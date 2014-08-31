@@ -1,113 +1,158 @@
 package main
 
 import . "syscall"
+import . "encoding/binary"
 import "fmt"
-import "unsafe"
+import . "unsafe"
 
 type NetlinkAuditRequest struct {
     Header NlMsghdr
     Data   RtGenmsg
 }
 
-func (rr *NetlinkAuditRequest) toWireFormat() []byte {
-    b := make([]byte, rr.Header.Len)
-    *(*uint32)(unsafe.Pointer(&b[0:4][0])) = rr.Header.Len
-    *(*uint16)(unsafe.Pointer(&b[4:6][0])) = rr.Header.Type
-    *(*uint16)(unsafe.Pointer(&b[6:8][0])) = rr.Header.Flags
-    *(*uint32)(unsafe.Pointer(&b[8:12][0])) = rr.Header.Seq
-    *(*uint32)(unsafe.Pointer(&b[12:16][0])) = rr.Header.Pid
-    b[16] = byte(rr.Data.Family)
+func (msg *IfInfomsg) ToWireFormat() []byte {
+    native := nativeEndian()
+    length := SizeofIfInfomsg
+    b := make([]byte, length)
+    b[0] = msg.Family
+    b[1] = 0
+    native.PutUint16(b[2:4], msg.Type)
+    native.PutUint32(b[4:8], uint32(msg.Index))
+    native.PutUint32(b[8:12], msg.Flags)
+    native.PutUint32(b[12:16], msg.Change)
     return b
 }
 
+func nativeEndian() ByteOrder {
+    var x uint32 = 0x01020304
+    if *(*byte)(Pointer(&x)) == 0x01 {
+        return BigEndian
+    }
+    return LittleEndian
+}
+
+/*
 func newNetlinkAuditRequest(proto, seq, family int) []byte {
     rr := &NetlinkAuditRequest{}
     rr.Header.Len = uint32(NLMSG_HDRLEN + SizeofRtGenmsg)
     rr.Header.Type = uint16(proto)
-    rr.Header.Flags = NLM_F_DUMP | NLM_F_REQUEST
+    rr.Header.Flags = NLM_F_ACK | NLM_F_REQUEST
     rr.Header.Seq = uint32(seq)
     rr.Data.Family = uint8(family)
     return rr.toWireFormat()
 }
+*/
 
-
-
-func main() {
-
-    s, err := Socket(AF_NETLINK, SOCK_RAW, NETLINK_AUDIT)
-    if err != nil {
-        fmt.Println(err)
-        return
-    }
-    defer Close(s)
-
-    lsa := &SockaddrNetlink{Family: AF_NETLINK}
-    if err := Bind(s, lsa); err != nil {
-        fmt.Println(err)
-        return
-    }
-
-    fmt.Println("**** Starting Netlink")
-
-    // this should be 10 or not??
-    //the purpose of sequence number is to give index number to the request , so for each request there will be different 
-    //sequence number , this sequence number should be matched with the corresponding reply we get from kernel space
-    wb := newNetlinkAuditRequest(AF_NETLINK, 10, NETLINK_AUDIT)
-    if err := Sendto(s, wb, 0, lsa); err != nil {
-        fmt.Println(err)
-        return
-    }
-    var tab []byte
-    for {
-        //In the below statement, make variable initialization we used Getpagesize(), this function returns us the PAGE_SIZE of the system,
-        // PAGE_SIZE of the system depends upon archietecture of the system, the use of page size is to store some memory during one
-        // run cycle of the cpu, greater the PAGE_SIZE, greater can be the memory stored during one run time of the CPU cycle
-        rb := make([]byte, Getpagesize())
-        nr, _, err := Recvfrom(s, rb, 0)
-        if err != nil {
-            fmt.Println(err)
-            return
-        }
-        if nr < NLMSG_HDRLEN {
-            fmt.Println(EINVAL)
-            fmt.Println("**** Starting Netlink")
-            return
-        }
-        rb = rb[:nr]
-        //fmt.Println(rb);
-        tab = append(tab, rb...)
-        msgs, err := ParseNetlinkMessage(rb)
-        //fmt.Println(msgs);
-        if err != nil {
-            fmt.Println(err)
-        }
-        for _, m := range msgs {
-            lsa, err := Getsockname(s)
-            if err != nil {
-                fmt.Println(err)
-            }
-            switch v := lsa.(type) {
-            case *SockaddrNetlink:
-                if m.Header.Seq != 1 || m.Header.Pid != v.Pid {
-                    fmt.Println(EINVAL)
-                }
-            default:
-                fmt.Println(EINVAL)
-            }
-            if m.Header.Type == NLMSG_DONE {
-                fmt.Println("*****Done******")
-            }
-            if m.Header.Type == NLMSG_ERROR {
-                fmt.Println(EINVAL)
-            }
-        }           
-
-    }
-
-    ////////////////////
-
-    fmt.Println(tab)
-
-    ///////////////////
+type IfInfomsg struct {
+    IfInfomsg
 }
 
+type NetlinkRequest struct {
+    NlMsghdr
+    Data []NetlinkRequestData
+}
+
+func (msg *IfInfomsg) Len() int {
+    return SizeofIfInfomsg
+}
+
+func (s *NetlinkSocket) Close() {
+    Close(s.fd)
+}
+
+type NetlinkRequestData interface {
+    Len() int
+    ToWireFormat() []byte
+}
+
+type NetlinkSocket struct {
+    fd int
+    lsa SockaddrNetlink
+}
+
+func getNetlinkSocket() (*NetlinkSocket, error) {
+    fd, err := Socket(AF_NETLINK, SOCK_RAW, NETLINK_AUDIT)
+    if err != nil {
+        return nil, err
+    }
+    s := &NetlinkSocket{
+        fd: fd,
+    }
+    s.lsa.Family = AF_NETLINK
+    if err := Bind(fd, &s.lsa); err != nil {
+        Close(fd)
+        return nil, err
+    }
+    return s, nil
+}
+
+func (s *NetlinkSocket) Send(request *NetlinkRequest) error {
+    if err := Sendto(s.fd, request.ToWireFormat(), 0, &s.lsa); err != nil {
+        return err
+    }
+    return nil
+}
+
+func (s *NetlinkSocket) Receive() ([]NetlinkMessage, error) {
+    rb := make([]byte, Getpagesize())
+    nr, _, err := Recvfrom(s.fd, rb, 0)
+    if err != nil {
+        return nil, err
+    }
+    if nr < NLMSG_HDRLEN {
+        return nil, ErrShortResponse
+    }
+    rb = rb[:nr]
+    return ParseNetlinkMessage(rb)
+}
+
+func (s *NetlinkSocket) GetPid() (uint32, error) {
+    lsa, err := Getsockname(s.fd)
+    if err != nil {
+        return 0, err
+    }
+    switch v := lsa.(type) {
+    case *SockaddrNetlink:
+        return v.Pid, nil
+    }
+    return 0, ErrWrongSockType
+}
+
+
+func (s *NetlinkSocket) HandleAck(seq uint32) error {
+    native := nativeEndian()
+    pid, err := s.GetPid()
+    if err != nil {
+        return err
+    }
+    done:
+        for {
+            msgs, err := s.Receive()
+            if err != nil {
+                return err
+            }   
+            for _, m := range msgs {
+                if m.Header.Seq != seq {
+                    return fmt.Errorf("Wrong Seq nr %d, expected %d", m.Header.Seq, seq)
+                }
+                if m.Header.Pid != pid {
+                    return fmt.Errorf("Wrong pid %d, expected %d", m.Header.Pid, pid)
+                }
+                if m.Header.Type == NLMSG_DONE {
+                    break done
+                }
+                if m.Header.Type == NLMSG_ERROR {
+                    error := int32(native.Uint32(m.Data[0:4]))
+                    if error == 0 {
+                        break done
+                    }
+                    return Errno(-error)
+                }
+            }
+        }
+    return nil
+}
+
+func main() {
+    
+}
