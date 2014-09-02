@@ -218,11 +218,11 @@ func newNetlinkRequest(proto, flags int) *NetlinkRequest {
 }
 
 func main() {
-    socket := getNetlinkSocket()
-    defer Close(socket)
+    socket, _ := getNetlinkSocket()
+    defer socket.Close()
+
     RequestData := newNetlinkRequest(AF_NETLINK, NETLINK_AUDIT)
-    socketFamily := NetlinkSocket{ AF_NETLINK,socket}
-    socket.Send(socketFamily)
+    //socketFamily := NetlinkSocket{AF_NETLINK, socket}
+    socket.Send(RequestData)
     socket.HandleAck(RequestData.NlMsghdr.Seq)
 }
-        
