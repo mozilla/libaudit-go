@@ -54,7 +54,7 @@ func main() {
     fmt.Println("**** Starting Netlink")
 
     // this should be 10 or not??
-    wb := newNetlinkAuditRequest(AF_NETLINK, 1, NETLINK_AUDIT)
+    wb := newNetlinkAuditRequest(1000, 1, NETLINK_AUDIT)
     if err := Sendto(s, wb, 0, lsa); err != nil {
         fmt.Println("sending error: ", err)
         return
