@@ -3,7 +3,7 @@ package main
 import (
 	//	"encoding/binary"
 	"fmt"
-	. "syscall"
+	"syscall"
 	"unsafe"
 )
 
@@ -23,9 +23,31 @@ type AuditMessage struct {
 	Mesg   []byte
 	Family uint8
 }
+struct audit_reply {
+	int                      type;
+	int                      len;
+	struct nlmsghdr         *nlh;
+	struct audit_message     msg;
+
+	// Using a union to compress this structure since only one of
+	 * the following should be valid for any packet. //
+	union {
+	struct audit_status     *status;
+	struct audit_rule_data  *ruledata;
+	struct audit_login      *login;
+	const char              *message;
+	struct nlmsgerr         *error;
+	struct audit_sig_info   *signal_info;
+	struct daemon_conf      *conf;
+#if HAVE_DECL_AUDIT_FEATURE_VERSION
+	struct audit_features	*features;
+#endif
+	};
+};
+
 */
 type netlinkAuditRequest struct {
-	Header NlMsghdr
+	Header syscall.NlMsghdr
 	Data   byte
 }
 
@@ -45,9 +67,9 @@ func (rr *netlinkAuditRequest) toWireFormat() []byte {
 func newNetlinkAuditRequest(proto, seq, family int) []byte {
 	rr := &netlinkAuditRequest{}
 
-	rr.Header.Len = uint32(NLMSG_HDRLEN) //
+	rr.Header.Len = uint32(syscall.NLMSG_HDRLEN) //
 	rr.Header.Type = uint16(proto)
-	rr.Header.Flags = NLM_F_REQUEST
+	rr.Header.Flags = syscall.NLM_F_REQUEST
 	rr.Header.Seq = uint32(seq)
 	b := make([]byte, rr.Header.Len)
 	*(*uint32)(unsafe.Pointer(&b[0:4][0])) = rr.Header.Len
@@ -64,7 +86,7 @@ func newNetlinkAuditRequest(proto, seq, family int) []byte {
 
 // Round the length of a netlink message up to align it properly.
 func nlmAlignOf(msglen int) int {
-	return (msglen + NLMSG_ALIGNTO - 1) & ^(NLMSG_ALIGNTO - 1)
+	return (msglen + syscall.NLMSG_ALIGNTO - 1) & ^(syscall.NLMSG_ALIGNTO - 1)
 }
 
 /*
@@ -76,40 +98,41 @@ func nativeEndian() binary.ByteOrder {
 	return binary.LittleEndian
 }
 */
-func ParseAuditNetlinkMessage(b []byte) ([]NetlinkMessage, error) {
-	var msgs []NetlinkMessage
-	for len(b) >= NLMSG_HDRLEN {
+func ParseAuditNetlinkMessage(b []byte) ([]syscall.NetlinkMessage, error) {
+	var msgs []syscall.NetlinkMessage
+	for len(b) >= syscall.NLMSG_HDRLEN {
 		h, dbuf, dlen, err := netlinkMessageHeaderAndData(b)
 		if err != nil {
 			fmt.Println("Error in parse")
 			return nil, err
 		}
-		m := NetlinkMessage{Header: *h, Data: dbuf[:int(h.Len)-NLMSG_HDRLEN]}
+		m := syscall.NetlinkMessage{Header: *h, Data: dbuf[:int(h.Len)-syscall.NLMSG_HDRLEN]}
 		msgs = append(msgs, m)
 		b = b[dlen:]
 	}
 	return msgs, nil
 }
 
-func netlinkMessageHeaderAndData(b []byte) (*NlMsghdr, []byte, int, error) {
-	h := (*NlMsghdr)(unsafe.Pointer(&b[0]))
-	if int(h.Len) < NLMSG_HDRLEN || int(h.Len) > len(b) {
+func netlinkMessageHeaderAndData(b []byte) (*syscall.NlMsghdr, []byte, int, error) {
+
+	h := (*syscall.NlMsghdr)(unsafe.Pointer(&b[0]))
+	if int(h.Len) < syscall.NLMSG_HDRLEN || int(h.Len) > len(b) {
 		fmt.Println("Error Here")
-		fmt.Println(NLMSG_HDRLEN, h.Len, h.Len, len(b))
-		return nil, nil, 0, EINVAL
+		fmt.Println(syscall.NLMSG_HDRLEN, h.Len, h.Len, len(b))
+		return nil, nil, 0, syscall.EINVAL
 	}
-	return h, b[NLMSG_HDRLEN:], nlmAlignOf(int(h.Len)), nil
+	return h, b[syscall.NLMSG_HDRLEN:], nlmAlignOf(int(h.Len)), nil
 }
 
 func newNetlink(proto, family int) ([]byte, error) {
 	//native := nativeEndian()
-	s, err := Socket(AF_NETLINK, SOCK_RAW, NETLINK_AUDIT)
+	s, err := syscall.Socket(syscall.AF_NETLINK, syscall.SOCK_RAW, syscall.NETLINK_AUDIT)
 	if err != nil {
 		return nil, err
 	}
-	defer Close(s)
-	lsa := &SockaddrNetlink{Family: AF_NETLINK, Pid: 0, Groups: 0}
-	if err := Bind(s, lsa); err != nil {
+	defer syscall.Close(s)
+	lsa := &syscall.SockaddrNetlink{Family: syscall.AF_NETLINK, Pid: 0, Groups: 0}
+	if err := syscall.Bind(s, lsa); err != nil {
 		return nil, err
 	}
 
@@ -117,24 +140,24 @@ func newNetlink(proto, family int) ([]byte, error) {
 	//Sending the request to kernel
 
 	//fmt.Printf("Sent(Raw) %+v\n", wb)
-
-	if err := Sendto(s, wb, 0, lsa); err != nil {
+	if err := syscall.Sendto(s, wb, 0, lsa); err != nil {
 		return nil, err
 	}
 	var tab []byte
-	// /done:
+	// done:
 	//for {
-	rb := make([]byte, Getpagesize())
+	//Running for one time only
+	rb := make([]byte, syscall.Getpagesize())
 
-	nr, _, err := Recvfrom(s, rb, MSG_PEEK|MSG_DONTWAIT)
+	nr, _, err := syscall.Recvfrom(s, rb, syscall.MSG_PEEK|syscall.MSG_DONTWAIT)
 	//		fmt.Printf("%v\n", nr)
 
 	if err != nil {
 		fmt.Println("Error on Receiving")
 		return nil, err
 	}
-	if nr < NLMSG_HDRLEN {
-		return nil, EINVAL
+	if nr < syscall.NLMSG_HDRLEN {
+		return nil, syscall.EINVAL
 	}
 	rb = rb[:nr]
 	//		fmt.Printf("Received (Raw)%v\n", rb)
@@ -147,27 +170,27 @@ func newNetlink(proto, family int) ([]byte, error) {
 		return nil, err
 	}
 	for _, m := range msgs {
-		lsa, err := Getsockname(s)
+		lsa, err := syscall.Getsockname(s)
 		if err != nil {
 			fmt.Println("Error in getting Sockaddr name")
 			return nil, err
 		}
 		switch v := lsa.(type) {
-		case *SockaddrNetlink:
+		case *syscall.SockaddrNetlink:
 			if m.Header.Seq != 1 || m.Header.Pid != v.Pid {
 				fmt.Println("Messgage sequence or Pid didn't match")
-				return nil, EINVAL
+				return nil, syscall.EINVAL
 			}
 		default:
 			fmt.Println("foo4")
-			return nil, EINVAL
+			return nil, syscall.EINVAL
 		}
-		if m.Header.Type == NLMSG_DONE {
+		if m.Header.Type == syscall.NLMSG_DONE {
 			//return tab, nil
 			fmt.Println("Message parsed..")
 			break
 		}
-		if m.Header.Type == NLMSG_ERROR {
+		if m.Header.Type == syscall.NLMSG_ERROR {
 
 			//	fmt.Printf("%x\n", m.Data)
 			//	fmt.Printf("%v\n", m.Header.Flags)
@@ -184,17 +207,16 @@ func newNetlink(proto, family int) ([]byte, error) {
 }
 
 func main() {
-	v, er := newNetlink(1000, AF_NETLINK)
+	v, er := newNetlink(1000, syscall.AF_NETLINK)
 	//Types are defined in /usr/include/linux/audit.h
-	//1002 is for #define AUDIT_LIST		1002	/* List syscall rules -- deprecated */
 	//See https://www.redhat.com/archives/linux-audit/2011-January/msg00030.html
 	if er != nil {
 		fmt.Println("Got error on last")
 
 		//fmt.Println(er)
 	} else {
-		str := string(v[:])
-		fmt.Println(str)
+		//str := string(v[:])
+		fmt.Println(v)
 	}
 	//	NetLinkListener()
 }
