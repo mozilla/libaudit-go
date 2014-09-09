@@ -123,6 +123,9 @@ done:
             }
 
         }
-        fmt.Println(string(tab[:]));
+        
+        //fmt.Println(string(tab[:]));
+        a,_ := s.ParseNetlinkMessage(tab)
+        fmt.Println(a)
     }
 }
