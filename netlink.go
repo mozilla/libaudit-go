@@ -10,6 +10,8 @@ import (
 const (
 	MAX_AUDIT_MESSAGE_LENGTH = 8970
 	AUDIT_GET                = 1000
+	AUDIT_LIST               = 1002
+	AUDIT_LIST_RULES         = 1013
 )
 
 /*
@@ -55,7 +57,7 @@ func nativeEndian() binary.ByteOrder {
 
 type NetlinkAuditRequest struct {
 	Header syscall.NlMsghdr
-	Data   byte
+	Data   string
 }
 
 type AuditReply struct {
@@ -210,7 +212,6 @@ func (s *NetlinkSocket) Receive() ([]syscall.NetlinkMessage, error) {
 	rb := make([]byte, syscall.Getpagesize())
 	nr, _, err := syscall.Recvfrom(s.fd, rb, syscall.MSG_PEEK|syscall.MSG_DONTWAIT)
 	//nr, _, err := syscall.Recvfrom(s, rb, syscall.MSG_PEEK|syscall.MSG_DONTWAIT)
-
 	if err != nil {
 		return nil, err
 	}
@@ -218,7 +219,18 @@ func (s *NetlinkSocket) Receive() ([]syscall.NetlinkMessage, error) {
 		return nil, syscall.EINVAL //ErrShortResponse
 	}
 	rb = rb[:nr]
-	fmt.Printf("Received (Raw)%v\n", rb)
+	//var tab []byte
+	//append(tab, rb...)
+	//	fmt.Printf("Received (Raw)%v\n", rb)
+	sd, _ := syscall.ParseNetlinkMessage(rb)
+	//fmt.Printf("Received (Raw)%v\n", sd)
+	for i, e := range sd {
+		fmt.Println("index ", i)
+		//fmt.Println(e.Data[:])
+		b := e.Data[:]
+		a := (*string)(unsafe.Pointer(&b[0])) //Conversion Success
+		fmt.Println(a)
+	}
 	return ParseAuditNetlinkMessage(rb) //Or syscall.ParseNetlinkMessage(rb)
 }
 
@@ -316,7 +328,7 @@ func AuditNetlink(proto, family int) ([]byte, error) {
 }
 
 func main() {
-	_, er := AuditNetlink(AUDIT_GET, syscall.AF_NETLINK)
+	_, er := AuditNetlink(AUDIT_LIST_RULES, syscall.AF_NETLINK)
 	//Types are defined in /usr/include/linux/audit.h
 	//See https://www.redhat.com/archives/linux-audit/2011-January/msg00030.html
 	if er != nil {
