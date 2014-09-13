@@ -4,13 +4,26 @@ import s "syscall"
 import "fmt"
 import "unsafe"
 
+const (
+    MAX_AUDIT_MESSAGE_LENGTH = 8970
+    AUDIT_GET                = 1000
+    AUDIT_LIST               = 1002
+    AUDIT_LIST_RULES         = 1013
+)
+
 type NetlinkAuditRequest struct {
     Header s.NlMsghdr
-    Data   byte  //s.RtGenmsg
+    Data   string
+}
+
+type AuditReply struct {
+
+    RepHeader s.NlMsghdr
+    Message   NetlinkAuditRequest
 }
 
 func (rr *NetlinkAuditRequest) toWireFormat() []byte {
-    b := make([]byte, rr.Header.Len)
+    b := make([]byte, uint32(s.NLMSG_HDRLEN + MAX_AUDIT_MESSAGE_LENGTH))
     *(*uint32)(unsafe.Pointer(&b[0:4][0])) = rr.Header.Len
     *(*uint16)(unsafe.Pointer(&b[4:6][0])) = rr.Header.Type
     *(*uint16)(unsafe.Pointer(&b[6:8][0])) = rr.Header.Flags
@@ -22,11 +35,16 @@ func (rr *NetlinkAuditRequest) toWireFormat() []byte {
 
 func newNetlinkAuditRequest(proto, seq, family int) []byte {
     rr := &NetlinkAuditRequest{}
-    rr.Header.Len = uint32(s.NLMSG_HDRLEN) //+ s.SizeofRtGenmsg)
+    rr.Header.Len = uint32(s.NLMSG_HDRLEN + MAX_AUDIT_MESSAGE_LENGTH) //+ s.SizeofRtGenmsg)
     rr.Header.Type = uint16(proto)
     rr.Header.Flags = s.NLM_F_REQUEST//s.MSG_PEEK|s.MSG_DONTWAIT//s.NLM_F_REQUEST //| s.NLM_F_ACK
     rr.Header.Seq = uint32(seq)
     //rr.Data.Family = uint8(family)
+    return rr.toWireFormat()
+}
+
+func  newNetlinkAuditReply() []byte {
+    rr := &NetlinkAuditRequest{}
     return rr.toWireFormat()
 }
 
@@ -53,25 +71,26 @@ func main() {
     }
     fmt.Println("**** Starting Netlink")
 
-    // sendto(fd, &req, req.nlh.nlmsg_len, 0,(struct sockaddr*)&addr, sizeof(addr))
-    // sendto(3, "\20\0\0\0\350\3\5\0\1\0\0\0\0\0\0\0", 16, 0, {sa_family=AF_NETLINK, pid=0, groups=00000000}, 12) = 16
-    // sendto(3, "\20\0\0\0\350\3\1\0\1\0\0\0\0\0\0\0", 16, 0, {sa_family=AF_NETLINK, pid=0, groups=00000000}, 12) = 16
-    wb := newNetlinkAuditRequest(1000, 1, s.NETLINK_AUDIT)
+    wb := newNetlinkAuditRequest(1002, 1, s.NETLINK_AUDIT)
+
+    //TODO: try sendmsg here 
     if err := s.Sendto(sock, wb, 0, lsa); err != nil {
         fmt.Println("sending error: ", err)
         return
     }
     var tab []byte
+
 done:
     for {
 
-        // recvfrom(fd, &rep->msg, sizeof(rep->msg), block|peek,   (struct sockaddr*)&nladdr, &nladdrlen);
-        // recvfrom(3, "$\0\0\0\2\0\0\0\1\0\0\0\234K\0\0\0\0\0\0\20\0\0\0\350\3\5\0\1\0\0\0"..., 8988, MSG_PEEK|MSG_DONTWAIT, {sa_family=AF_NETLINK, pid=0, groups=00000000}, [12]) = 36
-        // recvfrom(3, "0\0\0\0\350\3\0\0\1\0\0\0r\177\0\0\0\0\0\0\0\0\0\0\1\0\0\0\0\0\0\0"..., 8988, MSG_PEEK|MSG_DONTWAIT, {sa_family=AF_NETLINK, pid=0, groups=00000000}, [12]) = 48
-        rb := make([]byte, s.Getpagesize())
+        // use Audit_reply here
+        // r := make([]byte, s.Getpagesize())
+        
+        r := newNetlinkAuditReply();
+        //fmt.Println(r);
 
-        //nr, _, err := Recvfrom(s, rb, MSG_PEEK|MSG_DONTWAIT)
-        nr, _, err := s.Recvfrom(sock, rb, 0)
+        //nr, _, err := Recvfrom(s, rb, MSG_PEEK)
+        nr, _, err := s.Recvfrom(sock, r, s.MSG_PEEK|s.MSG_DONTWAIT)
         if err != nil {
             fmt.Println("rec err: ", err)
             return
@@ -81,9 +100,9 @@ done:
             fmt.Println("nr < nlmsg hdrlen")
             return
         }
-        rb = rb[:nr]
-        tab = append(tab, rb...)
-        msgs, err := s.ParseNetlinkMessage(rb)
+        r = r[:nr]
+        tab = append(tab, r...)
+        msgs, err := s.ParseNetlinkMessage(r)
 
         if err != nil {
             fmt.Println("parse error:", err)
