@@ -13,7 +13,8 @@ const (
 	AUDIT_LIST               = 1002
 	AUDIT_LIST_RULES         = 1013
 	AUDIT_FIRST_USER_MSG     = 1100 /* Userspace messages mostly uninteresting to kernel */
-
+    AUDIT_BITMASK_SIZE       = 64
+    AUDIT_MAX_FIELDS         = 64
 )
 
 /*
@@ -57,20 +58,40 @@ func nativeEndian() binary.ByteOrder {
 }
 */
 
-type NetlinkAuditRequest struct {
-	Header syscall.NlMsghdr
-	Data   []byte
-}
+type audit_rule_data struct {
+    flags uint32 /* AUDIT_PER_{TASK,CALL}, AUDIT_PREPEND */
+    action uint32/* AUDIT_NEVER, AUDIT_POSSIBLE, AUDIT_ALWAYS */
+    field_count uint32
+    mask [AUDIT_BITMASK_SIZE]uint32 /* syscall(s) affected */
+    fields [AUDIT_MAX_FIELDS]uint32
+    values [AUDIT_MAX_FIELDS]uint32
+    fieldflags [AUDIT_MAX_FIELDS]uint32
+    buflen  uint32/* total length of string fields */
+    buf string; /* string fields buffer */
+};
 
 type AuditReply struct {
-	RepHeader syscall.NlMsghdr
-	Message   NetlinkAuditRequest
+    Len   uint32
+    Type  uint16
+    RepHeader syscall.NlMsghdr
+    msg   NetlinkAuditRequest
+    rule  audit_rule_data 
+}
+
+func newNetlinkAuditReply() []byte {
+    rr := &AuditReply{}
+    return rr.msg.ToWireFormat()
+}
+
+type NetlinkAuditRequest struct {
+	Header syscall.NlMsghdr
+	Data   [MAX_AUDIT_MESSAGE_LENGTH]byte
 }
 
 //The recvfrom in go takes only a byte [] to put the data recieved from the kernel that removes the need
 //for having a separate audit_reply Struct for recieving data from kernel.
 func (rr *NetlinkAuditRequest) ToWireFormat() []byte {
-	b := make([]byte, rr.Header.Len)
+	b := make([]byte, uint32(syscall.NLMSG_HDRLEN + MAX_AUDIT_MESSAGE_LENGTH))
 	*(*uint32)(unsafe.Pointer(&b[0:4][0])) = rr.Header.Len
 	*(*uint16)(unsafe.Pointer(&b[4:6][0])) = rr.Header.Type
 	//	fmt.Printf("%+v,%+v\n", *(*uint16)(unsafe.Pointer(&b[4:6][0])), rr.Header.Type)
@@ -125,55 +146,6 @@ func netlinkMessageHeaderAndData(b []byte) (*syscall.NlMsghdr, []byte, int, erro
 	return h, b[syscall.NLMSG_HDRLEN:], nlmAlignOf(int(h.Len)), nil
 }
 
-/*
-Inspired from Docker library
-
-type NetlinkRequest struct {
-	syscall.NlMsghdr
-	Data []NetlinkRequestData
-}
-
-func (rr *NetlinkRequest) ToWireFormat() []byte {
-	native := nativeEndian()
-
-	length := rr.Len
-	dataBytes := make([][]byte, len(rr.Data))
-	for i, data := range rr.Data {
-		dataBytes[i] = data.ToWireFormat()
-		length += uint32(len(dataBytes[i]))
-	}
-	b := make([]byte, length)
-	native.PutUint32(b[0:4], length)
-	native.PutUint16(b[4:6], rr.Type)
-	native.PutUint16(b[6:8], rr.Flags)
-	native.PutUint32(b[8:12], rr.Seq)
-	native.PutUint32(b[12:16], rr.Pid)
-
-	next := 16
-	for _, data := range dataBytes {
-		copy(b[next:], data)
-		next += len(data)
-	}
-	return b
-}
-
-func (rr *NetlinkRequest) AddData(data NetlinkRequestData) {
-	if data != nil {
-		rr.Data = append(rr.Data, data)
-	}
-}
-
-func newNetlinkRequest(proto, flags int) *NetlinkRequest {
-	return &NetlinkRequest{
-		NlMsghdr: syscall.NlMsghdr{
-			Len:   uint32(syscall.NLMSG_HDRLEN),
-			Type:  uint16(proto),
-			Flags: syscall.NLM_F_REQUEST | uint16(flags),
-			Seq:   atomic.AddUint32(&nextSeqNr, 1),
-		},
-	}
-}
-*/
 type NetlinkSocket struct {
 	fd  int
 	lsa syscall.SockaddrNetlink
@@ -213,7 +185,9 @@ func (s *NetlinkSocket) Send(request *NetlinkAuditRequest) error {
 }
 
 func (s *NetlinkSocket) Receive() ([]syscall.NetlinkMessage, error) {
-	rb := make([]byte, syscall.Getpagesize())
+	//rb := make([]byte, syscall.Getpagesize())
+
+	rb := newNetlinkAuditReply()
 	nr, _, err := syscall.Recvfrom(s.fd, rb, 0)
 	//nr, _, err := syscall.Recvfrom(s, rb, syscall.MSG_PEEK|syscall.MSG_DONTWAIT)
 	if err != nil {
@@ -275,6 +249,7 @@ func AuditNetlink(proto, family int) ([]byte, error) {
 			return nil, err
 		}
 	*/
+
 	var tab []byte
 
 done:
@@ -327,7 +302,6 @@ done:
 				*/
 
 			}
-
 			if m.Header.Type == syscall.NLMSG_DONE {
 				fmt.Println("Done")
 				break done
@@ -361,7 +335,7 @@ done:
 }
 
 func main() {
-	_, er := AuditNetlink(AUDIT_LIST_RULES, syscall.AF_NETLINK)
+	_, er := AuditNetlink(1013, syscall.AF_NETLINK)
 	//Types are defined in /usr/include/linux/audit.h
 	//See https://www.redhat.com/archives/linux-audit/2011-January/msg00030.html
 	if er != nil {
