@@ -9,6 +9,8 @@ const (
     AUDIT_GET                = 1000
     AUDIT_LIST               = 1002
     AUDIT_LIST_RULES         = 1013
+    AUDIT_BITMASK_SIZE       = 64
+    AUDIT_MAX_FIELDS         = 64
 )
 
 type NetlinkAuditRequest struct {
@@ -16,10 +18,45 @@ type NetlinkAuditRequest struct {
     Data   []byte //string
 }
 
-type AuditReply struct {
 
+
+/*
+struct audit_reply {
+387         int                      type;
+388         int                      len;
+389         struct nlmsghdr         *nlh;
+390         struct audit_message     msg;
+391 
+392         /* Using a union to compress this structure since only one of
+393          * the following should be valid for any packet. 
+394         union {
+395         struct audit_status     *status;
+396         struct audit_rule_data  *ruledata;
+397         struct audit_login      *login;
+398         const char              *message;
+399         struct nlmsgerr         *error;
+400         struct audit_sig_info   *signal_info;
+401         struct daemon_conf      *conf;
+*/
+
+type audit_rule_data struct {
+    flags uint32 /* AUDIT_PER_{TASK,CALL}, AUDIT_PREPEND */
+    action uint32/* AUDIT_NEVER, AUDIT_POSSIBLE, AUDIT_ALWAYS */
+    field_count uint32
+    mask [AUDIT_BITMASK_SIZE]uint32 /* syscall(s) affected */
+    fields [AUDIT_MAX_FIELDS]uint32
+    values [AUDIT_MAX_FIELDS]uint32
+    fieldflags [AUDIT_MAX_FIELDS]uint32
+    buflen  uint32/* total length of string fields */
+    buf string; /* string fields buffer */
+};
+
+type AuditReply struct {
+    Len   uint32
+    Type  uint16
     RepHeader s.NlMsghdr
-    Message   NetlinkAuditRequest
+    msg   NetlinkAuditRequest
+    rule  audit_rule_data 
 }
 
 func (rr *NetlinkAuditRequest) toWireFormat() []byte {
@@ -37,15 +74,15 @@ func newNetlinkAuditRequest(proto, seq, family int) []byte {
     rr := &NetlinkAuditRequest{}
     rr.Header.Len = uint32(s.NLMSG_HDRLEN + MAX_AUDIT_MESSAGE_LENGTH) //+ s.SizeofRtGenmsg)
     rr.Header.Type = uint16(proto)
-    rr.Header.Flags = s.NLM_F_REQUEST//s.MSG_PEEK|s.MSG_DONTWAIT//s.NLM_F_REQUEST //| s.NLM_F_ACK
+    rr.Header.Flags = s.NLM_F_REQUEST//|s.NLM_F_ACK//s.MSG_PEEK|s.MSG_DONTWAIT//s.NLM_F_REQUEST //| s.NLM_F_ACK
     rr.Header.Seq = uint32(seq)
     //rr.Data.Family = uint8(family)
     return rr.toWireFormat()
 }
 
 func  newNetlinkAuditReply() []byte {
-    rr := &NetlinkAuditRequest{}
-    return rr.toWireFormat()
+    rr := &AuditReply{}
+    return rr.msg.toWireFormat()
 }
 
 func nlmAlignOf(msglen int) int {
@@ -116,6 +153,7 @@ done:
         nr, _, err := s.Recvfrom(sock, r, 0)
 
         //r = r[s.NLMSG_HDRLEN:nr]
+        fmt.Println(nr);
         if err != nil {
             fmt.Println("rec err: ", err)
             return
