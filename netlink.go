@@ -12,6 +12,8 @@ const (
 	AUDIT_GET                = 1000
 	AUDIT_LIST               = 1002
 	AUDIT_LIST_RULES         = 1013
+	AUDIT_FIRST_USER_MSG     = 1100 /* Userspace messages mostly uninteresting to kernel */
+
 )
 
 /*
@@ -57,7 +59,7 @@ func nativeEndian() binary.ByteOrder {
 
 type NetlinkAuditRequest struct {
 	Header syscall.NlMsghdr
-	Data   string
+	Data   []byte
 }
 
 type AuditReply struct {
@@ -65,6 +67,8 @@ type AuditReply struct {
 	Message   NetlinkAuditRequest
 }
 
+//The recvfrom in go takes only a byte [] to put the data recieved from the kernel that removes the need
+//for having a separate audit_reply Struct for recieving data from kernel.
 func (rr *NetlinkAuditRequest) ToWireFormat() []byte {
 	b := make([]byte, rr.Header.Len)
 	*(*uint32)(unsafe.Pointer(&b[0:4][0])) = rr.Header.Len
@@ -210,7 +214,7 @@ func (s *NetlinkSocket) Send(request *NetlinkAuditRequest) error {
 
 func (s *NetlinkSocket) Receive() ([]syscall.NetlinkMessage, error) {
 	rb := make([]byte, syscall.Getpagesize())
-	nr, _, err := syscall.Recvfrom(s.fd, rb, syscall.MSG_PEEK|syscall.MSG_DONTWAIT)
+	nr, _, err := syscall.Recvfrom(s.fd, rb, 0)
 	//nr, _, err := syscall.Recvfrom(s, rb, syscall.MSG_PEEK|syscall.MSG_DONTWAIT)
 	if err != nil {
 		return nil, err
@@ -223,14 +227,30 @@ func (s *NetlinkSocket) Receive() ([]syscall.NetlinkMessage, error) {
 	//append(tab, rb...)
 	//	fmt.Printf("Received (Raw)%v\n", rb)
 	sd, _ := syscall.ParseNetlinkMessage(rb)
+
 	//fmt.Printf("Received (Raw)%v\n", sd)
+
 	for i, e := range sd {
 		fmt.Println("index ", i)
 		//fmt.Println(e.Data[:])
-		b := e.Data[:]
-		a := (*string)(unsafe.Pointer(&b[0])) //Conversion Success
-		fmt.Println(a)
+		if len(e.Data) == 0 {
+			fmt.Println("0 DATA")
+		} else {
+			b := e.Data[:]
+			//for i, _ := range b {
+			a := (*string)(unsafe.Pointer(&b[0]))
+			//d := *a
+			fmt.Println(a)
+
+		}
+		//TO DO GET LIST DATA FROM KERNEL audit_rule_data ???
+		//Represent the value in hex form
+		//}
+		//		a := (*string)(unsafe.Pointer(&b[0]))
+		//		c := (*string)(unsafe.Pointer(&b[1])) //Conversion Success
+
 	}
+
 	return ParseAuditNetlinkMessage(rb) //Or syscall.ParseNetlinkMessage(rb)
 }
 
@@ -257,72 +277,85 @@ func AuditNetlink(proto, family int) ([]byte, error) {
 	*/
 	var tab []byte
 
-	// done:
-	//for {
-	//Running for one time only
-	/*rb := make([]byte, syscall.Getpagesize())
+done:
+	for {
+		//Running for one time only
+		/*rb := make([]byte, syscall.Getpagesize())
 
-	nr, _, err := syscall.Recvfrom(s, rb, syscall.MSG_PEEK|syscall.MSG_DONTWAIT)
+		nr, _, err := syscall.Recvfrom(s, rb, syscall.MSG_PEEK|syscall.MSG_DONTWAIT)
 
-	if err != nil {
-		fmt.Println("Error on Receiving")
-		return nil, err
-	}
-	if nr < syscall.NLMSG_HDRLEN {
-		return nil, syscall.EINVAL
-	}
-	rb = rb[:nr]
-	*/
-	//	tab = append(tab, rb...)
-	msgs, err := s.Receive() //ParseAuditNetlinkMessage(rb)
-	if err != nil {
-		fmt.Println("Error in Parsing")
-		return nil, err
-	}
-
-	for _, m := range msgs {
-		lsa, err := syscall.Getsockname(s.fd)
 		if err != nil {
-			fmt.Println("Error in getting Sockaddr name")
+			fmt.Println("Error on Receiving")
 			return nil, err
 		}
-		switch v := lsa.(type) {
-		case *syscall.SockaddrNetlink:
+		if nr < syscall.NLMSG_HDRLEN {
+			return nil, syscall.EINVAL
+		}
+		rb = rb[:nr]
+		*/
+		//	tab = append(tab, rb...)
+		msgs, err := s.Receive() //ParseAuditNetlinkMessage(rb)
+		if err != nil {
+			fmt.Println("Error in Parsing")
+			return nil, err
+		}
 
-			if m.Header.Seq != 1 || m.Header.Pid != v.Pid {
-				fmt.Println("Messgage sequence or Pid didn't match")
+		for _, m := range msgs {
+			lsa, err := syscall.Getsockname(s.fd)
+			if err != nil {
+				fmt.Println("Error in getting Sockaddr name")
+				return nil, err
+			}
+			switch v := lsa.(type) {
+			case *syscall.SockaddrNetlink:
+
+				if m.Header.Seq != 1 || m.Header.Pid != v.Pid {
+					fmt.Println("Messgage sequence or Pid didn't match")
+					return nil, syscall.EINVAL
+				}
+			default:
+				fmt.Println("foo4")
+				return nil, syscall.EINVAL
+				/*
+					if m.Header.Seq != wb.seq {
+						return fmt.Errorf("Wrong Seq nr %d, expected %d", m.Header.Seq, seq)
+					}
+					if m.Header.Pid != pid {
+						return fmt.Errorf("Wrong pid %d, expected %d", m.Header.Pid, pid)
+					}
+
+				*/
+
+			}
+
+			if m.Header.Type == syscall.NLMSG_DONE {
+				fmt.Println("Done")
+				break done
+			}
+			if m.Header.Type == syscall.NLMSG_ERROR {
+				//error := int32(native.Uint32(m.Data[0:4]))
+				fmt.Println("NLMSG_ERROR")
 				return nil, syscall.EINVAL
 			}
-		default:
-			fmt.Println("foo4")
-			return nil, syscall.EINVAL
-			/*
-				if m.Header.Seq != wb.seq {
-					return fmt.Errorf("Wrong Seq nr %d, expected %d", m.Header.Seq, seq)
-				}
-				if m.Header.Pid != pid {
-					return fmt.Errorf("Wrong pid %d, expected %d", m.Header.Pid, pid)
-				}
-
-			*/
+			if m.Header.Type == AUDIT_GET { //SHORT FOR AUDIT_GET
+				fmt.Println("ENABLED")
+				break done
+			}
+			if m.Header.Type == AUDIT_FIRST_USER_MSG {
+				fmt.Println("FFFF")
+				break done
+			}
+			if m.Header.Type == AUDIT_LIST_RULES {
+				fmt.Println("FOO")
+				break done
+			}
+			if m.Header.Type == AUDIT_FIRST_USER_MSG {
+				fmt.Println("HAA")
+				break done
+			}
 
 		}
-
-		if m.Header.Type == syscall.NLMSG_DONE {
-			break //done
-		}
-		if m.Header.Type == syscall.NLMSG_ERROR {
-			//error := int32(native.Uint32(m.Data[0:4]))
-			fmt.Println("NLMSG_ERROR")
-			return nil, syscall.EINVAL
-		}
-		if m.Header.Type == AUDIT_GET { //SHORT FOR AUDIT_GET
-			fmt.Println("ENABLED")
-			break
-		}
-
 	}
-	//}
 	return tab, nil
 
 }
