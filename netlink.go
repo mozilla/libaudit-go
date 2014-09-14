@@ -13,11 +13,12 @@ const (
 	AUDIT_LIST               = 1002
 	AUDIT_LIST_RULES         = 1013
 	AUDIT_FIRST_USER_MSG     = 1100 /* Userspace messages mostly uninteresting to kernel */
-
+	AUDIT_MAX_FIELDS         = 64
+	AUDIT_BITMASK_SIZE       = 64
 )
 
+//TO DO Send IN AUDIT_REPLY structure and Parse the same adjust the functions using them
 /*
-#define MAX_AUDIT_MESSAGE_LENGTH    8970 // PATH_MAX*2+CONTEXT_SIZE*2+11+256+1
 struct audit_message {
 	struct nlmsghdr nlh;
 	char   data[MAX_AUDIT_MESSAGE_LENGTH];
@@ -45,8 +46,36 @@ struct audit_reply {
 #endif
 	};
 };
+struct audit_rule_data {
+	__u32		flags;	// AUDIT_PER_{TASK,CALL}, AUDIT_PREPEND
+	__u32		action;	/* AUDIT_NEVER, AUDIT_POSSIBLE, AUDIT_ALWAYS
+	__u32		field_count;
+	__u32		mask[AUDIT_BITMASK_SIZE]; /* syscall(s) affected
+	__u32		fields[AUDIT_MAX_FIELDS];
+	__u32		values[AUDIT_MAX_FIELDS];
+	__u32		fieldflags[AUDIT_MAX_FIELDS];
+	__u32		buflen;	/* total length of string fields
+	char		buf[0];	/* string fields buffer
+};
+
+#define AUDIT_MAX_FIELDS   64
+#define AUDIT_MAX_KEY_LEN  256
+#define AUDIT_BITMASK_SIZE 64
 
 */
+
+type AuditRuleData struct {
+	flags       uint32
+	action      uint32
+	field_count uint32
+	mask        [AUDIT_BITMASK_SIZE]uint32
+	fields      [AUDIT_MAX_FIELDS]uint32
+	values      [AUDIT_MAX_FIELDS]uint32
+	fieldflags  [AUDIT_MAX_FIELDS]uint32
+	buflen      uint32
+	buf         [0]string
+}
+
 /*
 func nativeEndian() binary.ByteOrder {
 	var x uint32 = 0x01020304
@@ -60,11 +89,6 @@ func nativeEndian() binary.ByteOrder {
 type NetlinkAuditRequest struct {
 	Header syscall.NlMsghdr
 	Data   []byte
-}
-
-type AuditReply struct {
-	RepHeader syscall.NlMsghdr
-	Message   NetlinkAuditRequest
 }
 
 //The recvfrom in go takes only a byte [] to put the data recieved from the kernel that removes the need
@@ -92,6 +116,32 @@ func newNetlinkAuditRequest(proto, seq, family int) *NetlinkAuditRequest {
 	rr.Header.Seq = uint32(seq)
 	return rr
 	//	return rr.ToWireFormat()
+}
+
+type AuditReply struct {
+	Header   syscall.NlMsghdr
+	Message  NetlinkAuditRequest
+	Type     uint16
+	Len      uint32
+	RuleData AuditRuleData
+}
+
+func ParseAuditNetlinkReply(b []byte) ([]AuditReply, error) {
+	var msgs []AuditReply
+	for len(b) >= syscall.NLMSG_HDRLEN {
+		h, dbuf, dlen, err := netlinkMessageHeaderAndData(b)
+		if err != nil {
+			fmt.Println("Error in parse")
+			return nil, err
+		}
+		v := NetlinkAuditRequest{Header: *h, Data: dbuf[:int(h.Len)-syscall.NLMSG_HDRLEN]}
+		m := AuditReply{Type: h.Type, Len: h.Len, Header: *h,
+			Message: v,
+		}
+		msgs = append(msgs, m)
+		b = b[dlen:]
+	}
+	return msgs, nil
 }
 
 // Round the length of a netlink message up to align it properly.
@@ -125,55 +175,6 @@ func netlinkMessageHeaderAndData(b []byte) (*syscall.NlMsghdr, []byte, int, erro
 	return h, b[syscall.NLMSG_HDRLEN:], nlmAlignOf(int(h.Len)), nil
 }
 
-/*
-Inspired from Docker library
-
-type NetlinkRequest struct {
-	syscall.NlMsghdr
-	Data []NetlinkRequestData
-}
-
-func (rr *NetlinkRequest) ToWireFormat() []byte {
-	native := nativeEndian()
-
-	length := rr.Len
-	dataBytes := make([][]byte, len(rr.Data))
-	for i, data := range rr.Data {
-		dataBytes[i] = data.ToWireFormat()
-		length += uint32(len(dataBytes[i]))
-	}
-	b := make([]byte, length)
-	native.PutUint32(b[0:4], length)
-	native.PutUint16(b[4:6], rr.Type)
-	native.PutUint16(b[6:8], rr.Flags)
-	native.PutUint32(b[8:12], rr.Seq)
-	native.PutUint32(b[12:16], rr.Pid)
-
-	next := 16
-	for _, data := range dataBytes {
-		copy(b[next:], data)
-		next += len(data)
-	}
-	return b
-}
-
-func (rr *NetlinkRequest) AddData(data NetlinkRequestData) {
-	if data != nil {
-		rr.Data = append(rr.Data, data)
-	}
-}
-
-func newNetlinkRequest(proto, flags int) *NetlinkRequest {
-	return &NetlinkRequest{
-		NlMsghdr: syscall.NlMsghdr{
-			Len:   uint32(syscall.NLMSG_HDRLEN),
-			Type:  uint16(proto),
-			Flags: syscall.NLM_F_REQUEST | uint16(flags),
-			Seq:   atomic.AddUint32(&nextSeqNr, 1),
-		},
-	}
-}
-*/
 type NetlinkSocket struct {
 	fd  int
 	lsa syscall.SockaddrNetlink
@@ -214,6 +215,7 @@ func (s *NetlinkSocket) Send(request *NetlinkAuditRequest) error {
 
 func (s *NetlinkSocket) Receive() ([]syscall.NetlinkMessage, error) {
 	rb := make([]byte, syscall.Getpagesize())
+	//rb := NetlinkAuditRequest{}
 	nr, _, err := syscall.Recvfrom(s.fd, rb, 0)
 	//nr, _, err := syscall.Recvfrom(s, rb, syscall.MSG_PEEK|syscall.MSG_DONTWAIT)
 	if err != nil {
@@ -237,6 +239,7 @@ func (s *NetlinkSocket) Receive() ([]syscall.NetlinkMessage, error) {
 			fmt.Println("0 DATA")
 		} else {
 			b := e.Data[:]
+			//		c := (string)(e.Header)
 			//for i, _ := range b {
 			a := (*string)(unsafe.Pointer(&b[0]))
 			//d := *a
@@ -250,7 +253,23 @@ func (s *NetlinkSocket) Receive() ([]syscall.NetlinkMessage, error) {
 		//		c := (*string)(unsafe.Pointer(&b[1])) //Conversion Success
 
 	}
+	/*
+		on, _ := ParseAuditNetlinkReply(rb)
+		for i, e := range on {
+			fmt.Println("index", i)
+			if len(e.Message.Data) == 0 {
+				fmt.Println("FOOF DATA", e.Header)
+			} else {
+				b := e.Message.Data[:]
+				//for i, _ := range b {
+				a := (*string)(unsafe.Pointer(&b[0]))
+				//d := *a
+				fmt.Println(a)
 
+			}
+
+		}
+	*/
 	return ParseAuditNetlinkMessage(rb) //Or syscall.ParseNetlinkMessage(rb)
 }
 
@@ -346,7 +365,7 @@ done:
 				break done
 			}
 			if m.Header.Type == AUDIT_LIST_RULES {
-				fmt.Println("FOO")
+				fmt.Println("WE got RUles")
 				break done
 			}
 			if m.Header.Type == AUDIT_FIRST_USER_MSG {
