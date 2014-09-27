@@ -1,7 +1,8 @@
 package main
 
 import (
-	//	"encoding/binary"
+	"bytes"
+	"encoding/binary"
 	"fmt"
 	"syscall"
 	"unsafe"
@@ -10,14 +11,16 @@ import (
 const (
 	MAX_AUDIT_MESSAGE_LENGTH = 8970
 	AUDIT_GET                = 1000
+	AUDIT_SET                = 1001 /* Set status (enable/disable/auditd) */
 	AUDIT_LIST               = 1002
 	AUDIT_LIST_RULES         = 1013
 	AUDIT_FIRST_USER_MSG     = 1100 /* Userspace messages mostly uninteresting to kernel */
 	AUDIT_MAX_FIELDS         = 64
 	AUDIT_BITMASK_SIZE       = 64
+	AUDIT_GET_FEATURE        = 1019
+	AUDIT_STATUS_ENABLED     = 0x0001
 )
 
-//TO DO Send IN AUDIT_REPLY structure and Parse the same adjust the functions using them
 /*
 struct audit_message {
 	struct nlmsghdr nlh;
@@ -46,23 +49,18 @@ struct audit_reply {
 #endif
 	};
 };
-struct audit_rule_data {
-	__u32		flags;	// AUDIT_PER_{TASK,CALL}, AUDIT_PREPEND
-	__u32		action;	/* AUDIT_NEVER, AUDIT_POSSIBLE, AUDIT_ALWAYS
-	__u32		field_count;
-	__u32		mask[AUDIT_BITMASK_SIZE]; /* syscall(s) affected
-	__u32		fields[AUDIT_MAX_FIELDS];
-	__u32		values[AUDIT_MAX_FIELDS];
-	__u32		fieldflags[AUDIT_MAX_FIELDS];
-	__u32		buflen;	/* total length of string fields
-	char		buf[0];	/* string fields buffer
-};
-
-#define AUDIT_MAX_FIELDS   64
-#define AUDIT_MAX_KEY_LEN  256
-#define AUDIT_BITMASK_SIZE 64
 
 */
+type AuditStatus struct {
+	mask          uint32 /* Bit mask for valid entries */
+	enabled       uint32 /* 1 = enabled, 0 = disabled */
+	failure       uint32 /* Failure-to-log action */
+	pid           uint32 /* pid of auditd process */
+	rate_limit    uint32 /* messages rate limit (per second) */
+	backlog_limit uint32 /* waiting messages limit */
+	lost          uint32 /* messages lost */
+	backlog       uint32 /* messages waiting in queue */
+}
 
 type AuditRuleData struct {
 	flags       uint32
@@ -76,7 +74,6 @@ type AuditRuleData struct {
 	buf         [0]string
 }
 
-/*
 func nativeEndian() binary.ByteOrder {
 	var x uint32 = 0x01020304
 	if *(*byte)(unsafe.Pointer(&x)) == 0x01 {
@@ -84,7 +81,6 @@ func nativeEndian() binary.ByteOrder {
 	}
 	return binary.LittleEndian
 }
-*/
 
 type NetlinkAuditRequest struct {
 	Header syscall.NlMsghdr
@@ -103,8 +99,9 @@ func (rr *NetlinkAuditRequest) ToWireFormat() []byte {
 
 	*(*uint32)(unsafe.Pointer(&b[8:12][0])) = rr.Header.Seq
 	*(*uint32)(unsafe.Pointer(&b[12:16][0])) = rr.Header.Pid
-	//b[16] = byte(family)
-	return b
+	//append(b[:],rr.Data[:])
+	//b[16:] = rr.Data[:]
+	return append(b[:], rr.Data[:]...) //b
 }
 
 func newNetlinkAuditRequest(proto, seq, family int) *NetlinkAuditRequest {
@@ -126,6 +123,7 @@ type AuditReply struct {
 	RuleData AuditRuleData
 }
 
+/*
 func ParseAuditNetlinkReply(b []byte) ([]AuditReply, error) {
 	var msgs []AuditReply
 	for len(b) >= syscall.NLMSG_HDRLEN {
@@ -143,7 +141,7 @@ func ParseAuditNetlinkReply(b []byte) ([]AuditReply, error) {
 	}
 	return msgs, nil
 }
-
+*/
 // Round the length of a netlink message up to align it properly.
 func nlmAlignOf(msglen int) int {
 	return (msglen + syscall.NLMSG_ALIGNTO - 1) & ^(syscall.NLMSG_ALIGNTO - 1)
@@ -229,30 +227,34 @@ func (s *NetlinkSocket) Receive() ([]syscall.NetlinkMessage, error) {
 	//append(tab, rb...)
 	//	fmt.Printf("Received (Raw)%v\n", rb)
 	sd, _ := syscall.ParseNetlinkMessage(rb)
+	fmt.Println(sd[0].Header.Type)
 
 	//fmt.Printf("Received (Raw)%v\n", sd)
+	/*
+		for i, e := range sd {
+			fmt.Println("index ", i)
+			//fmt.Println(e.Data[:])
+			if len(e.Data) == 0 {
+				fmt.Println("0 DATA")
+			} else {
 
-	for i, e := range sd {
-		fmt.Println("index ", i)
-		//fmt.Println(e.Data[:])
-		if len(e.Data) == 0 {
-			fmt.Println("0 DATA")
-		} else {
-			b := e.Data[:]
-			//		c := (string)(e.Header)
-			//for i, _ := range b {
-			a := (*string)(unsafe.Pointer(&b[0]))
-			//d := *a
-			fmt.Println(a)
+				b := e.Data[:]
+				//		c := (string)(e.Header)
+				for i, _ := range b {
+					a := *(*string)(unsafe.Pointer(&b[i]))
+					//d := *a
+					fmt.Println(a) //Printing EMPTY
+				}
+
+			}
+			//TO DO GET LIST DATA FROM KERNEL audit_rule_data ???
+			//Represent the value in hex form
+			//}
+			//		a := (*string)(unsafe.Pointer(&b[0]))
+			//		c := (*string)(unsafe.Pointer(&b[1])) //Conversion Success
 
 		}
-		//TO DO GET LIST DATA FROM KERNEL audit_rule_data ???
-		//Represent the value in hex form
-		//}
-		//		a := (*string)(unsafe.Pointer(&b[0]))
-		//		c := (*string)(unsafe.Pointer(&b[1])) //Conversion Success
-
-	}
+	*/
 	/*
 		on, _ := ParseAuditNetlinkReply(rb)
 		for i, e := range on {
@@ -272,7 +274,61 @@ func (s *NetlinkSocket) Receive() ([]syscall.NetlinkMessage, error) {
 	*/
 	return ParseAuditNetlinkMessage(rb) //Or syscall.ParseNetlinkMessage(rb)
 }
+func SendAudit_Set() ([]byte, error) {
+	s, err := getNetlinkSocket()
+	if err != nil {
+		return nil, err
+	}
+	defer s.Close()
+	var status AuditStatus
+	status.enabled = 1
+	status.mask = AUDIT_STATUS_ENABLED
+	buff := new(bytes.Buffer)
+	err = binary.Write(buff, nativeEndian(), status)
 
+	if err != nil {
+		fmt.Println("binary.Write failed:", err)
+	}
+
+	wb := newNetlinkAuditRequest(AUDIT_SET, 1, syscall.AF_NETLINK)
+	wb.Data = buff.Bytes()
+
+	if err := s.Send(wb); err != nil {
+		return nil, err
+	}
+
+	rb := make([]byte, syscall.Getpagesize())
+
+	nr, _, err := syscall.Recvfrom(s.fd, rb, 0)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if nr < syscall.NLMSG_HDRLEN {
+		return nil, syscall.EINVAL //ErrShortResponse
+	}
+
+	rb = rb[:nr]
+	sd, _ := syscall.ParseNetlinkMessage(rb)
+	fmt.Println(sd[0].Header.Type)
+	if sd[0].Header.Type == syscall.NLMSG_DONE {
+		fmt.Println("Done")
+
+	}
+	if sd[0].Header.Type == syscall.NLMSG_ERROR {
+		//error := int32(native.Uint32(m.Data[0:4]))
+		fmt.Println("NLMSG_ERROR")
+		return nil, syscall.EINVAL
+	}
+	if sd[0].Header.Type == AUDIT_GET { //SHORT FOR AUDIT_GET
+		fmt.Println("ENABLED")
+		//	fmt.Println(m.Header, m.Data)
+
+	}
+
+	return nil, nil
+}
 func AuditNetlink(proto, family int) ([]byte, error) {
 	//native := nativeEndian()
 	s, err := getNetlinkSocket()
@@ -358,6 +414,7 @@ done:
 			}
 			if m.Header.Type == AUDIT_GET { //SHORT FOR AUDIT_GET
 				fmt.Println("ENABLED")
+				fmt.Println(m.Header, m.Data)
 				break done
 			}
 			if m.Header.Type == AUDIT_FIRST_USER_MSG {
@@ -366,11 +423,15 @@ done:
 			}
 			if m.Header.Type == AUDIT_LIST_RULES {
 				fmt.Println("WE got RUles")
+				fmt.Println(m.Header)
 				break done
 			}
 			if m.Header.Type == AUDIT_FIRST_USER_MSG {
 				fmt.Println("HAA")
 				break done
+			}
+			if m.Header.Type == 1009 {
+				fmt.Println("Watchlist")
 			}
 
 		}
@@ -380,16 +441,32 @@ done:
 }
 
 func main() {
-	_, er := AuditNetlink(AUDIT_LIST_RULES, syscall.AF_NETLINK)
-	//Types are defined in /usr/include/linux/audit.h
-	//See https://www.redhat.com/archives/linux-audit/2011-January/msg00030.html
-	if er != nil {
-		fmt.Println("Got error on last")
+	/*
+		_, er := AuditNetlink(AUDIT_GET_FEATURE, syscall.AF_NETLINK)
+		//Types are defined in /usr/include/linux/audit.h
+		//See https://www.redhat.com/archives/linux-audit/2011-January/msg00030.html
+		if er != nil {
+			fmt.Println("Got error on last")
 
-		//fmt.Println(er)
-	} else {
-		//str := string(v[:])
-		fmt.Println("Sucess!")
+			//fmt.Println(er)
+		} else {
+			//str := string(v[:])
+			fmt.Println("Sucess!")
+		}
+	*/
+	_, sd := SendAudit_Set()
+	if sd == nil {
+		fmt.Println("Horrah")
 	}
 	//	NetLinkListener()
 }
+
+/*
+	Problems
+	1. Sending Data Format Incompatibility with the C version Lack of working examples
+	2. Parsing is a big Problem. What is unsafe.Pointer What its purpose ?
+	3. Successful Parse still not done
+	5. Recieved messages are empty or some sort of signal
+	6. Working of Audit (not auditd) behind the scenes
+	7. What type of Responses Kernel Sent ? Convert it to what ? byte ==> string or uint16,uint32
+*/
