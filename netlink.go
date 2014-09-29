@@ -9,16 +9,16 @@ import (
 )
 
 const (
-	//MAX_AUDIT_MESSAGE_LENGTH = 8970
-	AUDIT_GET            = 1000
-	AUDIT_SET            = 1001 /* Set status (enable/disable/auditd) */
-	AUDIT_LIST           = 1002
-	AUDIT_LIST_RULES     = 1013
-	AUDIT_FIRST_USER_MSG = 1100 /* Userspace messages mostly uninteresting to kernel */
-	AUDIT_MAX_FIELDS     = 64
-	AUDIT_BITMASK_SIZE   = 64
-	AUDIT_GET_FEATURE    = 1019
-	AUDIT_STATUS_ENABLED = 0x0001
+	MAX_AUDIT_MESSAGE_LENGTH = 8960
+	AUDIT_GET                = 1000
+	AUDIT_SET                = 1001 /* Set status (enable/disable/auditd) */
+	AUDIT_LIST               = 1002
+	AUDIT_LIST_RULES         = 1013
+	AUDIT_FIRST_USER_MSG     = 1100 /* Userspace messages mostly uninteresting to kernel */
+	AUDIT_MAX_FIELDS         = 64
+	AUDIT_BITMASK_SIZE       = 64
+	AUDIT_GET_FEATURE        = 1019
+	AUDIT_STATUS_ENABLED     = 0x0001
 )
 
 type AuditStatus struct {
@@ -227,13 +227,22 @@ func Send_audit_set() ([]byte, error) {
 
 	// Sending AUDIT_SET TO KERNEL
 	fmt.Println("Sending AUDIT_SET TO kernel\n")
-	wb := newNetlinkAuditRequest(AUDIT_SET, 1, syscall.AF_NETLINK)
-	wb.Data = append(wb.Data, buff.Bytes()...)
-	if err := s.Send(wb); err != nil {
+
+	//wb := newNetlinkAuditRequest(AUDIT_SET, 1, syscall.AF_NETLINK)
+	//Need to change newNetlinkAuditRequest for adding sizeof the passed structure
+	rr := &NetlinkAuditRequest{}
+
+	rr.Header.Len = uint32(syscall.NLMSG_HDRLEN + unsafe.Sizeof(status)) //Added the sizeof struct AUDIT_STATUS
+	rr.Header.Type = uint16(AUDIT_SET)
+	rr.Header.Flags = syscall.NLM_F_REQUEST | syscall.NLM_F_ACK
+	rr.Header.Seq = uint32(1) //Seq number is important too.
+
+	rr.Data = append(rr.Data, buff.Bytes()...)
+	if err := s.Send(rr); err != nil {
 		return nil, err
 	}
 
-	rb := make([]byte, syscall.Getpagesize())
+	rb := make([]byte, syscall.Getpagesize()) //This is an important Part.
 
 	nr, _, err := syscall.Recvfrom(s.fd, rb, 0)
 
@@ -257,7 +266,7 @@ done:
 
 		}
 		if sd[0].Header.Type == syscall.NLMSG_ERROR {
-			//Can NLMSG_ERR means everything is Fine ?? AUDITD says so netlink.c L283
+			//NLMSG_ERR means everything is Fine ?? AUDITD says so netlink.c L283
 			fmt.Println("NLMSG_ERROR")
 			break done
 			//	return nil, syscall.EINVAL
@@ -265,25 +274,32 @@ done:
 		if sd[0].Header.Type == AUDIT_GET {
 			fmt.Println("ENABLED")
 			break done
-			//	fmt.Println(m.Header, m.Data)
 
 		}
 	}
 
 	fmt.Println("Now Sending AUDIT_GET for Checking if Audit is enabled or not \n")
-	wb = newNetlinkAuditRequest(AUDIT_GET, 2, syscall.AF_NETLINK)
-	if err := s.Send(wb); err != nil {
+	rr2 := &NetlinkAuditRequest{}
+
+	rr2.Header.Len = uint32(syscall.NLMSG_HDRLEN) //Now the Data Part is Not needed so no addition
+	rr2.Header.Type = uint16(AUDIT_GET)
+	rr2.Header.Flags = syscall.NLM_F_REQUEST | syscall.NLM_F_ACK
+	rr2.Header.Seq = uint32(2)
+
+	if err := s.Send(rr2); err != nil {
 		return nil, err
 	}
 
-	rb = make([]byte, syscall.Getpagesize())
 	//Need to get the status OUT of the messages
 	//Move Ahead of this using cgo as base
 
 	//Receiving Many Times due to multiple messages
 done2:
 	for {
-		nr, _, err = syscall.Recvfrom(s.fd, rb, 0|syscall.MSG_DONTWAIT)
+		//Make the rb byte bigger because of large messages from Kernel doesn't fit in 4096
+		rb = make([]byte, MAX_AUDIT_MESSAGE_LENGTH)
+
+		nr, _, err = syscall.Recvfrom(s.fd, rb, 0|syscall.MSG_DONTWAIT) //The | here matters as we are receiving multiple messages
 
 		if err != nil {
 			return nil, err
@@ -301,14 +317,11 @@ done2:
 			return nil, er
 		}
 		fmt.Println(sd)
-		//		fmt.Println(sd[0].Header.Type)
 		if sd[0].Header.Type == syscall.NLMSG_DONE {
 			fmt.Println("Done")
 
 		}
 		if sd[0].Header.Type == syscall.NLMSG_ERROR {
-			//error := int32(native.Uint32(m.Data[0:4]))
-			//Can NLMSG_ERR means everything is Fine ?? AUDITD says so netlink.c L283
 			fmt.Println("NLMSG_ERROR\n\n")
 			//break done2
 			//	return nil, syscall.EINVAL
@@ -316,8 +329,6 @@ done2:
 		if sd[0].Header.Type == AUDIT_GET {
 			fmt.Println("ENABLED")
 			break done2
-			//	fmt.Println(m.Header, m.Data)
-
 		}
 	}
 	return nil, nil
