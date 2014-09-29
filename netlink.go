@@ -327,9 +327,21 @@ done2:
 			//	return nil, syscall.EINVAL
 		}
 		if sd[0].Header.Type == AUDIT_GET {
+			for _, e := range sd {
+				//Here conversion of the data part written to audit_status Structure
+				//Nil error means successfuly parsed
+				b := e.Data[:]
+				buf := bytes.NewBuffer(b)
+				var dumm AuditStatus
+				err = binary.Read(buf, nativeEndian(), &dumm)
+				fmt.Println("\nstruct :", dumm, err)
+				fmt.Println("\nStatus: ", dumm.Enabled)
+			}
+
 			fmt.Println("ENABLED")
 			break done2
 		}
+
 	}
 	return nil, nil
 }
