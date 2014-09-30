@@ -44,17 +44,31 @@ type AuditRuleData struct {
 	buf         [0]string
 }
 
+type AuditReply struct {
+	Header   syscall.NlMsghdr
+	Message  NetlinkAuditRequest
+	Type     uint16
+	Len      uint32
+	RuleData AuditRuleData
+}
+
+type NetlinkSocket struct {
+	fd  int
+	lsa syscall.SockaddrNetlink
+}
+
+
+type NetlinkAuditRequest struct {
+	Header syscall.NlMsghdr
+	Data   []byte
+}
+
 func nativeEndian() binary.ByteOrder {
 	var x uint32 = 0x01020304
 	if *(*byte)(unsafe.Pointer(&x)) == 0x01 {
 		return binary.BigEndian
 	}
 	return binary.LittleEndian
-}
-
-type NetlinkAuditRequest struct {
-	Header syscall.NlMsghdr
-	Data   []byte
 }
 
 //The recvfrom in go takes only a byte [] to put the data recieved from the kernel that removes the need
@@ -79,14 +93,6 @@ func newNetlinkAuditRequest(proto, seq, family, sizeofData int) *NetlinkAuditReq
 	rr.Header.Seq = uint32(seq)
 	return rr
 	//	return rr.ToWireFormat()
-}
-
-type AuditReply struct {
-	Header   syscall.NlMsghdr
-	Message  NetlinkAuditRequest
-	Type     uint16
-	Len      uint32
-	RuleData AuditRuleData
 }
 
 // Round the length of a netlink message up to align it properly.
@@ -119,10 +125,6 @@ func netlinkMessageHeaderAndData(b []byte) (*syscall.NlMsghdr, []byte, int, erro
 	return h, b[syscall.NLMSG_HDRLEN:], nlmAlignOf(int(h.Len)), nil
 }
 
-type NetlinkSocket struct {
-	fd  int
-	lsa syscall.SockaddrNetlink
-}
 
 func getNetlinkSocket() (*NetlinkSocket, error) {
 	fd, err := syscall.Socket(syscall.AF_NETLINK, syscall.SOCK_RAW, syscall.NETLINK_AUDIT)
@@ -190,168 +192,6 @@ func (s *NetlinkSocket) Receive() ([]syscall.NetlinkMessage, error) {
 	return ParseAuditNetlinkMessage(rb) //Or syscall.ParseNetlinkMessage(rb)
 }
 
-func EnableAudit(seq int) error {
-	s, err := getNetlinkSocket()
-	if err != nil {
-		return err
-	}
-	defer s.Close()
-
-	var status AuditStatus
-	status.Enabled = 1
-	status.Mask = AUDIT_STATUS_ENABLED
-	buff := new(bytes.Buffer)
-	err = binary.Write(buff, nativeEndian(), status)
-	if err != nil {
-		fmt.Println("binary.Write failed:", err)
-		return err
-	}
-
-	wb := newNetlinkAuditRequest(AUDIT_SET, seq, syscall.AF_NETLINK, int(unsafe.Sizeof(status)))
-	wb.Data = append(wb.Data, buff.Bytes()...)
-
-	if err := s.Send(wb); err != nil {
-		return err
-	}
-	/*
-		rb := make([]byte, syscall.Getpagesize()) //This is an important Part.
-
-		nr, _, err := syscall.Recvfrom(s.fd, rb, 0)
-
-		if err != nil {
-			return err
-		}
-
-		if nr < syscall.NLMSG_HDRLEN {
-			return syscall.EINVAL //ErrShortResponse
-		}
-
-		rb = rb[:nr]
-	*/
-	// Receiving IN JUST ONE TRY
-done:
-	for {
-		msgs, err := s.Receive() //ParseAuditNetlinkMessage(rb)
-		if err != nil {
-			return err
-		}
-
-		for _, m := range msgs {
-			lsa, er := syscall.Getsockname(s.fd)
-			if er != nil {
-				return nil
-			}
-			switch v := lsa.(type) {
-			case *syscall.SockaddrNetlink:
-
-				if m.Header.Seq != 1 || m.Header.Pid != v.Pid {
-					return syscall.EINVAL
-				}
-			default:
-				return syscall.EINVAL
-			}
-			if m.Header.Type == syscall.NLMSG_DONE {
-				fmt.Println("Done")
-				break done
-			}
-			if m.Header.Type == syscall.NLMSG_ERROR {
-				//NLMSG_ERR means everything is Fine ?? AUDITD says so netlink.c L283
-				fmt.Println("NLMSG_ERROR")
-				break done
-			}
-			if m.Header.Type == AUDIT_GET {
-				fmt.Println("ENABLED")
-				break done
-
-			}
-
-		}
-
-	}
-	return nil
-}
-
-func IsAuditEnable(seq int) error {
-	s, err := getNetlinkSocket()
-	if err != nil {
-		return err
-	}
-	defer s.Close()
-
-	fmt.Println("Now Sending AUDIT_GET for Checking if Audit is enabled or not \n")
-	wb := newNetlinkAuditRequest(AUDIT_GET, seq, syscall.AF_NETLINK, 0)
-
-	if err := s.Send(wb); err != nil {
-		return err
-	}
-
-done:
-	for {
-		//Make the rb byte bigger because of large messages from Kernel doesn't fit in 4096
-		rb := make([]byte, MAX_AUDIT_MESSAGE_LENGTH)
-
-		nr, _, err := syscall.Recvfrom(s.fd, rb, 0|syscall.MSG_DONTWAIT) //The | here matters as we are receiving multiple messages
-
-		if err != nil {
-			return err
-		}
-
-		if nr < syscall.NLMSG_HDRLEN {
-			return syscall.EINVAL //ErrShortResponse
-		}
-
-		rb = rb[:nr]
-		fmt.Println(rb, nr)
-
-		msgs, er := ParseAuditNetlinkMessage(rb)
-		if er != nil {
-			return er
-		}
-		//fmt.Println(sd)
-
-		for _, m := range msgs {
-			lsa, er := syscall.Getsockname(s.fd)
-			if er != nil {
-				return nil
-			}
-			switch v := lsa.(type) {
-			case *syscall.SockaddrNetlink:
-
-				if m.Header.Seq != 2 || m.Header.Pid != v.Pid {
-					return syscall.EINVAL
-				}
-			default:
-				return syscall.EINVAL
-			}
-			if m.Header.Type == syscall.NLMSG_DONE {
-				fmt.Println("Done")
-				break done
-
-			}
-			if m.Header.Type == syscall.NLMSG_ERROR {
-				fmt.Println("NLMSG_ERROR\n\n")
-			}
-			if m.Header.Type == AUDIT_GET {
-				//Here conversion of the data part written to audit_status Structure
-				//Nil error means successfuly parsed
-				b := m.Data[:]
-				buf := bytes.NewBuffer(b)
-				var dumm AuditStatus
-				err = binary.Read(buf, nativeEndian(), &dumm)
-				fmt.Println("\nstruct :", dumm, err)
-				fmt.Println("\nStatus: ", dumm.Enabled)
-
-				fmt.Println("ENABLED")
-				break done
-			}
-
-		}
-
-	}
-	return nil
-
-}
-
 func AuditNetlink(proto, family int) ([]byte, error) {
 
 	s, err := getNetlinkSocket()
@@ -368,11 +208,6 @@ func AuditNetlink(proto, family int) ([]byte, error) {
 		return nil, err
 	}
 
-	/*
-		if err := syscall.Sendto(s, wb, 0, lsa); err != nil {
-			return nil, err
-		}
-	*/
 	var tab []byte
 
 done:
@@ -463,12 +298,175 @@ done:
 
 }
 
+func audit_set_enabled(s *NetlinkSocket, seq int) error {
+	var status AuditStatus
+	status.Enabled = 1
+	status.Mask = AUDIT_STATUS_ENABLED
+	buff := new(bytes.Buffer)
+	err := binary.Write(buff, nativeEndian(), status)
+	if err != nil {
+		fmt.Println("binary.Write failed:", err)
+		return err
+	}
+
+	wb := newNetlinkAuditRequest(AUDIT_SET, seq, syscall.AF_NETLINK, int(unsafe.Sizeof(status)))
+	wb.Data = append(wb.Data, buff.Bytes()...)
+
+	if err := s.Send(wb); err != nil {
+		return err
+	}
+	/*
+		rb := make([]byte, syscall.Getpagesize()) //This is an important Part.
+
+		nr, _, err := syscall.Recvfrom(s.fd, rb, 0)
+
+		if err != nil {
+			return err
+		}
+
+		if nr < syscall.NLMSG_HDRLEN {
+			return syscall.EINVAL //ErrShortResponse
+		}
+
+		rb = rb[:nr]
+	*/
+	// Receiving IN JUST ONE TRY
+done:
+	for {
+		msgs, err := s.Receive() //ParseAuditNetlinkMessage(rb)
+		if err != nil {
+			return err
+		}
+
+		for _, m := range msgs {
+			lsa, er := syscall.Getsockname(s.fd)
+			if er != nil {
+				return nil
+			}
+			switch v := lsa.(type) {
+			case *syscall.SockaddrNetlink:
+
+				if m.Header.Seq != 1 || m.Header.Pid != v.Pid {
+					return syscall.EINVAL
+				}
+			default:
+				return syscall.EINVAL
+			}
+			if m.Header.Type == syscall.NLMSG_DONE {
+				fmt.Println("Done")
+				break done
+			}
+			if m.Header.Type == syscall.NLMSG_ERROR {
+				//NLMSG_ERR means everything is Fine ?? AUDITD says so netlink.c L283
+				fmt.Println("NLMSG_ERROR")
+				break done
+			}
+			if m.Header.Type == AUDIT_GET {
+				fmt.Println("ENABLED")
+				break done
+
+			}
+
+		}
+
+	}
+	return nil
+}
+
+func audit_is_enabled(s *NetlinkSocket, seq int) error {
+	fmt.Println("Now Sending AUDIT_GET for Checking if Audit is enabled or not \n")
+	wb := newNetlinkAuditRequest(AUDIT_GET, seq, syscall.AF_NETLINK, 0)
+
+	if err := s.Send(wb); err != nil {
+		return err
+	}
+
+done:
+	for {
+		//Make the rb byte bigger because of large messages from Kernel doesn't fit in 4096
+		rb := make([]byte, MAX_AUDIT_MESSAGE_LENGTH)
+		nr, _, err := syscall.Recvfrom(s.fd, rb, 0|syscall.MSG_DONTWAIT) //The | here matters as we are receiving multiple messages
+
+		if err != nil {
+			return err
+		}
+
+		if nr < syscall.NLMSG_HDRLEN {
+			return syscall.EINVAL //ErrShortResponse
+		}
+
+		rb = rb[:nr]
+		fmt.Println(rb, nr)
+
+		msgs, er := ParseAuditNetlinkMessage(rb)
+		if er != nil {
+			return er
+		}
+		//fmt.Println(sd)
+
+		for _, m := range msgs {
+			lsa, er := syscall.Getsockname(s.fd)
+			if er != nil {
+				return nil
+			}
+			switch v := lsa.(type) {
+			case *syscall.SockaddrNetlink:
+
+				if m.Header.Seq != 2 || m.Header.Pid != v.Pid {
+					return syscall.EINVAL
+				}
+			default:
+				return syscall.EINVAL
+			}
+			if m.Header.Type == syscall.NLMSG_DONE {
+				fmt.Println("Done")
+				break done
+
+			}
+			if m.Header.Type == syscall.NLMSG_ERROR {
+				fmt.Println("NLMSG_ERROR\n\n")
+			}
+			if m.Header.Type == AUDIT_GET {
+				//Here conversion of the data part written to audit_status Structure
+				//Nil error means successfuly parsed
+				b := m.Data[:]
+				buf := bytes.NewBuffer(b)
+				var dumm AuditStatus
+				err = binary.Read(buf, nativeEndian(), &dumm)
+				fmt.Println("\nstruct :", dumm, err)
+				fmt.Println("\nStatus: ", dumm.Enabled)
+
+				fmt.Println("ENABLED")
+				break done
+			}
+
+		}
+
+	}
+	return nil
+
+}
+
+/* How the file should look like
+	-- seprate constant, stuct to function
+	-- have a library function for different things like list all rules etc
+	-- have a main function like audit_send/get_reply
+*/
 func main() {
-	EnableAudit(1)
-	err := IsAuditEnable(2)
+	s, err := getNetlinkSocket()
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer s.Close()
+
+	audit_set_enabled(s, 1)
+	err = audit_is_enabled(s, 2)
 	if err == nil {
 		fmt.Println("Horrah")
 	}
+
+}
+
 
 	/*
 		_, er := AuditNetlink(AUDIT_GET, syscall.AF_NETLINK)
@@ -483,5 +481,3 @@ func main() {
 			fmt.Println("Sucess!")
 		}
 	*/
-
-}
