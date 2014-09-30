@@ -57,7 +57,6 @@ type NetlinkSocket struct {
 	lsa syscall.SockaddrNetlink
 }
 
-
 type NetlinkAuditRequest struct {
 	Header syscall.NlMsghdr
 	Data   []byte
@@ -125,8 +124,7 @@ func netlinkMessageHeaderAndData(b []byte) (*syscall.NlMsghdr, []byte, int, erro
 	return h, b[syscall.NLMSG_HDRLEN:], nlmAlignOf(int(h.Len)), nil
 }
 
-
-func getNetlinkSocket() (*NetlinkSocket, error) {
+func GetNetlinkSocket() (*NetlinkSocket, error) {
 	fd, err := syscall.Socket(syscall.AF_NETLINK, syscall.SOCK_RAW, syscall.NETLINK_AUDIT)
 	if err != nil {
 		return nil, err
@@ -194,7 +192,7 @@ func (s *NetlinkSocket) Receive() ([]syscall.NetlinkMessage, error) {
 
 func AuditNetlink(proto, family int) ([]byte, error) {
 
-	s, err := getNetlinkSocket()
+	s, err := GetNetlinkSocket()
 
 	if err != nil {
 		return nil, err
@@ -298,7 +296,7 @@ done:
 
 }
 
-func audit_set_enabled(s *NetlinkSocket, seq int) error {
+func AuditSetEnabled(s *NetlinkSocket, seq int) error {
 	var status AuditStatus
 	status.Enabled = 1
 	status.Mask = AUDIT_STATUS_ENABLED
@@ -373,7 +371,7 @@ done:
 	return nil
 }
 
-func audit_is_enabled(s *NetlinkSocket, seq int) error {
+func AuditIsEnabled(s *NetlinkSocket, seq int) error {
 	fmt.Println("Now Sending AUDIT_GET for Checking if Audit is enabled or not \n")
 	wb := newNetlinkAuditRequest(AUDIT_GET, seq, syscall.AF_NETLINK, 0)
 
@@ -448,36 +446,35 @@ done:
 }
 
 /* How the file should look like
-	-- seprate constant, stuct to function
-	-- have a library function for different things like list all rules etc
-	-- have a main function like audit_send/get_reply
+-- seprate constant, stuct to function
+-- have a library function for different things like list all rules etc
+-- have a main function like audit_send/get_reply
 */
 func main() {
-	s, err := getNetlinkSocket()
+	s, err := GetNetlinkSocket()
 	if err != nil {
 		fmt.Println(err)
 	}
 	defer s.Close()
 
-	audit_set_enabled(s, 1)
-	err = audit_is_enabled(s, 2)
+	AuditSetEnabled(s, 1)
+	err = AuditIsEnabled(s, 2)
 	if err == nil {
 		fmt.Println("Horrah")
 	}
 
 }
 
+/*
+	_, er := AuditNetlink(AUDIT_GET, syscall.AF_NETLINK)
+	//Types are defined in /usr/include/linux/audit.h
+	//See https://www.redhat.com/archives/linux-audit/2011-January/msg00030.html
+	if er != nil {
+		fmt.Println("Got error on last")
 
-	/*
-		_, er := AuditNetlink(AUDIT_GET, syscall.AF_NETLINK)
-		//Types are defined in /usr/include/linux/audit.h
-		//See https://www.redhat.com/archives/linux-audit/2011-January/msg00030.html
-		if er != nil {
-			fmt.Println("Got error on last")
-
-			//fmt.Println(er)
-		} else {
-			//str := string(v[:])
-			fmt.Println("Sucess!")
-		}
-	*/
+		//fmt.Println(er)
+	} else {
+		//str := string(v[:])
+		fmt.Println("Sucess!")
+	}
+*/
