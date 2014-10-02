@@ -174,7 +174,7 @@ func AuditSend(s *NetlinkSocket, proto int, data []byte, sizedata, seq int) erro
 	return nil
 }
 
-func AuditGetReply(s *NetlinkSocket, proto, bytesize, block, seq int) error {
+func AuditGetReply(s *NetlinkSocket, bytesize, block, seq int) error {
 done:
 	for {
 		msgs, err := s.Receive(bytesize, block) //ParseAuditNetlinkMessage(rb)
@@ -244,52 +244,9 @@ func AuditSetEnabled(s *NetlinkSocket, seq int) error {
 		return err
 	}
 
-	wb := newNetlinkAuditRequest(AUDIT_SET, seq, syscall.AF_NETLINK, int(unsafe.Sizeof(status)))
-	wb.Data = append(wb.Data, buff.Bytes()...)
-
-	if err := s.Send(wb); err != nil {
-		return err
-	}
+	AuditSend(s, AUDIT_SET, buff.Bytes(), int(unsafe.Sizeof(status)), seq)
 	// Receiving IN JUST ONE TRY
-done:
-	for {
-		msgs, err := s.Receive(syscall.Getpagesize(), 0) //ParseAuditNetlinkMessage(rb)
-		if err != nil {
-			return err
-		}
-
-		for _, m := range msgs {
-			lsa, er := syscall.Getsockname(s.fd)
-			if er != nil {
-				return nil
-			}
-			switch v := lsa.(type) {
-			case *syscall.SockaddrNetlink:
-
-				if m.Header.Seq != uint32(seq) || m.Header.Pid != v.Pid {
-					return syscall.EINVAL
-				}
-			default:
-				return syscall.EINVAL
-			}
-			if m.Header.Type == syscall.NLMSG_DONE {
-				fmt.Println("Done")
-				break done
-			}
-			if m.Header.Type == syscall.NLMSG_ERROR {
-				//NLMSG_ERR means everything is Fine ?? AUDITD says so netlink.c L283
-				fmt.Println("NLMSG_ERROR")
-				break done
-			}
-			if m.Header.Type == AUDIT_GET {
-				fmt.Println("ENABLED")
-				break done
-
-			}
-
-		}
-
-	}
+	AuditGetReply(s, syscall.Getpagesize(), 0, seq)
 	return nil
 }
 
