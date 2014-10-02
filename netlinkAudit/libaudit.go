@@ -19,26 +19,6 @@ type AuditStatus struct {
 	Backlog       uint32 /* messages waiting in queue */
 }
 
-type AuditRuleData struct {
-	flags       uint32
-	action      uint32
-	field_count uint32
-	mask        [AUDIT_BITMASK_SIZE]uint32
-	fields      [AUDIT_MAX_FIELDS]uint32
-	values      [AUDIT_MAX_FIELDS]uint32
-	fieldflags  [AUDIT_MAX_FIELDS]uint32
-	buflen      uint32
-	buf         [0]string
-}
-
-type AuditReply struct {
-	Header   syscall.NlMsghdr
-	Message  NetlinkAuditRequest
-	Type     uint16
-	Len      uint32
-	RuleData AuditRuleData
-}
-
 type NetlinkSocket struct {
 	fd  int
 	lsa syscall.SockaddrNetlink
