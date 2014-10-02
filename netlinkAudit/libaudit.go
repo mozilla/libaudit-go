@@ -49,6 +49,7 @@ type NetlinkAuditRequest struct {
 	Data   []byte
 }
 
+
 var ParsedResult AuditStatus
 
 func nativeEndian() binary.ByteOrder {
@@ -113,8 +114,10 @@ func netlinkMessageHeaderAndData(b []byte) (*syscall.NlMsghdr, []byte, int, erro
 	return h, b[syscall.NLMSG_HDRLEN:], nlmAlignOf(int(h.Len)), nil
 }
 
+// This function makes a conncetion with kernel space and is to be used for all further socket communication
+
 func GetNetlinkSocket() (*NetlinkSocket, error) {
-	fd, err := syscall.Socket(syscall.AF_NETLINK, syscall.SOCK_RAW, syscall.NETLINK_AUDIT)
+	fd, err := syscall.Socket(syscall.AF_NETLINK, syscall.SOCK_RAW, syscall.NETLINK_AUDIT)//connect to the socket of type RAW
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +126,7 @@ func GetNetlinkSocket() (*NetlinkSocket, error) {
 	}
 	s.lsa.Family = syscall.AF_NETLINK
 	s.lsa.Groups = 0
-	s.lsa.Pid = 0
+	s.lsa.Pid = 0 //Kernel space pid is always set to be 0
 
 	if err := syscall.Bind(fd, &s.lsa); err != nil {
 		syscall.Close(fd)
@@ -131,7 +134,7 @@ func GetNetlinkSocket() (*NetlinkSocket, error) {
 	}
 	return s, nil
 }
-
+//To end the socket conncetion
 func (s *NetlinkSocket) Close() {
 	syscall.Close(s.fd)
 }
@@ -205,19 +208,19 @@ done:
 				//return nil
 			}
 			if m.Header.Type == AUDIT_GET {
-				fmt.Println("ENABLED")
+				fmt.Println("AUDIT_GET")
 				//				break done
 			}
 			if m.Header.Type == AUDIT_FIRST_USER_MSG {
-				fmt.Println("FFFF")
+				fmt.Println("AUDIT_FIRST_USER_MS")
 				//break done
 			}
 			if m.Header.Type == AUDIT_LIST_RULES {
-				fmt.Println("WE got RUles")
+				fmt.Println("AUDIT_LIST_RULES")
 				//break done
 			}
 			if m.Header.Type == AUDIT_FIRST_USER_MSG {
-				fmt.Println("HAA")
+				fmt.Println("AUDIT_FIRST_USER_MSG")
 				//break done
 			}
 			if m.Header.Type == 1009 {
@@ -227,86 +230,6 @@ done:
 		}
 	}
 	return nil
-
-}
-func AuditNetlink(proto, family int) ([]byte, error) {
-
-	s, err := GetNetlinkSocket()
-
-	if err != nil {
-		return nil, err
-	}
-
-	defer s.Close()
-
-	wb := newNetlinkAuditRequest(proto, 1, family, 0)
-
-	if err := s.Send(wb); err != nil {
-		return nil, err
-	}
-
-	var tab []byte
-
-done:
-	for {
-		msgs, err := s.Receive(syscall.Getpagesize(), 0) //ParseAuditNetlinkMessage(rb)
-		if err != nil {
-			fmt.Println("Error in Parsing")
-			return nil, err
-		}
-
-		for _, m := range msgs {
-			lsa, err := syscall.Getsockname(s.fd)
-			if err != nil {
-				fmt.Println("Error in getting Sockaddr name")
-				return nil, err
-			}
-			switch v := lsa.(type) {
-			case *syscall.SockaddrNetlink:
-
-				if m.Header.Seq != 1 || m.Header.Pid != v.Pid {
-					fmt.Println("Messgage sequence or Pid didn't match")
-					return nil, syscall.EINVAL
-				}
-			default:
-				fmt.Println("foo4")
-				return nil, syscall.EINVAL
-
-			}
-
-			if m.Header.Type == syscall.NLMSG_DONE {
-				fmt.Println("Done")
-				break done
-			}
-			if m.Header.Type == syscall.NLMSG_ERROR {
-				fmt.Println("NLMSG_ERROR")
-				return nil, syscall.EINVAL
-			}
-			if m.Header.Type == AUDIT_GET {
-				fmt.Println("ENABLED")
-				fmt.Println(m.Header, m.Data)
-				break done
-			}
-			if m.Header.Type == AUDIT_FIRST_USER_MSG {
-				fmt.Println("FFFF")
-				break done
-			}
-			if m.Header.Type == AUDIT_LIST_RULES {
-				fmt.Println("WE got RUles")
-				fmt.Println(m.Header)
-				break done
-			}
-			if m.Header.Type == AUDIT_FIRST_USER_MSG {
-				fmt.Println("HAA")
-				break done
-			}
-			if m.Header.Type == 1009 {
-				fmt.Println("Watchlist")
-			}
-
-		}
-	}
-	return tab, nil
 
 }
 
