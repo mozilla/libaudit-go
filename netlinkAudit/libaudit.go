@@ -159,6 +159,76 @@ func (s *NetlinkSocket) Receive(bytesize int, block int) ([]syscall.NetlinkMessa
 	return ParseAuditNetlinkMessage(rb) //Or syscall.ParseNetlinkMessage(rb)
 }
 
+//func audit_send(socket, proto, Data * struct, sizeof struct)
+//func audit_get_reply(socket, proto, Data* struct , block int)
+func AuditSend(s *NetlinkSocket, proto int, data []byte, sizedata, seq int) error {
+
+	wb := newNetlinkAuditRequest(proto, seq, syscall.AF_NETLINK, sizedata) //Need to work on sequence
+	wb.Data = append(wb.Data[:], data[:]...)
+	if err := s.Send(wb); err != nil {
+		return err
+	}
+	return nil
+}
+
+func AuditGetReply(s *NetlinkSocket, proto, bytesize, block, seq int) error {
+done:
+	for {
+		msgs, err := s.Receive(bytesize, block) //ParseAuditNetlinkMessage(rb)
+		if err != nil {
+			return err
+		}
+
+		for _, m := range msgs {
+			lsa, err := syscall.Getsockname(s.fd)
+			if err != nil {
+				return err
+			}
+			switch v := lsa.(type) {
+			case *syscall.SockaddrNetlink:
+
+				if m.Header.Seq != uint32(seq) || m.Header.Pid != v.Pid {
+					return syscall.EINVAL
+				}
+			default:
+				return syscall.EINVAL
+
+			}
+
+			if m.Header.Type == syscall.NLMSG_DONE {
+				fmt.Println("Done")
+				break done
+			}
+			if m.Header.Type == syscall.NLMSG_ERROR {
+				fmt.Println("NLMSG_ERROR")
+				break done
+				//return nil
+			}
+			if m.Header.Type == AUDIT_GET {
+				fmt.Println("ENABLED")
+				//				break done
+			}
+			if m.Header.Type == AUDIT_FIRST_USER_MSG {
+				fmt.Println("FFFF")
+				//break done
+			}
+			if m.Header.Type == AUDIT_LIST_RULES {
+				fmt.Println("WE got RUles")
+				//break done
+			}
+			if m.Header.Type == AUDIT_FIRST_USER_MSG {
+				fmt.Println("HAA")
+				//break done
+			}
+			if m.Header.Type == 1009 {
+				fmt.Println("Watchlist")
+			}
+
+		}
+	}
+	return nil
+
+}
 func AuditNetlink(proto, family int) ([]byte, error) {
 
 	s, err := GetNetlinkSocket()
@@ -273,7 +343,7 @@ done:
 			switch v := lsa.(type) {
 			case *syscall.SockaddrNetlink:
 
-				if m.Header.Seq != 1 || m.Header.Pid != v.Pid {
+				if m.Header.Seq != uint32(seq) || m.Header.Pid != v.Pid {
 					return syscall.EINVAL
 				}
 			default:
@@ -324,7 +394,7 @@ done:
 			switch v := lsa.(type) {
 			case *syscall.SockaddrNetlink:
 
-				if m.Header.Seq != 2 || m.Header.Pid != v.Pid {
+				if m.Header.Seq != uint32(seq) || m.Header.Pid != v.Pid {
 					return syscall.EINVAL
 				}
 			default:
