@@ -19,7 +19,11 @@ const (
 	AUDIT_BITMASK_SIZE       = 64
 	AUDIT_GET_FEATURE        = 1019
 	AUDIT_STATUS_ENABLED     = 0x0001
+	AUDIT_FILTER_ENTRY 		 = 0x02
+	AUDIT_ADD_RULE           = 1011
+	EEXIST                   = 17
 )
+
 
 type AuditStatus struct {
 	Mask          uint32 /* Bit mask for valid entries */
@@ -62,21 +66,23 @@ type NetlinkAuditRequest struct {
 	Data   []byte
 }
 
-func auditAddRuleData(fd int, struct AuditRuleData *rule, flags int, action int) {
-	
-	rc int;
-	
-	if (flags == AUDIT_FILTER_ENTRY) {
-	    fmt.Println("Use of entry filter is deprecated");
-	    return -2;
+func auditAddRuleData(fd int,rule AuditRuleData, flags int, action int) error {	
+	//var int rc
+	var auditstruct AuditRuleData
+	if flags == AUDIT_FILTER_ENTRY {
+	    fmt.Println("Use of entry filter is deprecated")
+	    return nil
 	}
-    rule.flags  = flags;
-    rule.action = action;
-    rc = syscall.Sendto(fd, AUDIT_ADD_RULE, rule, sizeof(struct AuditRuleData) + rule.buflen);
-    if (rc < 0){
-        fmt.Println("Error sending add rule data request (%s)");
+
+    rule.flags  = uint32(flags)
+    rule.action = uint32(action)
+
+    rc = syscall.Sendto(fd, AUDIT_ADD_RULE, rule, unsafe.Sizeof(struct AuditRuleData) + rule.buflen)
+    //rc := syscall.Sendto(fd, rule, AUDIT_ADD_RULE, syscall.Getsockname(fd))
+    if rc == nil {
+        fmt.Println("Error sending add rule data request ()")
     }
-    return rc;
+    return rc
 }
 
 func nativeEndian() binary.ByteOrder {
