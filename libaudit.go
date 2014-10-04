@@ -62,6 +62,23 @@ type NetlinkAuditRequest struct {
 	Data   []byte
 }
 
+func auditAddRuleData(fd int, struct AuditRuleData *rule, flags int, action int) {
+	
+	rc int;
+	
+	if (flags == AUDIT_FILTER_ENTRY) {
+	    fmt.Println("Use of entry filter is deprecated");
+	    return -2;
+	}
+    rule.flags  = flags;
+    rule.action = action;
+    rc = syscall.Sendto(fd, AUDIT_ADD_RULE, rule, sizeof(struct AuditRuleData) + rule.buflen);
+    if (rc < 0){
+        fmt.Println("Error sending add rule data request (%s)");
+    }
+    return rc;
+}
+
 func nativeEndian() binary.ByteOrder {
 	var x uint32 = 0x01020304
 	if *(*byte)(unsafe.Pointer(&x)) == 0x01 {
