@@ -309,7 +309,7 @@ func AuditSend(s *NetlinkSocket, proto int, data []byte, sizedata, seq int) erro
 	return nil
 }
 
-func auditAddRuleData(s *NetlinkSocket, rule *AuditRuleData, flags int, action int) error {
+func AuditAddRuleData(s *NetlinkSocket, rule *AuditRuleData, flags int, action int) error {
 	if flags == AUDIT_FILTER_ENTRY {
 		fmt.Println("Use of entry filter is deprecated")
 	return nil
@@ -336,7 +336,7 @@ func auditAddRuleData(s *NetlinkSocket, rule *AuditRuleData, flags int, action i
 	return err
 }
 
-func auditRuleSyscallData(rule *AuditRuleData, scall int) error{
+func AuditRuleSyscallData(rule *AuditRuleData, scall int) error{
 	word := auditWord(scall);
 	bit  := auditBit(scall);
 	
