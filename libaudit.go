@@ -66,24 +66,63 @@ type NetlinkAuditRequest struct {
 	Data   []byte
 }
 
-func auditAddRuleData(fd int,rule AuditRuleData, flags int, action int) error {	
-	//var int rc
-	var auditstruct AuditRuleData
-	if flags == AUDIT_FILTER_ENTRY {
-	    fmt.Println("Use of entry filter is deprecated")
-	    return nil
-	}
-
-    rule.flags  = uint32(flags)
-    rule.action = uint32(action)
-
-    rc = syscall.Sendto(fd, AUDIT_ADD_RULE, rule, unsafe.Sizeof(struct AuditRuleData) + rule.buflen)
-    //rc := syscall.Sendto(fd, rule, AUDIT_ADD_RULE, syscall.Getsockname(fd))
-    if rc == nil {
-        fmt.Println("Error sending add rule data request ()")
-    }
-    return rc
+func auditWord(nr int) uint32{
+	audit_word := (uint32)((nr)/32)
+	return (uint32)(audit_word)
 }
+
+func auditBit(nr int) uint32{ 
+	audit_bit := 1 << ((uint32)(nr) - auditWord(nr)*32)
+	return (uint32)(audit_bit)
+}
+
+func AuditSend(s *NetlinkSocket, proto int, data []byte, sizedata, seq int) error {
+	wb := newNetlinkAuditRequest(proto, seq, syscall.AF_NETLINK, sizedata) //Need to work on sequence
+	wb.Data = append(wb.Data[:], data[:]...)
+	if err := s.Send(wb); err != nil {
+		return err
+	}
+	return nil
+}
+
+func AuditAddRuleData(s *NetlinkSocket, rule *AuditRuleData, flags int, action int) error {
+	if flags == AUDIT_FILTER_ENTRY {
+		fmt.Println("Use of entry filter is deprecated")
+	return nil
+	}
+	
+	rule.flags =  (uint32)(flags)
+	rule.action = (uint32)(action)
+	buff := new(bytes.Buffer)
+	err := binary.Write(buff, nativeEndian(), rule)
+	
+	if err != nil {
+		fmt.Println("binary.Write failed:", err)
+		return err
+	}
+	
+	seq := 0
+	err = AuditSend(s, AUDIT_ADD_RULE, buff.Bytes(), int(unsafe.Sizeof(rule))+int(rule.buflen), seq)
+	//rc := syscall.Sendto(fd, AUDIT_ADD_RULE, rule, unsafe.Sizeof(auditstruct) + rule.buflen)
+	//rc := syscall.Sendto(fd, rule, AUDIT_ADD_RULE, syscall.Getsockname(fd))
+	if err != nil {
+		fmt.Println("Error sending add rule data request ()")
+		return err
+	}
+	return err
+}
+
+func auditRuleSyscallData(rule *AuditRuleData, scall int) error{
+	word := auditWord(scall);
+	bit  := auditBit(scall);
+	
+	if word >= AUDIT_BITMASK_SIZE-1 { 
+	    fmt.Println("Some error occured")
+	}    
+    rule.mask[word] |= bit;
+       	return nil
+}
+
 
 func nativeEndian() binary.ByteOrder {
 	var x uint32 = 0x01020304
