@@ -74,21 +74,21 @@ func newNetlinkAuditRequest(proto, seq, family, sizeofData int) *NetlinkAuditReq
 	return rr
 	//	return rr.ToWireFormat()
 }
-func auditWord(nr) uint32int{
+func auditWord(nr int) uint32{
 	audit_word := (uint32)((nr)/32)
-	return audit_word
+	return (uint32)(audit_word)
 }
 
-func auditBit(nr) uint32{ 
-	audit_bit := 1 << ((nr) - auditWord(nr)*32)
-	return audit_bit
+func auditBit(nr int) uint32{ 
+	audit_bit := 1 << ((uint32)(nr) - auditWord(nr)*32)
+	return (uint32)(audit_bit)
 }
 
-func auditRuleSyscallData(*rule AuditRuleData, scall int) error{
-	var int word = auditWord(scall);
-	var int bit  = auditBit(scall);
+func auditRuleSyscallData(rule *AuditRuleData, scall int) error{
+	word := auditWord(scall);
+	bit  := auditBit(scall);
 	
-	if word >= (AUDIT_BITMASK_SIZE-1){ 
+	if word >= AUDIT_BITMASK_SIZE-1 { 
 	    fmt.Println("Some error occured")
 	}    
     rule.mask[word] |= bit;
