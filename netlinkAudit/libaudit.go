@@ -74,7 +74,26 @@ func newNetlinkAuditRequest(proto, seq, family, sizeofData int) *NetlinkAuditReq
 	return rr
 	//	return rr.ToWireFormat()
 }
+func auditWord(nr) uint32int{
+	audit_word := (uint32)((nr)/32)
+	return audit_word
+}
 
+func auditBit(nr) uint32{ 
+	audit_bit := 1 << ((nr) - auditWord(nr)*32)
+	return audit_bit
+}
+
+func auditRuleSyscallData(*rule AuditRuleData, scall int) error{
+	var int word = auditWord(scall);
+	var int bit  = auditBit(scall);
+	
+	if word >= (AUDIT_BITMASK_SIZE-1){ 
+	    fmt.Println("Some error occured")
+	}    
+    rule.mask[word] |= bit;
+       	return nil
+}
 // Round the length of a netlink message up to align it properly.
 func nlmAlignOf(msglen int) int {
 	return (msglen + syscall.NLMSG_ALIGNTO - 1) & ^(syscall.NLMSG_ALIGNTO - 1)
