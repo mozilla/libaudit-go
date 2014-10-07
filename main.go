@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/arunk-s/netlinkAudit" //Should be changed according to individual settings
+	///	"unsafe"
 )
 
 func main() {
@@ -12,8 +13,8 @@ func main() {
 	}
 	defer s.Close()
 
-	netlinkAudit.AuditSetEnabled(s, 1)
-	err = netlinkAudit.AuditIsEnabled(s, 2)
+	//netlinkAudit.AuditSetEnabled(s, 1)
+	err = netlinkAudit.AuditIsEnabled(s, 1)
 	fmt.Println("parsedResult")
 	fmt.Println(netlinkAudit.ParsedResult)
 	if err == nil {
@@ -23,19 +24,10 @@ func main() {
 
 	//NO Fields for now
 	// we need audit_name_to_field( ) && audit_rule_fieldpair_data
-
-	/*
-		nr := 84
-		word := uint32(nr / 32)
-		bit := (1 << (uint32(nr) - word*32))
-		if word >= (netlinkAudit.AUDIT_BITMASK_SIZE - 1) {
-			fmt.Println("Error")
-		}
-
-		foo.Mask[word] = foo.Mask[word] | uint32(bit)
-	*/
 	//Syscall rmdir() is 84 on table
+	//fmt.Println(unsafe.Sizeof(foo))
 	netlinkAudit.AuditRuleSyscallData(&foo, 84)
+	//fmt.Println(foo)
 	netlinkAudit.AuditAddRuleData(s, &foo, netlinkAudit.AUDIT_FILTER_EXIT, netlinkAudit.AUDIT_ALWAYS)
 	//auditctl -a rmdir exit,always
 	//Flags are exit

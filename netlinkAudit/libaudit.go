@@ -27,8 +27,8 @@ type AuditRuleData struct {
 	Fields      [AUDIT_MAX_FIELDS]uint32
 	Values      [AUDIT_MAX_FIELDS]uint32
 	Fieldflags  [AUDIT_MAX_FIELDS]uint32
-	Buflen      uint32 /* total length of string fields */
-	Buf         byte   //[0]string /* string fields buffer */
+	Buflen      uint32  /* total length of string fields */
+	Buf         [0]byte //[0]string /* string fields buffer */
 
 }
 type NetlinkSocket struct {
@@ -60,7 +60,7 @@ func (rr *NetlinkAuditRequest) ToWireFormat() []byte {
 	*(*uint16)(unsafe.Pointer(&b[6:8][0])) = rr.Header.Flags
 	*(*uint32)(unsafe.Pointer(&b[8:12][0])) = rr.Header.Seq
 	*(*uint32)(unsafe.Pointer(&b[12:16][0])) = rr.Header.Pid
-	b = append(b[:], rr.Data[:]...)
+	b = append(b[:16], rr.Data[:]...) //Important b[:16]
 	return b
 }
 
@@ -154,11 +154,9 @@ func (s *NetlinkSocket) Receive(bytesize int, block int) ([]syscall.NetlinkMessa
 	return ParseAuditNetlinkMessage(rb) //Or syscall.ParseNetlinkMessage(rb)
 }
 
-//func audit_send(socket, proto, Data * struct, sizeof struct)
-//func audit_get_reply(socket, proto, Data* struct , block int)
 func AuditSend(s *NetlinkSocket, proto int, data []byte, sizedata, seq int) error {
 
-	wb := newNetlinkAuditRequest(proto, seq, syscall.AF_NETLINK, sizedata) //Need to work on sequence
+	wb := newNetlinkAuditRequest(proto, seq, syscall.AF_NETLINK, sizedata)
 	wb.Data = append(wb.Data[:], data[:]...)
 	if err := s.Send(wb); err != nil {
 		return err
@@ -327,6 +325,7 @@ func AuditRuleSyscallData(rule *AuditRuleData, scall int) error {
 	rule.Mask[word] |= bit
 	return nil
 }
+
 func AuditAddRuleData(s *NetlinkSocket, rule *AuditRuleData, flags int, action int) error {
 
 	if flags == AUDIT_FILTER_ENTRY {
@@ -338,21 +337,19 @@ func AuditAddRuleData(s *NetlinkSocket, rule *AuditRuleData, flags int, action i
 	rule.Action = uint32(action)
 
 	buff := new(bytes.Buffer)
-	err := binary.Write(buff, nativeEndian(), rule)
+	err := binary.Write(buff, nativeEndian(), *rule)
 	if err != nil {
 		fmt.Println("binary.Write failed:", err)
 		return err
 	}
-	seq := 1 //Should be set accordingly
-	err = AuditSend(s, AUDIT_ADD_RULE, buff.Bytes(), int(unsafe.Sizeof(rule))+int(rule.Buflen), seq)
+	seq := 2 //Should be set accordingly
+	err = AuditSend(s, AUDIT_ADD_RULE, buff.Bytes(), int(buff.Len())+int(rule.Buflen), seq)
 
-	//rc := syscall.Sendto(fd, AUDIT_ADD_RULE, rule, unsafe.Sizeof(auditstruct) + rule.buflen)
-	//rc := syscall.Sendto(fd, rule, AUDIT_ADD_RULE, syscall.Getsockname(fd))
 	if err != nil {
 		fmt.Println("Error sending add rule data request ()")
 		return err
 	}
-	return err
+	return nil
 }
 
 /* How the file should look like
