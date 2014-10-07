@@ -27,11 +27,10 @@ type AuditRuleData struct {
 	Fields      [AUDIT_MAX_FIELDS]uint32
 	Values      [AUDIT_MAX_FIELDS]uint32
 	Fieldflags  [AUDIT_MAX_FIELDS]uint32
-	Buflen      uint32 /* total length of string fields */
-	Buf         byte   //[0]string /* string fields buffer */
+	Buflen      uint32  /* total length of string fields */
+	Buf         [0]byte //[0]string /* string fields buffer */
 
 }
-
 type NetlinkSocket struct {
 	fd  int
 	lsa syscall.SockaddrNetlink
@@ -61,7 +60,7 @@ func (rr *NetlinkAuditRequest) ToWireFormat() []byte {
 	*(*uint16)(unsafe.Pointer(&b[6:8][0])) = rr.Header.Flags
 	*(*uint32)(unsafe.Pointer(&b[8:12][0])) = rr.Header.Seq
 	*(*uint32)(unsafe.Pointer(&b[12:16][0])) = rr.Header.Pid
-	b = append(b[:], rr.Data[:]...)
+	b = append(b[:16], rr.Data[:]...) //Important b[:16]
 	return b
 }
 
@@ -155,11 +154,9 @@ func (s *NetlinkSocket) Receive(bytesize int, block int) ([]syscall.NetlinkMessa
 	return ParseAuditNetlinkMessage(rb) //Or syscall.ParseNetlinkMessage(rb)
 }
 
-//func audit_send(socket, proto, Data * struct, sizeof struct)
-//func audit_get_reply(socket, proto, Data* struct , block int)
 func AuditSend(s *NetlinkSocket, proto int, data []byte, sizedata, seq int) error {
 
-	wb := newNetlinkAuditRequest(proto, seq, syscall.AF_NETLINK, sizedata) //Need to work on sequence
+	wb := newNetlinkAuditRequest(proto, seq, syscall.AF_NETLINK, sizedata)
 	wb.Data = append(wb.Data[:], data[:]...)
 	if err := s.Send(wb); err != nil {
 		return err
@@ -237,9 +234,15 @@ func AuditSetEnabled(s *NetlinkSocket, seq int) error {
 		return err
 	}
 
-	AuditSend(s, AUDIT_SET, buff.Bytes(), int(unsafe.Sizeof(status)), seq)
+	err = AuditSend(s, AUDIT_SET, buff.Bytes(), int(unsafe.Sizeof(status)), seq)
+	if err != nil {
+		return err
+	}
 	// Receiving IN JUST ONE TRY
-	AuditGetReply(s, syscall.Getpagesize(), 0, seq)
+	err = AuditGetReply(s, syscall.Getpagesize(), 0, seq)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -302,7 +305,6 @@ done:
 	return nil
 
 }
-
 func auditWord(nr int) uint32 {
 	audit_word := (uint32)((nr) / 32)
 	return (uint32)(audit_word)
@@ -313,33 +315,6 @@ func auditBit(nr int) uint32 {
 	return (uint32)(audit_bit)
 }
 
-func AuditAddRuleData(s *NetlinkSocket, rule *AuditRuleData, flags int, action int) error {
-	if flags == AUDIT_FILTER_ENTRY {
-		fmt.Println("Use of entry filter is deprecated")
-		return nil
-	}
-
-	rule.flags = (uint32)(flags)
-	rule.action = (uint32)(action)
-	buff := new(bytes.Buffer)
-	err := binary.Write(buff, nativeEndian(), rule)
-
-	if err != nil {
-		fmt.Println("binary.Write failed:", err)
-		return err
-	}
-
-	seq := 0
-	err = AuditSend(s, AUDIT_ADD_RULE, buff.Bytes(), int(unsafe.Sizeof(rule))+int(rule.buflen), seq)
-	//rc := syscall.Sendto(fd, AUDIT_ADD_RULE, rule, unsafe.Sizeof(auditstruct) + rule.buflen)
-	//rc := syscall.Sendto(fd, rule, AUDIT_ADD_RULE, syscall.Getsockname(fd))
-	if err != nil {
-		fmt.Println("Error sending add rule data request ()")
-		return err
-	}
-	return err
-}
-
 func AuditRuleSyscallData(rule *AuditRuleData, scall int) error {
 	word := auditWord(scall)
 	bit := auditBit(scall)
@@ -347,7 +322,33 @@ func AuditRuleSyscallData(rule *AuditRuleData, scall int) error {
 	if word >= AUDIT_BITMASK_SIZE-1 {
 		fmt.Println("Some error occured")
 	}
-	rule.mask[word] |= bit
+	rule.Mask[word] |= bit
+	return nil
+}
+
+func AuditAddRuleData(s *NetlinkSocket, rule *AuditRuleData, flags int, action int) error {
+
+	if flags == AUDIT_FILTER_ENTRY {
+		fmt.Println("Use of entry filter is deprecated")
+		return nil
+	}
+
+	rule.Flags = uint32(flags)
+	rule.Action = uint32(action)
+
+	buff := new(bytes.Buffer)
+	err := binary.Write(buff, nativeEndian(), *rule)
+	if err != nil {
+		fmt.Println("binary.Write failed:", err)
+		return err
+	}
+	seq := 2 //Should be set accordingly
+	err = AuditSend(s, AUDIT_ADD_RULE, buff.Bytes(), int(buff.Len())+int(rule.Buflen), seq)
+
+	if err != nil {
+		fmt.Println("Error sending add rule data request ()")
+		return err
+	}
 	return nil
 }
 
