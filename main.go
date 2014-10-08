@@ -28,6 +28,11 @@ func main() {
 	//fmt.Println(unsafe.Sizeof(foo))
 	netlinkAudit.AuditRuleSyscallData(&foo, 84)
 	//fmt.Println(foo)
+	foo.Fields[foo.Field_count] = netlinkAudit.AUDIT_ARCH
+	foo.Fieldflags[foo.Field_count] = netlinkAudit.AUDIT_EQUAL
+	foo.Values[foo.Field_count] = 64
+	foo.Field_count++
+
 	netlinkAudit.AuditAddRuleData(s, &foo, netlinkAudit.AUDIT_FILTER_EXIT, netlinkAudit.AUDIT_ALWAYS)
 	//auditctl -a rmdir exit,always
 	//Flags are exit
