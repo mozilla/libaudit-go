@@ -11,7 +11,6 @@ const (
 	AUDIT_MAX_FIELDS         = 64
 	AUDIT_BITMASK_SIZE       = 64
 	AUDIT_GET_FEATURE        = 1019
-	AUDIT_STATUS_ENABLED     = 0x0001
 	//Rule Flags
 	AUDIT_FILTER_USER  = 0x00 /* Apply rule to user-generated messages */
 	AUDIT_FILTER_TASK  = 0x01 /* Apply rule at task creation (not syscall) */
@@ -63,6 +62,18 @@ const (
 	AUDIT_LESS_THAN_OR_EQUAL    = (AUDIT_LESS_THAN | AUDIT_EQUAL)
 	AUDIT_GREATER_THAN_OR_EQUAL = (AUDIT_GREATER_THAN | AUDIT_EQUAL)
 	AUDIT_OPERATORS             = (AUDIT_EQUAL | AUDIT_NOT_EQUAL | AUDIT_BIT_MASK)
+	/* Status symbols */
+	/* Mask values */
+	AUDIT_STATUS_ENABLED       = 0x0001
+	AUDIT_STATUS_FAILURE       = 0x0002
+	AUDIT_STATUS_PID           = 0x0004
+	AUDIT_STATUS_RATE_LIMIT    = 0x0008
+	AUDIT_STATUS_BACKLOG_LIMIT = 0x0010
+	/* Failure-to-log actions */
+	AUDIT_FAIL_SILENT = 0
+	AUDIT_FAIL_PRINTK = 1
+	AUDIT_FAIL_PANIC  = 2
+
 	/* distinguish syscall tables */
 	__AUDIT_ARCH_64BIT  = 0x80000000
 	__AUDIT_ARCH_LE     = 0x40000000

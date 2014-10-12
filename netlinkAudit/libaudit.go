@@ -142,6 +142,11 @@ func (s *NetlinkSocket) Receive(bytesize int, block int) ([]syscall.NetlinkMessa
 	rb := make([]byte, bytesize)
 	nr, _, err := syscall.Recvfrom(s.fd, rb, 0|block)
 	//nr, _, err := syscall.Recvfrom(s, rb, syscall.MSG_PEEK|syscall.MSG_DONTWAIT)
+	/*
+		if err == syscall.EAGAIN {
+			return nil, err
+		}
+	*/
 	if err != nil {
 		return nil, err
 	}
@@ -149,8 +154,6 @@ func (s *NetlinkSocket) Receive(bytesize int, block int) ([]syscall.NetlinkMessa
 		return nil, syscall.EINVAL
 	}
 	rb = rb[:nr]
-	//var tab []byte
-	//append(tab, rb...)
 	return ParseAuditNetlinkMessage(rb) //Or syscall.ParseNetlinkMessage(rb)
 }
 
@@ -171,7 +174,6 @@ done:
 		if err != nil {
 			return err
 		}
-
 		for _, m := range msgs {
 			lsa, err := syscall.Getsockname(s.fd)
 			if err != nil {
@@ -247,7 +249,6 @@ func AuditSetEnabled(s *NetlinkSocket, seq int) error {
 }
 
 func AuditIsEnabled(s *NetlinkSocket, seq int) error {
-	fmt.Println("Now Sending AUDIT_GET for Checking if Audit is enabled or not \n")
 	wb := newNetlinkAuditRequest(AUDIT_GET, seq, syscall.AF_NETLINK, 0)
 
 	if err := s.Send(wb); err != nil {
@@ -282,7 +283,7 @@ done:
 
 			}
 			if m.Header.Type == syscall.NLMSG_ERROR {
-				fmt.Println("NLMSG_ERROR\n\n")
+				fmt.Println("NLMSG_ERROR\n")
 			}
 			if m.Header.Type == AUDIT_GET {
 				//Conversion of the data part written to AuditStatus struct
@@ -302,6 +303,31 @@ done:
 		}
 
 	}
+	return nil
+
+}
+func AuditSetPid(s *NetlinkSocket, pid uint32 /*,Wait mode WAIT_YES | WAIT_NO */) error {
+	var status AuditStatus
+	status.Mask = AUDIT_STATUS_PID
+	status.Pid = pid
+	buff := new(bytes.Buffer)
+	err := binary.Write(buff, nativeEndian(), status)
+	if err != nil {
+		fmt.Println("binary.Write failed:", err)
+		return err
+	}
+
+	err = AuditSend(s, AUDIT_SET, buff.Bytes(), int(unsafe.Sizeof(status)), 3)
+	if err != nil {
+		return err
+	}
+
+	err = AuditGetReply(s, syscall.Getpagesize(), 0, 3)
+	if err != nil {
+		return err
+	}
+	//Polling in GO
+
 	return nil
 
 }
@@ -342,7 +368,7 @@ func AuditAddRuleData(s *NetlinkSocket, rule *AuditRuleData, flags int, action i
 		fmt.Println("binary.Write failed:", err)
 		return err
 	}
-	seq := 2 //Should be set accordingly
+	seq := 4 //Should be set accordingly
 	err = AuditSend(s, AUDIT_ADD_RULE, buff.Bytes(), int(buff.Len())+int(rule.Buflen), seq)
 
 	if err != nil {
