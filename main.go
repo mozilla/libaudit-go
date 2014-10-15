@@ -4,8 +4,11 @@ import (
 	"fmt"
 	"github.com/arunk-s/netlinkAudit" //Should be changed according to individual settings
 	"syscall"
-	///	"unsafe"
+	"time"
+	//	"unsafe"
 )
+
+var done chan bool
 
 func main() {
 	s, err := netlinkAudit.GetNetlinkSocket()
@@ -34,21 +37,33 @@ func main() {
 	foo.Field_count++
 	//seq := 3
 	netlinkAudit.AuditAddRuleData(s, &foo, netlinkAudit.AUDIT_FILTER_EXIT, netlinkAudit.AUDIT_ALWAYS)
-	//TODO: Need to comeup with a method to generate atomic sequence numbers for sending the messages.
-	//Listening in a while loop from kernel when some event goes down through Kernel
-	/*
-		Creating Errors for now
-			seq := 3
 
-			for {
-				err := netlinkAudit.AuditGetReply(s, syscall.Getpagesize(), syscall.MSG_DONTWAIT, seq)
-				if err != nil {
-					continue
-				}
+	done = make(chan bool)
+	msgchan := make(chan syscall.NetlinkMessage)
+	errchan := make(chan error)
 
-				seq++
+	go netlinkAudit.Getreply(s, msgchan, errchan, done)
+
+	go func() {
+		for {
+			select {
+			case ev := <-errchan:
+				fmt.Println("Eror", ev)
+			case ev := <-msgchan:
+				fmt.Println("Message", ev)
 			}
-	*/
+
+		}
+	}()
+	time.Sleep(15 * time.Second)
+	done <- true
+
+	//Listening in a while loop from kernel when some event goes down through Kernel
+	//TODO : Make a HandleAck
+	//Remove seq dependency in AuditReply............
+	//Important point is that NLMSG_ERROR is also an acknowledgement from Kernel If the first 4 bytes of Data part are zero
+	// than it means the message is acknowledged
+
 	//auditctl -a rmdir exit,always
 	//Flags are exit
 	//Action is always

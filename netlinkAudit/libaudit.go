@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"sync/atomic"
 	"syscall"
 	"unsafe"
 )
+
+var nextSeqNr uint32
 
 type AuditStatus struct {
 	Mask          uint32 /* Bit mask for valid entries */
@@ -64,13 +67,13 @@ func (rr *NetlinkAuditRequest) ToWireFormat() []byte {
 	return b
 }
 
-func newNetlinkAuditRequest(proto, seq, family, sizeofData int) *NetlinkAuditRequest {
+func newNetlinkAuditRequest(proto /*seq,*/, family, sizeofData int) *NetlinkAuditRequest {
 	rr := &NetlinkAuditRequest{}
 
 	rr.Header.Len = uint32(syscall.NLMSG_HDRLEN + sizeofData)
 	rr.Header.Type = uint16(proto)
 	rr.Header.Flags = syscall.NLM_F_REQUEST | syscall.NLM_F_ACK
-	rr.Header.Seq = uint32(seq)
+	rr.Header.Seq = atomic.AddUint32(&nextSeqNr, 1) //Autoincrementing Sequence
 	return rr
 	//	return rr.ToWireFormat()
 }
@@ -99,6 +102,9 @@ func netlinkMessageHeaderAndData(b []byte) (*syscall.NlMsghdr, []byte, int, erro
 
 	h := (*syscall.NlMsghdr)(unsafe.Pointer(&b[0]))
 	if int(h.Len) < syscall.NLMSG_HDRLEN || int(h.Len) > len(b) {
+		foo := int32(nativeEndian().Uint32(b[0:4]))
+		fmt.Println(foo) //!!!!While recv message this is causing bug ! FIX THIS
+
 		fmt.Println("Error due to....HDRLEN:", syscall.NLMSG_HDRLEN, " Header Length:", h.Len, " Length of BYTE Array:", len(b))
 		return nil, nil, 0, syscall.EINVAL
 	}
@@ -142,11 +148,7 @@ func (s *NetlinkSocket) Receive(bytesize int, block int) ([]syscall.NetlinkMessa
 	rb := make([]byte, bytesize)
 	nr, _, err := syscall.Recvfrom(s.fd, rb, 0|block)
 	//nr, _, err := syscall.Recvfrom(s, rb, syscall.MSG_PEEK|syscall.MSG_DONTWAIT)
-	/*
-		if err == syscall.EAGAIN {
-			return nil, err
-		}
-	*/
+
 	if err != nil {
 		return nil, err
 	}
@@ -157,9 +159,9 @@ func (s *NetlinkSocket) Receive(bytesize int, block int) ([]syscall.NetlinkMessa
 	return ParseAuditNetlinkMessage(rb) //Or syscall.ParseNetlinkMessage(rb)
 }
 
-func AuditSend(s *NetlinkSocket, proto int, data []byte, sizedata, seq int) error {
+func AuditSend(s *NetlinkSocket, proto int, data []byte, sizedata /*,seq */ int) error {
 
-	wb := newNetlinkAuditRequest(proto, seq, syscall.AF_NETLINK, sizedata)
+	wb := newNetlinkAuditRequest(proto, syscall.AF_NETLINK, sizedata)
 	wb.Data = append(wb.Data[:], data[:]...)
 	if err := s.Send(wb); err != nil {
 		return err
@@ -183,6 +185,7 @@ done:
 			case *syscall.SockaddrNetlink:
 
 				if m.Header.Seq != uint32(seq) || m.Header.Pid != v.Pid {
+					fmt.Println("foo", seq, m.Header.Seq)
 					return syscall.EINVAL
 				}
 			default:
@@ -195,6 +198,12 @@ done:
 				break done
 			}
 			if m.Header.Type == syscall.NLMSG_ERROR {
+				error := int32(nativeEndian().Uint32(m.Data[0:4]))
+				if error == 0 {
+					fmt.Println("furr")
+					break done
+				}
+
 				fmt.Println("NLMSG_ERROR")
 				break done
 				//return nil
@@ -236,7 +245,7 @@ func AuditSetEnabled(s *NetlinkSocket, seq int) error {
 		return err
 	}
 
-	err = AuditSend(s, AUDIT_SET, buff.Bytes(), int(unsafe.Sizeof(status)), seq)
+	err = AuditSend(s, AUDIT_SET, buff.Bytes(), int(unsafe.Sizeof(status)))
 	if err != nil {
 		return err
 	}
@@ -249,7 +258,7 @@ func AuditSetEnabled(s *NetlinkSocket, seq int) error {
 }
 
 func AuditIsEnabled(s *NetlinkSocket, seq int) error {
-	wb := newNetlinkAuditRequest(AUDIT_GET, seq, syscall.AF_NETLINK, 0)
+	wb := newNetlinkAuditRequest(AUDIT_GET, syscall.AF_NETLINK, 0)
 
 	if err := s.Send(wb); err != nil {
 		return err
@@ -317,7 +326,7 @@ func AuditSetPid(s *NetlinkSocket, pid uint32 /*,Wait mode WAIT_YES | WAIT_NO */
 		return err
 	}
 
-	err = AuditSend(s, AUDIT_SET, buff.Bytes(), int(unsafe.Sizeof(status)), 3)
+	err = AuditSend(s, AUDIT_SET, buff.Bytes(), int(unsafe.Sizeof(status)))
 	if err != nil {
 		return err
 	}
@@ -326,7 +335,7 @@ func AuditSetPid(s *NetlinkSocket, pid uint32 /*,Wait mode WAIT_YES | WAIT_NO */
 	if err != nil {
 		return err
 	}
-	//Polling in GO
+	//Polling in GO Is it needed ?
 
 	return nil
 
@@ -368,14 +377,110 @@ func AuditAddRuleData(s *NetlinkSocket, rule *AuditRuleData, flags int, action i
 		fmt.Println("binary.Write failed:", err)
 		return err
 	}
-	seq := 4 //Should be set accordingly
-	err = AuditSend(s, AUDIT_ADD_RULE, buff.Bytes(), int(buff.Len())+int(rule.Buflen), seq)
+	err = AuditSend(s, AUDIT_ADD_RULE, buff.Bytes(), int(buff.Len())+int(rule.Buflen))
 
 	if err != nil {
 		fmt.Println("Error sending add rule data request ()")
 		return err
 	}
 	return nil
+}
+
+//A very gibberish hack right now , Need to work on the design of this package.
+
+func isDone(msgchan chan<- syscall.NetlinkMessage, errchan chan<- error, done <-chan bool) bool {
+	var d bool
+	select {
+	case d = <-done:
+		close(msgchan)
+		close(errchan)
+	default:
+	}
+	return d
+}
+
+func Getreply(s *NetlinkSocket, msgchan chan<- syscall.NetlinkMessage, errchan chan<- error, done <-chan bool) {
+
+	rb := make([]byte, MAX_AUDIT_MESSAGE_LENGTH)
+
+	for {
+
+		nr, _, err := syscall.Recvfrom(s.fd, rb, 0 /*Do not use syscall.MSG_DONTWAIT*/)
+
+		if isDone(msgchan, errchan, done) {
+			return
+		}
+
+		if err != nil {
+			errchan <- err
+			continue
+		}
+		if nr < syscall.NLMSG_HDRLEN {
+			errchan <- syscall.EINVAL
+			continue
+		}
+
+		rb = rb[:nr]
+
+		msgs, err := ParseAuditNetlinkMessage(rb) //Or syscall.ParseNetlinkMessage(rb)
+
+		if err != nil {
+			errchan <- err
+			continue
+		}
+		for _, m := range msgs {
+			/*
+				Not needed while receiving from kernel ?
+							lsa, err := syscall.Getsockname(s.fd)
+							if err != nil {
+								errchan <- err
+								continue
+								//return err
+							}
+								switch v := lsa.(type) {
+								case *syscall.SockaddrNetlink:
+
+									if m.Header.Seq != uint32(seq) || m.Header.Pid != v.Pid {
+										fmt.Println("foo", seq, m.Header.Seq)
+										errchan <- syscall.EINVAL
+										//return syscall.EINVAL
+									}
+								default:
+									errchan <- syscall.EINVAL
+									//return syscall.EINVAL
+
+								}
+			*/
+			//Decide on various message Types
+			if m.Header.Type == syscall.NLMSG_DONE {
+				fmt.Println("Done")
+				msgchan <- m
+				//continue
+			}
+			if m.Header.Type == syscall.NLMSG_ERROR {
+				err := int32(nativeEndian().Uint32(m.Data[0:4]))
+				if err == 0 {
+					fmt.Println("furr")
+					//continue
+				}
+
+				fmt.Println("NLMSG_ERROR")
+				msgchan <- m
+				//continue
+			}
+			if m.Header.Type == AUDIT_GET {
+				fmt.Println("AUDIT_GET")
+				msgchan <- m
+				//continue
+			}
+			if m.Header.Type == AUDIT_FIRST_USER_MSG {
+				fmt.Println("AUDIT_FIRST_USER_MSG")
+				msgchan <- m
+				//continue
+			}
+		}
+
+	}
 }
 
 /* How the file should look like
