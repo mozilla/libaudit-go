@@ -1,9 +1,28 @@
-
 {
-"rmdir":84,
-"read":0,
-"write":1,
-"open":2,
-"close":3,
-"stat":4
+	"xmap" : [
+		{
+			"name": "rmdir",
+			"id"  : 84
+		},
+		{
+			"name": "read",
+			"id"  : 0
+		},
+		{
+			"name": "write",
+			"id"  : 1
+		},
+		{
+			"name": "open",
+			"id"  : 2
+		},
+		{
+			"name": "close",
+			"id"  : 3
+		},
+		{
+			"name": "stat",
+			"id"  : 4
+		}
+	]
 }
