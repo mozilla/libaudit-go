@@ -36,7 +36,7 @@ func main() {
 	foo.Values[foo.Field_count] = netlinkAudit.AUDIT_ARCH_X86_64
 	foo.Field_count++
 	//seq := 3
-	netlinkAudit.AuditAddRuleData(s, &foo, netlinkAudit.AUDIT_FILTER_EXIT, netlinkAudit.AUDIT_ALWAYS)
+	//netlinkAudit.AuditAddRuleData(s, &foo, netlinkAudit.AUDIT_FILTER_EXIT, netlinkAudit.AUDIT_ALWAYS)
 
 	done = make(chan bool)
 	msgchan := make(chan syscall.NetlinkMessage)
