@@ -24,6 +24,12 @@ const (
 	AUDIT_POSSIBLE = 1 /* Build context if rule matches  */
 	AUDIT_ALWAYS   = 2 /* Generate audit record if rule matches */
 
+	/*Audit Message Types */
+	AUDIT_SYSCALL = 1300 /* Syscall event */
+	AUDIT_PATH    = 1302 /* Filename path information */
+	AUDIT_CWD     = 1307 /* Current working directory */
+	AUDIT_EXECVE  = 1309 /* execve arguments */
+
 	/* Rule fields */
 	/* These are useful when checking the
 	 * task structure at task creation time

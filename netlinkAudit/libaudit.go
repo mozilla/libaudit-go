@@ -95,15 +95,17 @@ func ParseAuditNetlinkMessage(b []byte) ([]syscall.NetlinkMessage, error) {
 		msgs = append(msgs, m)
 		b = b[dlen:]
 	}
+	fmt.Println("Passed")
 	return msgs, nil
 }
 
 func netlinkMessageHeaderAndData(b []byte) (*syscall.NlMsghdr, []byte, int, error) {
 
 	h := (*syscall.NlMsghdr)(unsafe.Pointer(&b[0]))
+	fmt.Println("HEADER", b[0])
 	if int(h.Len) < syscall.NLMSG_HDRLEN || int(h.Len) > len(b) {
 		foo := int32(nativeEndian().Uint32(b[0:4]))
-		fmt.Println(foo) //!!!!While recv message this is causing bug ! FIX THIS
+		fmt.Println("Headerlength", foo) //!!!!While recv message this is causing bug ! FIX THIS
 
 		fmt.Println("Error due to....HDRLEN:", syscall.NLMSG_HDRLEN, " Header Length:", h.Len, " Length of BYTE Array:", len(b))
 		return nil, nil, 0, syscall.EINVAL
@@ -402,7 +404,7 @@ func isDone(msgchan chan<- syscall.NetlinkMessage, errchan chan<- error, done <-
 func Getreply(s *NetlinkSocket, msgchan chan<- syscall.NetlinkMessage, errchan chan<- error, done <-chan bool) {
 
 	rb := make([]byte, MAX_AUDIT_MESSAGE_LENGTH)
-
+	//	rb := make([]byte, syscall.Getpagesize())
 	for {
 
 		nr, _, err := syscall.Recvfrom(s.fd, rb, 0 /*Do not use syscall.MSG_DONTWAIT*/)
@@ -421,7 +423,7 @@ func Getreply(s *NetlinkSocket, msgchan chan<- syscall.NetlinkMessage, errchan c
 		}
 
 		rb = rb[:nr]
-
+		//fmt.Println("num recieved :", nr, len(rb))
 		msgs, err := ParseAuditNetlinkMessage(rb) //Or syscall.ParseNetlinkMessage(rb)
 
 		if err != nil {
@@ -456,28 +458,35 @@ func Getreply(s *NetlinkSocket, msgchan chan<- syscall.NetlinkMessage, errchan c
 				fmt.Println("Done")
 				msgchan <- m
 				//continue
-			}
-			if m.Header.Type == syscall.NLMSG_ERROR {
+			} else if m.Header.Type == syscall.NLMSG_ERROR {
 				err := int32(nativeEndian().Uint32(m.Data[0:4]))
 				if err == 0 {
-					fmt.Println("furr")
+					fmt.Println("Ack") //Acknowledgement from kernel
 					//continue
 				}
 
 				fmt.Println("NLMSG_ERROR")
 				msgchan <- m
 				//continue
-			}
-			if m.Header.Type == AUDIT_GET {
+			} else if m.Header.Type == AUDIT_GET {
 				fmt.Println("AUDIT_GET")
 				msgchan <- m
 				//continue
-			}
-			if m.Header.Type == AUDIT_FIRST_USER_MSG {
+			} else if m.Header.Type == AUDIT_FIRST_USER_MSG {
 				fmt.Println("AUDIT_FIRST_USER_MSG")
 				msgchan <- m
 				//continue
+			} else if m.Header.Type == AUDIT_SYSCALL {
+				fmt.Println("Syscall Event")
+				msgchan <- m
+			} else if m.Header.Type == AUDIT_CWD {
+				fmt.Println("CWD Event")
+				msgchan <- m
+			} else {
+				fmt.Println("UNKnown: ", m.Header.Type)
+				msgchan <- m
 			}
+
 		}
 
 	}

@@ -25,19 +25,22 @@ func main() {
 		fmt.Println("Horrah")
 	}
 	netlinkAudit.AuditSetPid(s, uint32(syscall.Getpid()))
-	var foo netlinkAudit.AuditRuleData
-	// we need audit_name_to_field( ) && audit_rule_fieldpair_data
-	//Syscall rmdir() is 84 on table
-	//fmt.Println(unsafe.Sizeof(foo))
-	netlinkAudit.AuditRuleSyscallData(&foo, 84)
-	//fmt.Println(foo)
-	foo.Fields[foo.Field_count] = netlinkAudit.AUDIT_ARCH
-	foo.Fieldflags[foo.Field_count] = netlinkAudit.AUDIT_EQUAL
-	foo.Values[foo.Field_count] = netlinkAudit.AUDIT_ARCH_X86_64
-	foo.Field_count++
-	//seq := 3
-	netlinkAudit.AuditAddRuleData(s, &foo, netlinkAudit.AUDIT_FILTER_EXIT, netlinkAudit.AUDIT_ALWAYS)
 
+	/*
+		Uncomment this once to first add the rules and then comment it again to just receive !
+			var foo netlinkAudit.AuditRuleData
+			// we need audit_name_to_field( ) && audit_rule_fieldpair_data
+			//Syscall rmdir() is 84 on table
+			//fmt.Println(unsafe.Sizeof(foo))
+			netlinkAudit.AuditRuleSyscallData(&foo, 84)
+			//fmt.Println(foo)
+			foo.Fields[foo.Field_count] = netlinkAudit.AUDIT_ARCH
+			foo.Fieldflags[foo.Field_count] = netlinkAudit.AUDIT_EQUAL
+			foo.Values[foo.Field_count] = netlinkAudit.AUDIT_ARCH_X86_64
+			foo.Field_count++
+			//seq := 3
+			netlinkAudit.AuditAddRuleData(s, &foo, netlinkAudit.AUDIT_FILTER_EXIT, netlinkAudit.AUDIT_ALWAYS)
+	*/
 	done = make(chan bool)
 	msgchan := make(chan syscall.NetlinkMessage)
 	errchan := make(chan error)
