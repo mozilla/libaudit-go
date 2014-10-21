@@ -25,10 +25,14 @@ const (
 	AUDIT_ALWAYS   = 2 /* Generate audit record if rule matches */
 
 	/*Audit Message Types */
-	AUDIT_SYSCALL = 1300 /* Syscall event */
-	AUDIT_PATH    = 1302 /* Filename path information */
-	AUDIT_CWD     = 1307 /* Current working directory */
-	AUDIT_EXECVE  = 1309 /* execve arguments */
+	AUDIT_SYSCALL       = 1300 /* Syscall event */
+	AUDIT_PATH          = 1302 /* Filename path information */
+	AUDIT_IPC           = 1303 /* IPC record */
+	AUDIT_SOCKETCALL    = 1304 /* sys_socketcall arguments */
+	AUDIT_CONFIG_CHANGE = 1305 /* Audit system configuration change */
+	AUDIT_SOCKADDR      = 1306 /* sockaddr copied as syscall arg */
+	AUDIT_CWD           = 1307 /* Current working directory */
+	AUDIT_EXECVE        = 1309 /* execve arguments */
 
 	/* Rule fields */
 	/* These are useful when checking the
