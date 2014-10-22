@@ -17,8 +17,8 @@ func main() {
 	}
 	defer s.Close()
 
-	netlinkAudit.AuditSetEnabled(s, 1)
-	err = netlinkAudit.AuditIsEnabled(s, 2)
+	netlinkAudit.AuditSetEnabled(s)
+	err = netlinkAudit.AuditIsEnabled(s)
 	fmt.Println("parsedResult")
 	fmt.Println(netlinkAudit.ParsedResult)
 	if err == nil {
