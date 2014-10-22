@@ -262,7 +262,7 @@ func AuditSetEnabled(s *NetlinkSocket, seq int) error {
 		return err
 	}
 	// Receiving IN JUST ONE TRY
-	err = AuditGetReply(s, syscall.Getpagesize(), 0, seq)
+	err = AuditGetReply(s, syscall.Getpagesize(), 0)
 	if err != nil {
 		return err
 	}
@@ -340,7 +340,7 @@ func AuditSetPid(s *NetlinkSocket, pid uint32 /*,Wait mode WAIT_YES | WAIT_NO */
 		return err
 	}
 
-	err = AuditGetReply(s, syscall.Getpagesize(), 0, 3)
+	err = AuditGetReply(s, syscall.Getpagesize(), 0)
 	if err != nil {
 		return err
 	}
