@@ -33,6 +33,7 @@ const (
 	AUDIT_SOCKADDR      = 1306 /* sockaddr copied as syscall arg */
 	AUDIT_CWD           = 1307 /* Current working directory */
 	AUDIT_EXECVE        = 1309 /* execve arguments */
+	AUDIT_EOE           = 1320 /* End of multi-record event */
 
 	/* Rule fields */
 	/* These are useful when checking the

@@ -83,36 +83,49 @@ func nlmAlignOf(msglen int) int {
 	return (msglen + syscall.NLMSG_ALIGNTO - 1) & ^(syscall.NLMSG_ALIGNTO - 1)
 }
 
+/*
+ NLMSG_HDRLEN     ((int) NLMSG_ALIGN(sizeof(struct nlmsghdr)))
+ NLMSG_LENGTH(len) ((len) + NLMSG_HDRLEN)
+ NLMSG_SPACE(len) NLMSG_ALIGN(NLMSG_LENGTH(len))
+ NLMSG_DATA(nlh)  ((void*)(((char*)nlh) + NLMSG_LENGTH(0)))
+ NLMSG_NEXT(nlh,len)      ((len) -= NLMSG_ALIGN((nlh)->nlmsg_len), \
+                                    (struct nlmsghdr*)(((char*)(nlh)) + NLMSG_ALIGN((nlh)->nlmsg_len)))
+ NLMSG_OK(nlh,len) ((len) >= (int)sizeof(struct nlmsghdr) && \
+                             (nlh)->nlmsg_len >= sizeof(struct nlmsghdr) && \
+                             (nlh)->nlmsg_len <= (len))
+*/
+
 func ParseAuditNetlinkMessage(b []byte) ([]syscall.NetlinkMessage, error) {
 	var msgs []syscall.NetlinkMessage
-	for len(b) >= syscall.NLMSG_HDRLEN {
-		h, dbuf, dlen, err := netlinkMessageHeaderAndData(b)
-		if err != nil {
-			fmt.Println("Error in parsing")
-			return nil, err
-		}
-		m := syscall.NetlinkMessage{Header: *h, Data: dbuf[:int(h.Len) /*-syscall.NLMSG_HDRLEN*/]}
-		//Commented the subtraction. Leading to trimming of the output Data string
-		msgs = append(msgs, m)
-		b = b[dlen:]
+	//What is the reason for looping ?
+	//	for len(b) >= syscall.NLMSG_HDRLEN {
+	h, dbuf, dlen, err := netlinkMessageHeaderAndData(b)
+	if err != nil {
+		fmt.Println("Error in parsing")
+		return nil, err
 	}
-	fmt.Println("Passed")
+	//fmt.Println("Get 3", h, dbuf, dlen, len(b))
+	m := syscall.NetlinkMessage{Header: *h, Data: dbuf[:int(h.Len) /* -syscall.NLMSG_HDRLEN*/]}
+	//Commented the subtraction. Leading to trimming of the output Data string
+	msgs = append(msgs, m)
+	b = b[dlen:]
+	//	}
+	//fmt.Println("Passed", msgs)
 	return msgs, nil
 }
 
 func netlinkMessageHeaderAndData(b []byte) (*syscall.NlMsghdr, []byte, int, error) {
 
 	h := (*syscall.NlMsghdr)(unsafe.Pointer(&b[0]))
-	fmt.Println("HEADER", b[0], "\n", b)
+	//fmt.Println("HEADER 1", b[0], b)
 	if int(h.Len) < syscall.NLMSG_HDRLEN || int(h.Len) > len(b) {
 		foo := int32(nativeEndian().Uint32(b[0:4]))
 		fmt.Println("Headerlength with ", foo, b[0]) //!bug ! FIX THIS
 		//IT happens only when message don't contain any useful message only dummy strings
-
 		fmt.Println("Error due to....HDRLEN:", syscall.NLMSG_HDRLEN, " Header Length:", h.Len, " Length of BYTE Array:", len(b))
 		return nil, nil, 0, syscall.EINVAL
 	}
-//	fmt.Println("OUT" ,b[0])
+	//fmt.Println("OUT 2", b[0], b, syscall.NLMSG_HDRLEN)
 	return h, b[syscall.NLMSG_HDRLEN:], nlmAlignOf(int(h.Len)), nil
 }
 
@@ -230,9 +243,6 @@ done:
 				fmt.Println("AUDIT_FIRST_USER_MSG")
 				//break done
 			}
-			if m.Header.Type == 1009 {
-				fmt.Println("Watchlist")
-			}
 
 		}
 	}
@@ -308,9 +318,6 @@ done:
 				var dumm AuditStatus
 				err = binary.Read(buf, nativeEndian(), &dumm)
 				ParsedResult = dumm
-				//fmt.Println("\nstruct :", dumm, err)
-				//fmt.Println("\nStatus: ", dumm.Enabled)
-
 				fmt.Println("ENABLED")
 				break done
 			}
@@ -404,33 +411,24 @@ func isDone(msgchan chan<- syscall.NetlinkMessage, errchan chan<- error, done <-
 	}
 	return d
 }
-
-func Getreply(s *NetlinkSocket, msgchan chan<- syscall.NetlinkMessage, errchan chan<- error, done <-chan bool) {
-
-	//	rb := make([]byte, syscall.Getpagesize())
+func GetreplyWithoutSync(s *NetlinkSocket) {
 	for {
 		rb := make([]byte, MAX_AUDIT_MESSAGE_LENGTH)
 		nr, _, err := syscall.Recvfrom(s.fd, rb, 0 /*Do not use syscall.MSG_DONTWAIT*/)
-
-		if isDone(msgchan, errchan, done) {
-			return
-		}
-
 		if err != nil {
-			errchan <- err
+			fmt.Println("Error While Recieving !!")
 			continue
 		}
 		if nr < syscall.NLMSG_HDRLEN {
-			errchan <- syscall.EINVAL
+			fmt.Println("Message Too Short!!")
 			continue
 		}
 
 		rb = rb[:nr]
-		//fmt.Println("num recieved :", nr, len(rb))
 		msgs, err := ParseAuditNetlinkMessage(rb) //Or syscall.ParseNetlinkMessage(rb)
 
 		if err != nil {
-			errchan <- err
+			fmt.Println("Not Parsed Successfuly !!")
 			continue
 		}
 		for _, m := range msgs {
@@ -459,7 +457,98 @@ func Getreply(s *NetlinkSocket, msgchan chan<- syscall.NetlinkMessage, errchan c
 			//Decide on various message Types
 			if m.Header.Type == syscall.NLMSG_DONE {
 				fmt.Println("Done")
-				msgchan <- m
+			} else if m.Header.Type == syscall.NLMSG_ERROR {
+				err := int32(nativeEndian().Uint32(m.Data[0:4]))
+				if err == 0 {
+					fmt.Println("Ack") //Acknowledgement from kernel
+				}
+				fmt.Println("NLMSG_ERROR")
+
+			} else if m.Header.Type == AUDIT_GET {
+				fmt.Println("AUDIT_GET")
+
+			} else if m.Header.Type == AUDIT_FIRST_USER_MSG {
+				fmt.Println("AUDIT_FIRST_USER_MSG")
+
+			} else if m.Header.Type == AUDIT_SYSCALL {
+				fmt.Println("Syscall Event")
+				fmt.Println(string(m.Data[:]))
+
+			} else if m.Header.Type == AUDIT_CWD {
+				fmt.Println("CWD Event")
+				fmt.Println(string(m.Data[:]))
+
+			} else if m.Header.Type == AUDIT_PATH {
+				fmt.Println("Path Event")
+				fmt.Println(string(m.Data[:]))
+
+			} else if m.Header.Type == AUDIT_EOE {
+				fmt.Println("Event Ends ", string(m.Data[:]))
+			} else {
+				fmt.Println("UNKnown: ", m.Header.Type)
+
+			}
+
+		}
+
+	}
+
+}
+
+func Getreply(s *NetlinkSocket, msgchan chan<- syscall.NetlinkMessage, errchan chan<- error, done <-chan bool) {
+
+	//	rb := make([]byte, syscall.Getpagesize())
+	for {
+		rb := make([]byte, MAX_AUDIT_MESSAGE_LENGTH)
+		nr, _, err := syscall.Recvfrom(s.fd, rb, 0 /*Do not use syscall.MSG_DONTWAIT*/)
+		/*
+			if isDone(msgchan, errchan, done) {
+				return
+			}
+		*/
+		if err != nil {
+			//errchan <- err
+			continue
+		}
+		if nr < syscall.NLMSG_HDRLEN {
+			//errchan <- syscall.EINVAL
+			continue
+		}
+
+		rb = rb[:nr]
+		msgs, err := ParseAuditNetlinkMessage(rb) //Or syscall.ParseNetlinkMessage(rb)
+
+		if err != nil {
+			//errchan <- err
+			continue
+		}
+		for _, m := range msgs {
+			/*
+				Not needed while receiving from kernel ?
+							lsa, err := syscall.Getsockname(s.fd)
+							if err != nil {
+								errchan <- err
+								continue
+								//return err
+							}
+								switch v := lsa.(type) {
+								case *syscall.SockaddrNetlink:
+
+									if m.Header.Seq != uint32(seq) || m.Header.Pid != v.Pid {
+										fmt.Println("foo", seq, m.Header.Seq)
+										errchan <- syscall.EINVAL
+										//return syscall.EINVAL
+									}
+								default:
+									errchan <- syscall.EINVAL
+									//return syscall.EINVAL
+
+								}
+			*/
+			//Decide on various message Types
+			if m.Header.Type == syscall.NLMSG_DONE {
+				fmt.Println("Done")
+				//msgchan <- m
 				//continue
 			} else if m.Header.Type == syscall.NLMSG_ERROR {
 				err := int32(nativeEndian().Uint32(m.Data[0:4]))
@@ -469,31 +558,33 @@ func Getreply(s *NetlinkSocket, msgchan chan<- syscall.NetlinkMessage, errchan c
 				}
 
 				fmt.Println("NLMSG_ERROR")
-				msgchan <- m
+				//msgchan <- m
 				//continue
 			} else if m.Header.Type == AUDIT_GET {
 				fmt.Println("AUDIT_GET")
-				msgchan <- m
+				//msgchan <- m
 				//continue
 			} else if m.Header.Type == AUDIT_FIRST_USER_MSG {
 				fmt.Println("AUDIT_FIRST_USER_MSG")
-				msgchan <- m
+				//msgchan <- m
 				//continue
 			} else if m.Header.Type == AUDIT_SYSCALL {
 				fmt.Println("Syscall Event")
-				//	fmt.Println(string(m.Data[:]))
-				msgchan <- m
+				fmt.Println(string(m.Data[:]))
+				//msgchan <- m
 			} else if m.Header.Type == AUDIT_CWD {
 				fmt.Println("CWD Event")
-				//	fmt.Println(string(m.Data[:]))
-				msgchan <- m
+				fmt.Println(string(m.Data[:]))
+				//msgchan <- m
 			} else if m.Header.Type == AUDIT_PATH {
 				fmt.Println("Path Event")
-				//	fmt.Println(string(m.Data[:]))
-				msgchan <- m
+				fmt.Println(string(m.Data[:]))
+				//msgchan <- m
+			} else if m.Header.Type == AUDIT_EOE {
+				fmt.Println("Event Ends ", string(m.Data[:]))
 			} else {
 				fmt.Println("UNKnown: ", m.Header.Type)
-				msgchan <- m
+				//msgchan <- m
 			}
 
 		}
