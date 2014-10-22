@@ -176,8 +176,8 @@ func (s *NetlinkSocket) Receive(bytesize int, block int) ([]syscall.NetlinkMessa
 	rb = rb[:nr]
 	return ParseAuditNetlinkMessage(rb) //Or syscall.ParseNetlinkMessage(rb)
 }
-
-func AuditSend(s *NetlinkSocket, proto int, data []byte, sizedata /*,seq */ int) error {
+/*
+func AuditSend(s *NetlinkSocket, proto int, data []byte, sizedata ,//seq,int) error {
 
 	wb := newNetlinkAuditRequest(proto, syscall.AF_NETLINK, sizedata)
 	wb.Data = append(wb.Data[:], data[:]...)
@@ -186,9 +186,9 @@ func AuditSend(s *NetlinkSocket, proto int, data []byte, sizedata /*,seq */ int)
 	}
 	return nil
 }
-
+*/
 //should it be changed to HandleAck ?
-func AuditGetReply(s *NetlinkSocket, bytesize, block int) error {
+func AuditGetReply(s *NetlinkSocket, bytesize, block, seq int) error {
 done:
 	for {
 		msgs, err := s.Receive(bytesize, block) //ParseAuditNetlinkMessage(rb)
@@ -203,7 +203,7 @@ done:
 			switch v := lsa.(type) {
 			case *syscall.SockaddrNetlink:
 
-				if m.Header.Seq != nextSeqNr {
+				if m.Header.Seq != uint32(seq) {
 					return fmt.Errorf("Wrong Seq nr %d, expected %d", m.Header.Seq, nextSeqNr)
 				}
 				if m.Header.Pid != v.Pid {
@@ -257,12 +257,19 @@ func AuditSetEnabled(s *NetlinkSocket, seq int) error {
 		return err
 	}
 
-	err = AuditSend(s, AUDIT_SET, buff.Bytes(), int(unsafe.Sizeof(status)))
+
+	wb := newNetlinkAuditRequest(AUDIT_SET, syscall.AF_NETLINK, int(unsafe.Sizeof(status)))
+	wb.Data = append(wb.Data[:], buff.Bytes()...)
+	if err := s.Send(wb); err != nil {
+		fmt.Println("error")
+	}
+	//(s *NetlinkSocket, proto int, data []byte, sizedata /*,seq */ int)
+	//err = AuditSend(s, AUDIT_SET, buff.Bytes(), int(unsafe.Sizeof(status)))
 	if err != nil {
 		return err
 	}
 	// Receiving IN JUST ONE TRY
-	err = AuditGetReply(s, syscall.Getpagesize(), 0)
+	err = AuditGetReply(s, syscall.Getpagesize(), 0, wb.Header.Seq)
 	if err != nil {
 		return err
 	}
@@ -335,12 +342,19 @@ func AuditSetPid(s *NetlinkSocket, pid uint32 /*,Wait mode WAIT_YES | WAIT_NO */
 		return err
 	}
 
-	err = AuditSend(s, AUDIT_SET, buff.Bytes(), int(unsafe.Sizeof(status)))
+	wb := newNetlinkAuditRequest(AUDIT_SET, syscall.AF_NETLINK, int(unsafe.Sizeof(status)))
+	wb.Data = append(wb.Data[:], buff.Bytes()...)
+	if err := s.Send(wb); err != nil {
+		fmt.Println("error")
+	}
+	//(s *NetlinkSocket, proto int, data []byte, sizedata /*,seq */ int)
+
+	//err = AuditSend(s, AUDIT_SET, buff.Bytes(), int(unsafe.Sizeof(status)))
 	if err != nil {
 		return err
 	}
 
-	err = AuditGetReply(s, syscall.Getpagesize(), 0)
+	err = AuditGetReply(s, syscall.Getpagesize(), 0, wb.Header.Seq)
 	if err != nil {
 		return err
 	}
@@ -386,7 +400,14 @@ func AuditAddRuleData(s *NetlinkSocket, rule *AuditRuleData, flags int, action i
 		fmt.Println("binary.Write failed:", err)
 		return err
 	}
-	err = AuditSend(s, AUDIT_ADD_RULE, buff.Bytes(), int(buff.Len())+int(rule.Buflen))
+
+	wb := newNetlinkAuditRequest(AUDIT_ADD_RULE, syscall.AF_NETLINK, int(buff.Len())+int(rule.Buflen))
+	wb.Data = append(wb.Data[:], buff.Bytes()...)
+	if err := s.Send(wb); err != nil {
+		fmt.Println("error")
+	}
+	//(s *NetlinkSocket, proto int, data []byte, sizedata /*,seq */ int)
+	//err = AuditSend(s, AUDIT_ADD_RULE, buff.Bytes(), int(buff.Len())+int(rule.Buflen))
 
 	if err != nil {
 		fmt.Println("Error sending add rule data request ()")
@@ -481,7 +502,8 @@ func GetreplyWithoutSync(s *NetlinkSocket) {
 			} else if m.Header.Type == AUDIT_EOE {
 				fmt.Println("Event Ends ", string(m.Data[:]))
 			} else {
-				fmt.Println("UNKnown: ", m.Header.Type)
+				fmt.Println("bawhahahaha")
+				fmt.Println("UNKnown: ", string(m.Data[:]))
 
 			}
 
