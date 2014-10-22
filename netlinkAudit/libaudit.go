@@ -188,66 +188,62 @@ func AuditSend(s *NetlinkSocket, proto int, data []byte, sizedata /*,seq */ int)
 }
 
 //should it be changed to HandleAck ?
-func AuditGetReply(s *NetlinkSocket, bytesize, block, seq int) error {
-done:
-	for {
-		msgs, err := s.Receive(bytesize, block) //ParseAuditNetlinkMessage(rb)
-		if err != nil {
-			return err
-		}
-		for _, m := range msgs {
-			lsa, err := syscall.Getsockname(s.fd)
+func (s *NetlinkSocket) AuditGetReply(s *NetlinkSocket, bytesize, block) error {
+	done:
+		for {
+			msgs, err := s.Receive(bytesize, block) //ParseAuditNetlinkMessage(rb)
 			if err != nil {
 				return err
 			}
-			switch v := lsa.(type) {
-			case *syscall.SockaddrNetlink:
-
-				if m.Header.Seq != uint32(seq) || m.Header.Pid != v.Pid {
-					fmt.Println("foo", seq, m.Header.Seq)
-					return syscall.EINVAL
+			for _, m := range msgs {
+				lsa, err := syscall.Getsockname(s.fd)
+				if err != nil {
+					return err
 				}
-			default:
-				return syscall.EINVAL
+				switch v := lsa.(type) {
+				case *syscall.SockaddrNetlink:
 
-			}
+					if m.Header.Seq != &nextSeqNr {
+						return fmt.Errorf("Wrong Seq nr %d, expected %d", m.Header.Seq, &nextSeqNr)
+					}
+					if m.Header.Pid != pid {
+						return fmt.Errorf("Wrong pid %d, expected %d", m.Header.Pid, pid)
+					}
+				default:
+					return syscall.EINVAL
 
-			if m.Header.Type == syscall.NLMSG_DONE {
-				fmt.Println("Done")
-				break done
-			}
-			if m.Header.Type == syscall.NLMSG_ERROR {
-				error := int32(nativeEndian().Uint32(m.Data[0:4]))
-				if error == 0 {
-					fmt.Println("ACK")
+					}	
+				if m.Header.Type == syscall.NLMSG_DONE {
 					break done
 				}
-
-				fmt.Println("NLMSG_ERROR")
-				break done
-				//return nil
+				if m.Header.Type == syscall.NLMSG_ERROR {
+					error := int32(native.Uint32(m.Data[0:4]))
+					if error == 0 {
+						fmt.Println("ACK")
+						break done
+					}
+					fmt.Println("NLMSG_ERROR")
+					break done
+				}
+				if m.Header.Type == AUDIT_GET {
+					fmt.Println("AUDIT_GET")
+					//				break done
+				}
+				if m.Header.Type == AUDIT_FIRST_USER_MSG {
+					fmt.Println("AUDIT_FIRST_USER_MS")
+					//break done
+				}
+				if m.Header.Type == AUDIT_LIST_RULES {
+					fmt.Println("AUDIT_LIST_RULES")
+					//break done
+				}
+				if m.Header.Type == AUDIT_FIRST_USER_MSG {
+					fmt.Println("AUDIT_FIRST_USER_MSG")
+					//break done
+				}
 			}
-			if m.Header.Type == AUDIT_GET {
-				fmt.Println("AUDIT_GET")
-				//				break done
-			}
-			if m.Header.Type == AUDIT_FIRST_USER_MSG {
-				fmt.Println("AUDIT_FIRST_USER_MS")
-				//break done
-			}
-			if m.Header.Type == AUDIT_LIST_RULES {
-				fmt.Println("AUDIT_LIST_RULES")
-				//break done
-			}
-			if m.Header.Type == AUDIT_FIRST_USER_MSG {
-				fmt.Println("AUDIT_FIRST_USER_MSG")
-				//break done
-			}
-
 		}
-	}
 	return nil
-
 }
 
 func AuditSetEnabled(s *NetlinkSocket, seq int) error {
