@@ -189,7 +189,7 @@ func AuditSend(s *NetlinkSocket, proto int, data []byte, sizedata /*,seq */ int)
 }
 
 //should it be changed to HandleAck ?
-func AuditGetReply(s *NetlinkSocket, bytesize, block, seq int) error {
+func AuditGetReply(s *NetlinkSocket, bytesize, block int, seq uint32) error {
 done:
 	for {
 		msgs, err := s.Receive(bytesize, block) //ParseAuditNetlinkMessage(rb)
@@ -204,8 +204,8 @@ done:
 			switch v := lsa.(type) {
 			case *syscall.SockaddrNetlink:
 
-				if m.Header.Seq != nextSeqNr {
-					return fmt.Errorf("Wrong Seq nr %d, expected %d", m.Header.Seq, nextSeqNr)
+				if m.Header.Seq != seq {
+					return fmt.Errorf("Wrong Seq nr %d, expected %d", m.Header.Seq, seq)
 				}
 				if m.Header.Pid != v.Pid {
 					return fmt.Errorf("Wrong pid %d, expected %d", m.Header.Pid, v.Pid)
@@ -271,7 +271,7 @@ func AuditSetEnabled(s *NetlinkSocket /*, seq int*/) error {
 		return err
 	}
 	// Receiving IN JUST ONE TRY
-	err = AuditGetReply(s, syscall.Getpagesize(), 0, int(wb.Header.Seq))
+	err = AuditGetReply(s, syscall.Getpagesize(), 0, wb.Header.Seq)
 	if err != nil {
 		return err
 	}
@@ -355,7 +355,7 @@ func AuditSetPid(s *NetlinkSocket, pid uint32 /*,Wait mode WAIT_YES | WAIT_NO */
 		return err
 	}
 
-	err = AuditGetReply(s, syscall.Getpagesize(), 0, int(wb.Header.Seq))
+	err = AuditGetReply(s, syscall.Getpagesize(), 0, wb.Header.Seq)
 	if err != nil {
 		return err
 	}
