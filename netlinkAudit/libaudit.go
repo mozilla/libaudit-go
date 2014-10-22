@@ -85,7 +85,7 @@ func nlmAlignOf(msglen int) int {
 
 func ParseAuditNetlinkMessage(b []byte) ([]syscall.NetlinkMessage, error) {
 	var msgs []syscall.NetlinkMessage
-	for len(b) >= syscall.NLMSG_HDRLEN {
+	//for len(b) >= syscall.NLMSG_HDRLEN {
 		h, dbuf, dlen, err := netlinkMessageHeaderAndData(b)
 		if err != nil {
 			fmt.Println("Error in parsing")
@@ -95,7 +95,7 @@ func ParseAuditNetlinkMessage(b []byte) ([]syscall.NetlinkMessage, error) {
 		//Commented the subtraction. Leading to trimming of the output Data string
 		msgs = append(msgs, m)
 		b = b[dlen:]
-	}
+	//}
 	fmt.Println("Passed")
 	return msgs, nil
 }
