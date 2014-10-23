@@ -18,7 +18,7 @@ const (
 	AUDIT_FILTER_WATCH = 0x03 /* Apply rule to file system watches */
 	AUDIT_FILTER_EXIT  = 0x04 /* Apply rule at syscall exit */
 	AUDIT_FILTER_TYPE  = 0x05 /* Apply rule at audit_log_start */
-
+	AUDIT_DEL_RULE     = 1012 
 	/* Rule actions */
 	AUDIT_NEVER    = 0 /* Do not build context if rule matches */
 	AUDIT_POSSIBLE = 1 /* Build context if rule matches  */

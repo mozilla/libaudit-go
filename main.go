@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/arunk-s/netlinkAudit" //Should be changed according to individual settings
+	"netlinkAudit" //Should be changed according to individual settings
 	"syscall"
 	//	"time"
 	//	"unsafe"
