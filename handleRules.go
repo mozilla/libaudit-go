@@ -29,8 +29,7 @@ func main() {
 	for k, v := range m {
     	switch k {
     		case "syscall_rule":
-    			fmt.Println(m[k])
-
+    			vi := v.(map[string]interface{})
     			content2, err := ioutil.ReadFile("netlinkAudit/audit_x86.json")
 				if err!=nil{
 			        fmt.Print("Error:",err)
@@ -41,9 +40,11 @@ func main() {
 				if err != nil {
 					fmt.Print("Error:", err)
 				}
-				for m := range conf.Xmap {
-					if conf.Xmap[m].Name == v {
-						fmt.Println(conf.Xmap[m].Name, conf.Xmap[m].Id)
+				for l := range conf.Xmap {
+					//fmt.Println(conf.Xmap[l].Name)
+					//fmt.Println(vi["names"])
+					if conf.Xmap[l].Name == vi["names"] {
+						fmt.Println(conf.Xmap[l].Name, conf.Xmap[l].Id)
 					}
 				}
 		    //default:
