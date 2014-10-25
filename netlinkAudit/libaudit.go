@@ -703,67 +703,64 @@ func SetRules(s *NetlinkSocket) {
 
 /*
 var fieldStrings []byte
-fieldStrings = "a0\0a1\0a2\0a3\0arch\0auid\0devmajor\0devminor\0dir\0egid\0"
-"euid\0exit\0field_compare\0filetype\0fsgid\0fsuid\0gid\0inode\0key\0loginuid\0"
-"msgtype\0obj_gid\0obj_lev_high\0obj_lev_low\0obj_role\0obj_type\0obj_uid\0obj_user\0path\0perm\0"
-"pers\0pid\0ppid\0sgid\0subj_clr\0subj_role\0subj_sen\0subj_type\0subj_user\0success\0"
-"suid\0uid"
+fieldStrings = {"a", "a1", "a2", "a3", "arch", "auid", "devmajor", "devminor", "dir", "egid", "euid", "exit", "field_compare", "filetype", "fsgid", "fsuid", "gid", "inode", "key", "loginuid", "msgtype", "obj_gid", "obj_lev_high", "obj_lev_low", "obj_role", "obj_type", "obj_uid", "obj_user",  "path",  "perm",  "pers",  "pid",  "ppid",  "sgid",  "subj_clr",  "subj_role",  "subj_sen",  "subj_type",  "subj_user",  "success",  "suid",  "uid" }
 
-var fieldS2i_s []uint{0,3,6,9,12,17,22,31,40,44,49,54,59,73,82,88,94,98,104,108,117,125,133,146,158,167,176,184,193,198,203,208,212,217,222,231,241,250,260,270,278,283}
+var fieldS2i_s []uint = {0,3,6,9,12,17,22,31,40,44,49,54,59,73,82,88,94,98,104,108,117,125,133,146,158,167,176,184,193,198,203,208,212,217,222,231,241,250,260,270,278,283}
 
 var fieldS2i_i []int{200,201,202,203,11,9,100,101,107,6,2,103,111,108,8,4,5,102,210,9,12,110,23,22,20,21,109,19,105,106,10,0,18,7,17,14,16,15,13,104,3,1}
 
-func S2i(const char *[]byte, const unsigned *s_table,
-	                        const int *i_table, size_t n, const char *s, int *value)
-	{
+func S2i(strings *[]byte, s_table *uint, i_table *int, int n, s *[]byte,value *int) bool{
 	        var left, right int
 	
 	        left = 0
 	        right = n - 1
-	        while (left <= right) {
-	                size_t mid
-	                int r
+	        while left <= right {
+	                var mid int
+	                var r int
 	
 	                mid = (left + right) / 2
-	                r = strcmp(s, strings + s_table[mid])
+	                r =  int(s) - int(s_table[mid])
 	                if (r == 0) {
-	                        *value = i_table[mid]
-	                        return 1
+	                        &value = i_table[mid]
+	                        return true
 	                }
 	                if (r < 0)
 	                        right = mid - 1
 	                else
 	                        left = mid + 1
 	        }
-	        return 0
+	        return false
 }
 
 
-func int FieldS2i(s *[]byte, value *int) {
+func int FlagS2i(s *[]byte, value *int) bool{
 	var len, i int
+	i = 0
 	c []byte
 	len = unsafe.Sizeof(s);
 	copy := make([]byte, len+1)
 	//char copy[len + 1];	
-	for i = 0; i < len; i++ {
+	for i < len {
 		c = &s[i]
 		if unicode.IsUpper(c){
 			copy[i] = c - 'A' + 'a'
 		}else{
 			copy[i] = c
 		}
+		i = i + 1
 	}
 	copy[i] = 0;
 	return S2i(fieldStrings, fieldS2i_s, fieldS2i_i, 42, copy, value);
 }
 
-func AuditNameToField(const char *field){
-
-	var res int
+func AuditNameToField(const char *field) bool{
+//#ifndef NO_TABLES
+	//var res bool
 	
-	if (fieldS2i(field, res) != 0)
-	    return res;
-	return -1;
+	if FlagS2i(field, res) != false
+	    return true;
+//#endif	    
+	return false;
 }
 
 /* Form of main function
