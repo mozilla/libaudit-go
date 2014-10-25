@@ -11,7 +11,6 @@ const (
 	AUDIT_MAX_FIELDS         = 64
 	AUDIT_BITMASK_SIZE       = 64
 	AUDIT_GET_FEATURE        = 1019
-	AUDIT_STATUS_ENABLED     = 0x0001
 	//Rule Flags
 	AUDIT_FILTER_USER  = 0x00 /* Apply rule to user-generated messages */
 	AUDIT_FILTER_TASK  = 0x01 /* Apply rule at task creation (not syscall) */
@@ -19,11 +18,22 @@ const (
 	AUDIT_FILTER_WATCH = 0x03 /* Apply rule to file system watches */
 	AUDIT_FILTER_EXIT  = 0x04 /* Apply rule at syscall exit */
 	AUDIT_FILTER_TYPE  = 0x05 /* Apply rule at audit_log_start */
-
+	AUDIT_DEL_RULE     = 1012 
 	/* Rule actions */
 	AUDIT_NEVER    = 0 /* Do not build context if rule matches */
 	AUDIT_POSSIBLE = 1 /* Build context if rule matches  */
 	AUDIT_ALWAYS   = 2 /* Generate audit record if rule matches */
+
+	/*Audit Message Types */
+	AUDIT_SYSCALL       = 1300 /* Syscall event */
+	AUDIT_PATH          = 1302 /* Filename path information */
+	AUDIT_IPC           = 1303 /* IPC record */
+	AUDIT_SOCKETCALL    = 1304 /* sys_socketcall arguments */
+	AUDIT_CONFIG_CHANGE = 1305 /* Audit system configuration change */
+	AUDIT_SOCKADDR      = 1306 /* sockaddr copied as syscall arg */
+	AUDIT_CWD           = 1307 /* Current working directory */
+	AUDIT_EXECVE        = 1309 /* execve arguments */
+	AUDIT_EOE           = 1320 /* End of multi-record event */
 
 	/* Rule fields */
 	/* These are useful when checking the
@@ -63,85 +73,97 @@ const (
 	AUDIT_LESS_THAN_OR_EQUAL    = (AUDIT_LESS_THAN | AUDIT_EQUAL)
 	AUDIT_GREATER_THAN_OR_EQUAL = (AUDIT_GREATER_THAN | AUDIT_EQUAL)
 	AUDIT_OPERATORS             = (AUDIT_EQUAL | AUDIT_NOT_EQUAL | AUDIT_BIT_MASK)
+	/* Status symbols */
+	/* Mask values */
+	AUDIT_STATUS_ENABLED       = 0x0001
+	AUDIT_STATUS_FAILURE       = 0x0002
+	AUDIT_STATUS_PID           = 0x0004
+	AUDIT_STATUS_RATE_LIMIT    = 0x0008
+	AUDIT_STATUS_BACKLOG_LIMIT = 0x0010
+	/* Failure-to-log actions */
+	AUDIT_FAIL_SILENT = 0
+	AUDIT_FAIL_PRINTK = 1
+	AUDIT_FAIL_PANIC  = 2
 
 	/* distinguish syscall tables */
-	__AUDIT_ARCH_64BIT 				= 0x80000000
-	__AUDIT_ARCH_LE 				= 0x40000000
-	AUDIT_ARCH_ALPHA 				= (EM_ALPHA | __AUDIT_ARCH_64BIT | __AUDIT_ARCH_LE)
-	AUDIT_ARCH_ARM 					= (EM_ARM | __AUDIT_ARCH_LE)
-	AUDIT_ARCH_ARMEB 				= (EM_ARM)
-	AUDIT_ARCH_CRIS 				= (EM_CRIS | __AUDIT_ARCH_LE)
-	AUDIT_ARCH_FRV 					= (EM_FRV)
-	AUDIT_ARCH_I386 				= (EM_386 | __AUDIT_ARCH_LE)
-	AUDIT_ARCH_IA64 				= (EM_IA_64 | __AUDIT_ARCH_64BIT | __AUDIT_ARCH_LE)
-	AUDIT_ARCH_M32R 				= (EM_M32R)
-	AUDIT_ARCH_M68K 				= (EM_68K)
-	AUDIT_ARCH_MIPS 				= (EM_MIPS)
-	AUDIT_ARCH_MIPSEL 				= (EM_MIPS | __AUDIT_ARCH_LE)
-	AUDIT_ARCH_MIPS64 				= (EM_MIPS | __AUDIT_ARCH_64BIT)
-	AUDIT_ARCH_MIPSEL64 			= (EM_MIPS | __AUDIT_ARCH_64BIT | __AUDIT_ARCH_LE)
-	// AUDIT_ARCH_OPENRISC = (EM_OPENRISC)
-	// AUDIT_ARCH_PARISC = (EM_PARISC)
-	// AUDIT_ARCH_PARISC64 = (EM_PARISC | __AUDIT_ARCH_64BIT)
-	AUDIT_ARCH_PPC 					= (EM_PPC)
-	AUDIT_ARCH_PPC64 				= (EM_PPC64 | __AUDIT_ARCH_64BIT)
-	AUDIT_ARCH_S390 				= (EM_S390)
-	AUDIT_ARCH_S390X 				= (EM_S390 | __AUDIT_ARCH_64BIT)
-	AUDIT_ARCH_SH 					= (EM_SH)
-	AUDIT_ARCH_SHEL 				= (EM_SH | __AUDIT_ARCH_LE)
-	AUDIT_ARCH_SH64 				= (EM_SH | __AUDIT_ARCH_64BIT)
-	AUDIT_ARCH_SHEL64 				= (EM_SH | __AUDIT_ARCH_64BIT | __AUDIT_ARCH_LE)
-	AUDIT_ARCH_SPARC 				= (EM_SPARC)
-	AUDIT_ARCH_SPARC64 				= (EM_SPARCV9 | __AUDIT_ARCH_64BIT)
-	AUDIT_ARCH_X86_64 				= (EM_X86_64 | __AUDIT_ARCH_64BIT | __AUDIT_ARCH_LE)
-
+	__AUDIT_ARCH_64BIT  = 0x80000000
+	__AUDIT_ARCH_LE     = 0x40000000
+	AUDIT_ARCH_ALPHA    = (EM_ALPHA | __AUDIT_ARCH_64BIT | __AUDIT_ARCH_LE)
+	AUDIT_ARCH_ARM      = (EM_ARM | __AUDIT_ARCH_LE)
+	AUDIT_ARCH_ARMEB    = (EM_ARM)
+	AUDIT_ARCH_CRIS     = (EM_CRIS | __AUDIT_ARCH_LE)
+	AUDIT_ARCH_FRV      = (EM_FRV)
+	AUDIT_ARCH_I386     = (EM_386 | __AUDIT_ARCH_LE)
+	AUDIT_ARCH_IA64     = (EM_IA_64 | __AUDIT_ARCH_64BIT | __AUDIT_ARCH_LE)
+	AUDIT_ARCH_M32R     = (EM_M32R)
+	AUDIT_ARCH_M68K     = (EM_68K)
+	AUDIT_ARCH_MIPS     = (EM_MIPS)
+	AUDIT_ARCH_MIPSEL   = (EM_MIPS | __AUDIT_ARCH_LE)
+	AUDIT_ARCH_MIPS64   = (EM_MIPS | __AUDIT_ARCH_64BIT)
+	AUDIT_ARCH_MIPSEL64 = (EM_MIPS | __AUDIT_ARCH_64BIT | __AUDIT_ARCH_LE)
+	//	AUDIT_ARCH_OPENRISC = (EM_OPENRISC)
+	//	AUDIT_ARCH_PARISC   = (EM_PARISC)
+	//	AUDIT_ARCH_PARISC64 = (EM_PARISC | __AUDIT_ARCH_64BIT)
+	AUDIT_ARCH_PPC     = (EM_PPC)
+	AUDIT_ARCH_PPC64   = (EM_PPC64 | __AUDIT_ARCH_64BIT)
+	AUDIT_ARCH_S390    = (EM_S390)
+	AUDIT_ARCH_S390X   = (EM_S390 | __AUDIT_ARCH_64BIT)
+	AUDIT_ARCH_SH      = (EM_SH)
+	AUDIT_ARCH_SHEL    = (EM_SH | __AUDIT_ARCH_LE)
+	AUDIT_ARCH_SH64    = (EM_SH | __AUDIT_ARCH_64BIT)
+	AUDIT_ARCH_SHEL64  = (EM_SH | __AUDIT_ARCH_64BIT | __AUDIT_ARCH_LE)
+	AUDIT_ARCH_SPARC   = (EM_SPARC)
+	AUDIT_ARCH_SPARC64 = (EM_SPARCV9 | __AUDIT_ARCH_64BIT)
+	AUDIT_ARCH_X86_64  = (EM_X86_64 | __AUDIT_ARCH_64BIT | __AUDIT_ARCH_LE)
 	///Temporary Solution need to add linux/elf-em.h
-	EM_NONE 			= 0
-	EM_M32 				= 1
-	EM_SPARC 			= 2
-	EM_386 				= 3
-	EM_68K 				= 4
-	EM_88K 				= 5
-	EM_486 				= 6 /* Perhaps disused */
-	EM_860 				= 7
-	EM_MIPS 			= 8 /* MIPS R3000 (officially, big-endian only) */
+	EM_NONE  = 0
+	EM_M32   = 1
+	EM_SPARC = 2
+	EM_386   = 3
+	EM_68K   = 4
+	EM_88K   = 5
+	EM_486   = 6 /* Perhaps disused */
+	EM_860   = 7
+	EM_MIPS  = 8 /* MIPS R3000 (officially, big-endian only) */
 	/* Next two are historical and binaries and
-	modules of these types will be rejected by
-	Linux. */
-	EM_MIPS_RS3_LE 		= 10 /* MIPS R3000 little-endian */
-	EM_MIPS_RS4_BE 		= 10 /* MIPS R4000 big-endian */
-	EM_PARISC 			= 15 /* HPPA */
-	EM_SPARC32PLUS 		= 18 /* Sun's "v8plus" */
-	EM_PPC 				= 20 /* PowerPC */
-	EM_PPC64		 	= 21 /* PowerPC64 */
-	EM_SPU 				= 23 /* Cell BE SPU */
-	EM_ARM 				= 40 /* ARM 32 bit */
-	EM_SH 				= 42 /* SuperH */
-	EM_SPARCV9 			= 43 /* SPARC v9 64-bit */
-	EM_IA_64 			= 50 /* HP/Intel IA-64 */
-	EM_X86_64 			= 62 /* AMD x86-64 */
-	EM_S390 			= 22 /* IBM S/390 */
-	EM_CRIS 			= 76 /* Axis Communications 32-bit embedded processor */
-	EM_V850 			= 87 /* NEC v850 */
-	EM_M32R 			= 88 /* Renesas M32R */
-	EM_MN10300 			= 89 /* Panasonic/MEI MN10300, AM33 */
-	EM_BLACKFIN 		= 106 /* ADI Blackfin Processor */
-	EM_TI_C6000 		= 140 /* TI C6X DSPs */
-	EM_AARCH64 			= 183 /* ARM 64 bit */
-	EM_FRV 				= 0x5441 /* Fujitsu FR-V */
-	EM_AVR32 			= 0x18ad /* Atmel AVR32 */
+	   modules of these types will be rejected by
+	   Linux.  */
+	EM_MIPS_RS3_LE = 10 /* MIPS R3000 little-endian */
+	EM_MIPS_RS4_BE = 10 /* MIPS R4000 big-endian */
+
+	EM_PARISC      = 15     /* HPPA */
+	EM_SPARC32PLUS = 18     /* Sun's "v8plus" */
+	EM_PPC         = 20     /* PowerPC */
+	EM_PPC64       = 21     /* PowerPC64 */
+	EM_SPU         = 23     /* Cell BE SPU */
+	EM_ARM         = 40     /* ARM 32 bit */
+	EM_SH          = 42     /* SuperH */
+	EM_SPARCV9     = 43     /* SPARC v9 64-bit */
+	EM_IA_64       = 50     /* HP/Intel IA-64 */
+	EM_X86_64      = 62     /* AMD x86-64 */
+	EM_S390        = 22     /* IBM S/390 */
+	EM_CRIS        = 76     /* Axis Communications 32-bit embedded processor */
+	EM_V850        = 87     /* NEC v850 */
+	EM_M32R        = 88     /* Renesas M32R */
+	EM_MN10300     = 89     /* Panasonic/MEI MN10300, AM33 */
+	EM_BLACKFIN    = 106    /* ADI Blackfin Processor */
+	EM_TI_C6000    = 140    /* TI C6X DSPs */
+	EM_AARCH64     = 183    /* ARM 64 bit */
+	EM_FRV         = 0x5441 /* Fujitsu FR-V */
+	EM_AVR32       = 0x18ad /* Atmel AVR32 */
 
 	/*
-	* This is an interim value that we will use until the committee comes
-	* up with a final number.
-	*/
-	EM_ALPHA 			= 0x9026
+	 * This is an interim value that we will use until the committee comes
+	 * up with a final number.
+	 */
+	EM_ALPHA = 0x9026
+
 	/* Bogus old v850 magic number, used by old tools. */
-	EM_CYGNUS_V850 		= 0x9080
+	EM_CYGNUS_V850 = 0x9080
 	/* Bogus old m32r magic number, used by old tools. */
-	EM_CYGNUS_M32R 		= 0x9041
+	EM_CYGNUS_M32R = 0x9041
 	/* This is the old interim value for S/390 architecture */
-	EM_S390_OLD 		= 0xA390
+	EM_S390_OLD = 0xA390
 	/* Also Panasonic/MEI MN10300, AM33 */
-	EM_CYGNUS_MN10300 	= 0xbeef
+	EM_CYGNUS_MN10300 = 0xbeef
 )
