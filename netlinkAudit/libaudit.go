@@ -429,9 +429,7 @@ func AuditAddRuleData(s *NetlinkSocket, rule *AuditRuleData, flags int, action i
 }
 
 //TODO: Add a DeleteAllRules Function
-
 //A very gibberish hack right now , Need to work on the design of this package.
-
 func isDone(msgchan chan<- syscall.NetlinkMessage, errchan chan<- error, done <-chan bool) bool {
 	var d bool
 	select {
@@ -442,6 +440,7 @@ func isDone(msgchan chan<- syscall.NetlinkMessage, errchan chan<- error, done <-
 	}
 	return d
 }
+
 func GetreplyWithoutSync(s *NetlinkSocket) {
 	for {
 		rb := make([]byte, MAX_AUDIT_MESSAGE_LENGTH)
@@ -617,39 +616,35 @@ func Getreply(s *NetlinkSocket, msgchan chan<- syscall.NetlinkMessage, errchan c
 				fmt.Println("Event Ends ", string(m.Data[:]))
 			} else {
 				fmt.Println("UNKnown: ", m.Header.Type)
-		
-
 				//msgchan <- m
 			}
-
 		}
-
 	}
 }
 
 //Delete Rule Data Function
-func AuditDeleteRuleData(s *NetlinkSocket, rule *AuditRuleData, flags int,action int) error{
-	        //var rc int;
-			var sizePurpose AuditRuleData
-	        if (flags == AUDIT_FILTER_ENTRY) {
-	                fmt.Println("Error in delete")
-	                return nil;
-	        }
-	        rule.Flags = uint32(flags)
-			rule.Action = uint32(action)
+func AuditDeleteRuleData(s *NetlinkSocket, rule *AuditRuleData, flags int, action int) error{
+	//var rc int;
+	var sizePurpose AuditRuleData
+	if (flags == AUDIT_FILTER_ENTRY) {
+		fmt.Println("Error in delete")
+		return nil;
+	}
+	rule.Flags = uint32(flags)
+	rule.Action = uint32(action)
 
-			buff := new(bytes.Buffer)
-			err := binary.Write(buff, nativeEndian(), *rule)
-			if err != nil {
-				fmt.Println("binary.Write failed:", err)
-				return err
-			}
-	        wb := newNetlinkAuditRequest(AUDIT_DEL_RULE, syscall.AF_NETLINK, int(unsafe.Sizeof(sizePurpose)) + int(rule.Buflen))
-			wb.Data = append(wb.Data[:], buff.Bytes()[:]...)
-			if err := s.Send(wb); err != nil {
-				return err
-			}
-	        return nil;
+	buff := new(bytes.Buffer)
+	err := binary.Write(buff, nativeEndian(), *rule)
+	if err != nil {
+		fmt.Println("binary.Write failed:", err)
+		return err
+	}
+	wb := newNetlinkAuditRequest(AUDIT_DEL_RULE, syscall.AF_NETLINK, int(unsafe.Sizeof(sizePurpose)) + int(rule.Buflen))
+	wb.Data = append(wb.Data[:], buff.Bytes()[:]...)
+	if err := s.Send(wb); err != nil {
+		return err
+	}
+	return nil;
 }
 
 // function that sets each rule after reading configuration file

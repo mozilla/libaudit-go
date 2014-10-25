@@ -62,8 +62,4 @@ func main() {
 	// than it means the message is acknowledged
 	//Design changes resulting from Handle Ack
 	//Incorporate more AUDIT Constants and find way to load them
-	//Work on loading rules from files : Json Format,various names to constants conversion :lookup-table.c
-	//auditctl -a rmdir exit,always
-	//Flags are exit
-	//Action is always
 }
