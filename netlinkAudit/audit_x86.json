@@ -1,10 +1,6 @@
 {
 	"xmap" : [
 		{
-			"name": "rmdir",
-			"id"  : 84
-		},
-		{
 			"name": "read",
 			"id"  : 0
 		},
@@ -23,6 +19,125 @@
 		{
 			"name": "stat",
 			"id"  : 4
-		}
+		},
+		{
+			"name": "fstat",
+			"id"  : 5
+		},
+		{
+			"name": "lstat",
+			"id"  : 6
+		},
+		{
+			"name": "poll",
+			"id"  : 7
+		},
+		{
+			"name": "lseek",
+			"id"  : 8
+		},
+		{
+			"name": "mmap",
+			"id"  : 9
+		},
+		{
+			"name": "mprotect",
+			"id"  : 10
+		},
+		{
+			"name": "munmap",
+			"id"  : 11
+		},
+		{
+			"name": "brk",
+			"id"  : 12
+		},
+		{
+			"name": "rt_sigaction",
+			"id"  : 13
+		},
+		{
+			"name": "rt_sigaction",
+			"id"  : 14
+		},
+		{
+			"name": "rt_sigreturn",
+			"id"  : 15
+		},
+		{
+			"name": "ioctl",
+			"id"  : 16
+		},
+		{
+			"name": "rmdir",
+			"id"  : 17
+		},
+		{
+			"name": "pwrite64",
+			"id"  : 18
+		},
+		{
+			"name": "readv",
+			"id"  : 19
+		},
+		{
+			"name": "writev",
+			"id"  : 20
+		},
+		{
+			"name": "access",
+			"id"  : 21
+		},
+		{
+			"name": "pipe",
+			"id"  : 22
+		},
+		{
+			"name": "select",
+			"id"  : 23
+		},
+		{
+			"name": "sched_yield",
+			"id"  : 24
+		},
+		{
+			"name": "mremap",
+			"id"  : 25
+		},
+		{
+			"name": "msync",
+			"id"  : 26
+		},
+		{
+			"name": "mincore",
+			"id"  : 27
+		},{
+			"name": "madvise",
+			"id"  : 28
+		},
+		{
+			"name": "shmget",
+			"id"  : 29
+		},
+		{
+			"name": "chdir",
+			"id"  : 80
+		},
+		{
+			"name": "fchdir",
+			"id"  : 81
+		},
+		{
+			"name": "rename",
+			"id"  : 82
+		},
+		{
+			"name": "mkdir",
+			"id"  : 83
+		},
+		{
+			"name": "rmdir",
+			"id"  : 84
+		},
 	]
 }
