@@ -664,34 +664,36 @@ func SetRules(s *NetlinkSocket) {
 	for k, v := range m {
     	switch k {
     		case "syscall_rule":
-    			vi := v.(map[string]interface{})
-    			// Load x86 map
-    			content2, err := ioutil.ReadFile("netlinkAudit/audit_x86.json")
-				if err!=nil{
-			        fmt.Print("Error:",err)
-				}
-    
-				var conf Config
-				err = json.Unmarshal([]byte(content2), &conf)
-				if err != nil {
-					fmt.Print("Error:", err)
-				}
-				for l := range conf.Xmap {
-					//fmt.Println(vi["name"])
-					if conf.Xmap[l].Name == vi["name"] {
-						// set rules 
-						fmt.Println("setting syscall rule", conf.Xmap[l].Name)
-						var foo AuditRuleData
-						AuditRuleSyscallData(&foo,  conf.Xmap[l].Id)
-						foo.Fields[foo.Field_count] = AUDIT_ARCH
-						foo.Fieldflags[foo.Field_count] = AUDIT_EQUAL
-						foo.Values[foo.Field_count] = AUDIT_ARCH_X86_64
-						foo.Field_count++
-						AuditAddRuleData(s, &foo, AUDIT_FILTER_EXIT, AUDIT_ALWAYS)
+
+    			vi := v.([]interface{})
+	    		for sruleNo := range vi {
+	    			srule := vi[sruleNo].(map[string]interface{})
+    				// Load x86 map
+    				content2, err := ioutil.ReadFile("netlinkAudit/audit_x86.json")
+					if err!=nil{
+			    	    fmt.Print("Error:",err)
 					}
-				}
-		    //default:
-		    //    fmt.Println(k, "is not yet supported")
+    
+					var conf Config
+					err = json.Unmarshal([]byte(content2), &conf)
+					if err != nil {
+						fmt.Print("Error:", err)
+					}
+					for l := range conf.Xmap {
+						if conf.Xmap[l].Name == srule["name"] {
+							// set rules 
+							fmt.Println("setting syscall rule", conf.Xmap[l].Name)
+							var foo AuditRuleData
+							AuditRuleSyscallData(&foo,  conf.Xmap[l].Id)
+							foo.Fields[foo.Field_count] = AUDIT_ARCH
+							foo.Fieldflags[foo.Field_count] = AUDIT_EQUAL
+							foo.Values[foo.Field_count] = AUDIT_ARCH_X86_64
+							foo.Field_count++
+							AuditAddRuleData(s, &foo, AUDIT_FILTER_EXIT, AUDIT_ALWAYS)
+						}
+					}
+				    //default:
+				    //    fmt.Println(k, "is not yet supported")
 		    }
 	}
 }
