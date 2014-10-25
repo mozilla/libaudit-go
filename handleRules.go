@@ -16,7 +16,6 @@ type Config struct {
 }
 
 func main() {
-	
 	content, err := ioutil.ReadFile("netlinkAudit/audit.rules.json")
 	if err!=nil{
         fmt.Print("Error:",err)
@@ -41,9 +40,8 @@ func main() {
 					fmt.Print("Error:", err)
 				}
 				for l := range conf.Xmap {
-					//fmt.Println(conf.Xmap[l].Name)
-					//fmt.Println(vi["names"])
-					if conf.Xmap[l].Name == vi["names"] {
+					//fmt.Println(vi["name"])
+					if conf.Xmap[l].Name == vi["name"] {
 						fmt.Println(conf.Xmap[l].Name, conf.Xmap[l].Id)
 					}
 				}

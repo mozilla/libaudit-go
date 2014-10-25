@@ -2,8 +2,10 @@ package netlinkAudit
 
 import (
 	"bytes"
+	"encoding/json"
 	"encoding/binary"
 	"fmt"
+	"io/ioutil"
 	"sync/atomic"
 	"syscall"
 	"unsafe"
@@ -42,6 +44,17 @@ type NetlinkSocket struct {
 type NetlinkAuditRequest struct {
 	Header syscall.NlMsghdr
 	Data   []byte
+}
+
+// for config
+type CMap struct {
+	Name  string
+	Id  int
+}
+
+// for config
+type Config struct {
+	Xmap []CMap
 }
 
 var ParsedResult AuditStatus
@@ -212,8 +225,8 @@ done:
 				}
 			default:
 				return syscall.EINVAL
-
 			}
+
 			if m.Header.Type == syscall.NLMSG_DONE {
 				break done
 			}
@@ -604,6 +617,8 @@ func Getreply(s *NetlinkSocket, msgchan chan<- syscall.NetlinkMessage, errchan c
 				fmt.Println("Event Ends ", string(m.Data[:]))
 			} else {
 				fmt.Println("UNKnown: ", m.Header.Type)
+		
+
 				//msgchan <- m
 			}
 
@@ -635,6 +650,56 @@ func AuditDeleteRuleData(s *NetlinkSocket, rule *AuditRuleData, flags int,action
 				return err
 			}
 	        return nil;
+}
+
+
+// function that sets each rule after reading configuration file
+func SetRules(s *NetlinkSocket) {
+	// TODO: clean the code, add cases
+
+	// Load all rules
+	content, err := ioutil.ReadFile("netlinkAudit/audit.rules.json")
+	if err!=nil{
+        fmt.Print("Error:",err)
+	}
+
+	var rules interface{}
+	err = json.Unmarshal(content, &rules)
+
+	m := rules.(map[string]interface{})
+	for k, v := range m {
+    	switch k {
+    		case "syscall_rule":
+    			vi := v.(map[string]interface{})
+    			// Load x86 map
+    			content2, err := ioutil.ReadFile("netlinkAudit/audit_x86.json")
+				if err!=nil{
+			        fmt.Print("Error:",err)
+				}
+    
+				var conf Config
+				err = json.Unmarshal([]byte(content2), &conf)
+				if err != nil {
+					fmt.Print("Error:", err)
+				}
+				for l := range conf.Xmap {
+					//fmt.Println(vi["name"])
+					if conf.Xmap[l].Name == vi["name"] {
+						// set rules 
+						fmt.Println("setting syscall rule", conf.Xmap[l].Name)
+						var foo AuditRuleData
+						AuditRuleSyscallData(&foo,  conf.Xmap[l].Id)
+						foo.Fields[foo.Field_count] = AUDIT_ARCH
+						foo.Fieldflags[foo.Field_count] = AUDIT_EQUAL
+						foo.Values[foo.Field_count] = AUDIT_ARCH_X86_64
+						foo.Field_count++
+						AuditAddRuleData(s, &foo, AUDIT_FILTER_EXIT, AUDIT_ALWAYS)
+					}
+				}
+		    //default:
+		    //    fmt.Println(k, "is not yet supported")
+		    }
+	}
 }
 
 /* How the file should look like

@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"netlinkAudit" //Should be changed according to individual settings
+	"./netlinkAudit" //Should be changed according to individual settings
 	"syscall"
 	//	"time"
 	//	"unsafe"
@@ -27,19 +27,10 @@ func main() {
 	netlinkAudit.AuditSetPid(s, uint32(syscall.Getpid()))
 
 	//	Uncomment this once to first add the rules and then comment it again to just receive !
-	var foo netlinkAudit.AuditRuleData
 	// we need audit_name_to_field( ) && audit_rule_fieldpair_data
 	//Syscall rmdir() is 84 on table
 	//fmt.Println(unsafe.Sizeof(foo))
-	netlinkAudit.AuditRuleSyscallData(&foo, 84)
-	//fmt.Println(foo)
-	foo.Fields[foo.Field_count] = netlinkAudit.AUDIT_ARCH
-	foo.Fieldflags[foo.Field_count] = netlinkAudit.AUDIT_EQUAL
-	foo.Values[foo.Field_count] = netlinkAudit.AUDIT_ARCH_X86_64
-	foo.Field_count++
-	//seq := 3
-	netlinkAudit.AuditAddRuleData(s, &foo, netlinkAudit.AUDIT_FILTER_EXIT, netlinkAudit.AUDIT_ALWAYS)
-
+	netlinkAudit.SetRules(s)
 	netlinkAudit.GetreplyWithoutSync(s)
 
 	/*
