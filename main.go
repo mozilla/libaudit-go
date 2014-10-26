@@ -1,8 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"./netlinkAudit" //Should be changed according to individual settings
+	"fmt"
 	"syscall"
 	//	"time"
 	//	"unsafe"
@@ -25,10 +25,10 @@ func main() {
 		fmt.Println("Horrah")
 	}
 	netlinkAudit.AuditSetPid(s, uint32(syscall.Getpid()))
+	//First Delete All rules and then add rules
+	netlinkAudit.DeleteAllRules(s)
 
-	//	Uncomment this once to first add the rules and then comment it again to just receive !
 	// we need audit_name_to_field( ) && audit_rule_fieldpair_data
-
 	netlinkAudit.SetRules(s)
 	netlinkAudit.GetreplyWithoutSync(s)
 
