@@ -736,36 +736,6 @@ func SetRules(s *NetlinkSocket) {
 }
 
 /*
-var fieldStrings []byte
-fieldStrings = {"a", "a1", "a2", "a3", "arch", "auid", "devmajor", "devminor", "dir", "egid", "euid", "exit", "field_compare", "filetype", "fsgid", "fsuid", "gid", "inode", "key", "loginuid", "msgtype", "obj_gid", "obj_lev_high", "obj_lev_low", "obj_role", "obj_type", "obj_uid", "obj_user",  "path",  "perm",  "pers",  "pid",  "ppid",  "sgid",  "subj_clr",  "subj_role",  "subj_sen",  "subj_type",  "subj_user",  "success",  "suid",  "uid" }
-
-var fieldS2i_s []uint = {0,3,6,9,12,17,22,31,40,44,49,54,59,73,82,88,94,98,104,108,117,125,133,146,158,167,176,184,193,198,203,208,212,217,222,231,241,250,260,270,278,283}
-
-var fieldS2i_i []int{200,201,202,203,11,9,100,101,107,6,2,103,111,108,8,4,5,102,210,9,12,110,23,22,20,21,109,19,105,106,10,0,18,7,17,14,16,15,13,104,3,1}
-
-func S2i(strings *[]byte, s_table *uint, i_table *int, int n, s *[]byte,value *int) bool{
-	        var left, right int
-
-	        left = 0
-	        right = n - 1
-	        while left <= right {
-	                var mid int
-	                var r int
-
-	                mid = (left + right) / 2
-	                r =  int(s) - int(s_table[mid])
-	                if (r == 0) {
-	                        &value = i_table[mid]
-	                        return true
-	                }
-	                if (r < 0)
-	                        right = mid - 1
-	                else
-	                        left = mid + 1
-	        }
-	        return false
-}
-
 
 func int FlagS2i(s *[]byte, value *int) bool{
 	var len, i int
