@@ -1,0 +1,100 @@
+{
+	"fieldmap" : [
+		{
+			"name": "pid",
+			"field_id"  : 0
+		},{
+			"name": "uid",
+			"field_id"  : 1
+		},
+		{
+			"name": "euid",
+			"field_id"  : 2
+		},
+		{
+			"name": "suid",
+			"field_id"  : 3
+		},
+		{
+			"name": "fsuid",
+			"field_id"  : 4
+		},
+		{
+			"name": "gid",
+			"field_id"  : 5
+		},
+		{
+			"name": "egid",
+			"field_id"  : 6
+		},
+		{
+			"name": "sgid",
+			"field_id"  : 7
+		},
+		{
+			"name": "fsgid",
+			"field_id"  : 8
+		},
+		{
+			"name": "loginuid",
+			"field_id"  : 9
+		},
+		{
+			"name": "pers",
+			"field_id"  : 10
+		},
+		{
+			"name": "arch",
+			"fields"  : 11
+		},
+		{
+			"name": "msgtype",
+			"field_id"  : 12
+		},
+		{
+			"name": "ppid",
+			"field_id"  : 18
+		},
+		{
+			"name": "inode",
+			"field_id"  : 102
+		},
+		{
+			"name": "exit",
+			"field_id"  : 103
+		},
+		{
+			"name": "success",
+			"field_id"  : 104
+		},
+		{
+			"name": "path",
+			"field_id"  : 105
+		},
+		{
+			"name": "perm",
+			"field_id"  : 106
+		},
+		{
+			"name": "dir",
+			"field_id"  : 107
+		},
+		{
+			"name": "filetype",
+			"field_id"  : 108
+		},
+		{
+			"name": "obj_uid",
+			"field_id"  : 109
+		},
+		{
+			"name": "obj_gid",
+			"field_id"  : 110
+		},
+		{
+			"name": "field_compare",
+			"field_id"  : 111
+		},
+	]
+}
+//A ddmore rules as per needed
