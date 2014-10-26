@@ -368,7 +368,6 @@ func AuditSetPid(s *NetlinkSocket, pid uint32 /*,Wait mode WAIT_YES | WAIT_NO */
 	//Polling in GO Is it needed ?
 
 	return nil
-
 }
 
 func auditWord(nr int) uint32 {
@@ -615,6 +614,8 @@ func Getreply(s *NetlinkSocket, msgchan chan<- syscall.NetlinkMessage, errchan c
 	}
 }
 
+// List all rules
+// TODO: this funcion will need a lot of work to print actual rules
 func ListAllRules(s *NetlinkSocket) {
 	wb := newNetlinkAuditRequest(AUDIT_LIST_RULES, syscall.AF_NETLINK, 0)
 	if err := s.Send(wb); err != nil {
@@ -624,22 +625,9 @@ func ListAllRules(s *NetlinkSocket) {
 done:
 	for {
 		//Make the rb byte bigger because of large messages from Kernel doesn't fit in 4096
-		rb := make([]byte, MAX_AUDIT_MESSAGE_LENGTH)
-		nr, _, err := syscall.Recvfrom(s.fd, rb, 0 )
+		msgs, err := s.Receive(MAX_AUDIT_MESSAGE_LENGTH, syscall.MSG_DONTWAIT)
 		if err != nil {
-			fmt.Println("Error While Recieving !!")
-			continue
-		}
-		if nr < syscall.NLMSG_HDRLEN {
-			fmt.Println("Message Too Short!!")
-			continue
-		}
-
-		rb = rb[:nr]
-		msgs, err := ParseAuditNetlinkMessage(rb)
-		if err != nil {
-			fmt.Println("Not Parsed Successfuly !!")
-			continue
+			fmt.Println("ERROR while receiving rules:", err)
 		}
 
 		for _, m := range msgs {
@@ -657,35 +645,34 @@ done:
 			}
 
 			if m.Header.Type == syscall.NLMSG_DONE {
-				fmt.Println("Done\n")
+				fmt.Println("All rules deleted\n")
 				break done
-
 			}
 			if m.Header.Type == syscall.NLMSG_ERROR {
 				fmt.Println("NLMSG_ERROR\n")
 			} 
 			if m.Header.Type == AUDIT_LIST_RULES  {
 				b := m.Data[:]
-				//buf := bytes.NewBuffer(b)
-				//var rules AuditRuleData
-				//err = binary.Read(buf, nativeEndian(), &rules)
-				//ParsedResult = dumm
-				fmt.Println("b\n", string(b))
+				buf := bytes.NewBuffer(b)
+				var rules AuditRuleData
+				err = binary.Read(buf, nativeEndian(), &rules)
+				// TODO : save all rules to an array so delete all rules function can use this
+				fmt.Println(rules)
 			}
 		}
 	}
 }
 
 //Delete Rule Data Function
-func AuditDeleteRuleData(s *NetlinkSocket, rule *AuditRuleData, flags int, action int) error{
+func AuditDeleteRuleData(s *NetlinkSocket, rule *AuditRuleData, flags uint32, action uint32) error{
 	//var rc int;
 	var sizePurpose AuditRuleData
 	if (flags == AUDIT_FILTER_ENTRY) {
 		fmt.Println("Error in delete")
 		return nil;
 	}
-	rule.Flags = uint32(flags)
-	rule.Action = uint32(action)
+	rule.Flags = flags
+	rule.Action = action
 
 	buff := new(bytes.Buffer)
 	err := binary.Write(buff, nativeEndian(), *rule)
@@ -701,15 +688,50 @@ func AuditDeleteRuleData(s *NetlinkSocket, rule *AuditRuleData, flags int, actio
 	return nil;
 }
 
+// This function Deletes all rules
 func DeleteAllRules(s *NetlinkSocket) {
 	wb := newNetlinkAuditRequest(AUDIT_LIST_RULES, syscall.AF_NETLINK, 0)
 	if err := s.Send(wb); err != nil {
-		fmt.Print("Error:",err)
+		fmt.Print("Error:", err)
 	}
+	
+done:
+	for {
+		//Make the rb byte bigger because of large messages from Kernel doesn't fit in 4096
+		msgs, err := s.Receive(MAX_AUDIT_MESSAGE_LENGTH, syscall.MSG_DONTWAIT)
+		if err != nil {
+			fmt.Println("ERROR while receiving rules:", err)
+		}
 
-	// iterate over the rules you get
-	// then delete each rule using above function
+		for _, m := range msgs {
+			lsa, er := syscall.Getsockname(s.fd)
+			if er != nil {
+				fmt.Println("ERROR:", er)
+			}
+			switch v := lsa.(type) {
+			case *syscall.SockaddrNetlink:
+				if m.Header.Seq != uint32(wb.Header.Seq) || m.Header.Pid != v.Pid {
+					fmt.Println("ERROR:", syscall.EINVAL)
+				}
+			}
 
+			if m.Header.Type == syscall.NLMSG_DONE {
+				fmt.Println("Done\n")
+				break done
+
+			}
+			if m.Header.Type == syscall.NLMSG_ERROR {
+				fmt.Println("NLMSG_ERROR\n")
+			} 
+			if m.Header.Type == AUDIT_LIST_RULES  {
+				b := m.Data[:]
+				buf := bytes.NewBuffer(b)
+				var rules AuditRuleData
+				err = binary.Read(buf, nativeEndian(), &rules)
+				AuditDeleteRuleData(s, &rules, rules.Flags, rules.Action)
+			}
+		}
+	}
 }
 
 // function that sets each rule after reading configuration file
@@ -726,7 +748,10 @@ func SetRules(s *NetlinkSocket) {
 
 	m := rules.(map[string]interface{})
 	for k, v := range m {
+		fmt.Println(k)
     	switch k {
+    		//case "delete":
+    		//	DeleteAllRules(s)
     		case "syscall_rules":
     			vi := v.([]interface{})
 	    		for sruleNo := range vi {
@@ -825,29 +850,4 @@ func AuditNameToField(const char *field) bool{
 //#endif	    
 	return false;
 }
-
-/* Form of main function
-package main
-
-import (
-	"fmt"
-	"github.com/..../netlinkAudit"
-)
-func main() {
-	s, err := netlinkAudit.GetNetlinkSocket()
-	if err != nil {
-		fmt.Println(err)
-	}
-	defer s.Close()
-
-	netlinkAudit.AuditSetEnabled(s, 1)
-	err = netlinkAudit.AuditIsEnabled(s, 2)
-	fmt.Println("parsedResult")
-	fmt.Println(netlinkAudit.ParsedResult)
-	if err == nil {
-		fmt.Println("Horrah")
-	}
-
-}
-
 */

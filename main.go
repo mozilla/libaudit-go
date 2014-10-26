@@ -29,9 +29,8 @@ func main() {
 	//	Uncomment this once to first add the rules and then comment it again to just receive !
 	// we need audit_name_to_field( ) && audit_rule_fieldpair_data
 
-	//netlinkAudit.SetRules(s)
-	netlinkAudit.ListAllRules(s)
-	//netlinkAudit.GetreplyWithoutSync(s)
+	netlinkAudit.SetRules(s)
+	netlinkAudit.GetreplyWithoutSync(s)
 
 	/*
 		DO NOT USE SYNC VERSION! IT is not Correct.
