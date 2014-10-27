@@ -53,10 +53,20 @@ type CMap struct {
 	Name string
 	Id   int
 }
+//for fieldtab
+type FMap struct {
+	Name string
+	Field_id   int
+}
 
 // for config
 type Config struct {
 	Xmap []CMap
+}
+
+//for fieldtab
+type Field struct {
+	Fieldmap []FMap
 }
 
 func nativeEndian() binary.ByteOrder {
@@ -706,15 +716,34 @@ func SetRules(s *NetlinkSocket) {
 				srule := vi[sruleNo].(map[string]interface{})
 				// Load x86 map
 				content2, err := ioutil.ReadFile("netlinkAudit/audit_x86.json")
+				content3, err_3 := ioutil.ReadFile("netlinkAudit/fieldtab.json")
+
 				if err != nil {
+					fmt.Print("Error:", err)
+				}
+				if err_3 != nil {
 					fmt.Print("Error:", err)
 				}
 
 				var conf Config
+				var field Field
 				err = json.Unmarshal([]byte(content2), &conf)
 				if err != nil {
 					fmt.Print("Error:", err)
 				}
+				/*
+				err = json.Unmarshal([]byte(content3), &field)	
+				if err != nil {
+					fmt.Print("Error:", err)
+				}
+				var fieldCount int
+				for f := range field.Xmap {
+					if field.Fieldmap[f].Name == srule["filter"][0] {
+						// set rules
+						fieldCount = conf.Xmap[l].Field_id
+					}
+				}
+				*/
 				for l := range conf.Xmap {
 					if conf.Xmap[l].Name == srule["name"] {
 						// set rules
