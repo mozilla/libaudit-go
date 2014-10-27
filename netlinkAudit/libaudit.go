@@ -716,17 +716,17 @@ func SetRules(s *NetlinkSocket) {
 				srule := vi[sruleNo].(map[string]interface{})
 				// Load x86 map
 				content2, err := ioutil.ReadFile("netlinkAudit/audit_x86.json")
-				content3, err_3 := ioutil.ReadFile("netlinkAudit/fieldtab.json")
+				//content3, err_3 := ioutil.ReadFile("netlinkAudit/fieldtab.json")
 
 				if err != nil {
 					fmt.Print("Error:", err)
 				}
-				if err_3 != nil {
-					fmt.Print("Error:", err)
-				}
+				//if err_3 != nil {
+				//	fmt.Print("Error:", err)
+				//}
 
 				var conf Config
-				var field Field
+				//var field Field
 				err = json.Unmarshal([]byte(content2), &conf)
 				if err != nil {
 					fmt.Print("Error:", err)
