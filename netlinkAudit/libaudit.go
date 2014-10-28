@@ -119,20 +119,18 @@ func nlmAlignOf(msglen int) int {
 */
 
 func ParseAuditNetlinkMessage(b []byte) ([]syscall.NetlinkMessage, error) {
+	
 	var msgs []syscall.NetlinkMessage
-	//What is the reason for looping ?
-	//	for len(b) >= syscall.NLMSG_HDRLEN {
 	h, dbuf, dlen, err := netlinkMessageHeaderAndData(b)
 	if err != nil {
 		fmt.Println("Error in parsing")
 		return nil, err
 	}
-	//fmt.Println("Get 3", h, dbuf, dlen, len(b))
+	
 	m := syscall.NetlinkMessage{Header: *h, Data: dbuf[:int(h.Len) /* -syscall.NLMSG_HDRLEN*/]}
-	//Commented the subtraction. Leading to trimming of the output Data string
 	msgs = append(msgs, m)
 	b = b[dlen:]
-	//	}
+
 	return msgs, nil
 }
 
@@ -325,7 +323,6 @@ done:
 				var dumm AuditStatus
 				err = binary.Read(buf, nativeEndian(), &dumm)
 				ParsedResult = dumm
-				fmt.Println("ENABLED")
 				break done
 			}
 		}
@@ -376,6 +373,34 @@ func AuditRuleSyscallData(rule *AuditRuleData, scall int) error {
 		fmt.Println("Some error occured")
 	}
 	rule.Mask[word] |= bit
+	return nil
+}
+
+func AuditWatchRuleData(s *NetlinkSocket, rule *AuditRuleData, path []byte) error {
+	rule.Flags = uint32(AUDIT_FILTER_EXIT)
+	rule.Action = uint32(AUDIT_ALWAYS)
+	// set mask
+	rule.Field_count = uint32(2)
+	rule.Fields[0] = uint32(105)
+	rule.Values[0] = uint32(len(path))
+	rule.Fieldflags[0] = uint32(AUDIT_EQUAL)
+	rule.Buflen = uint32(len(path))
+	rule.Buf = append(rule.Buf[:], path[:]...)
+
+
+	buff := new(bytes.Buffer)
+	err := binary.Write(buff, nativeEndian(), *rule)
+	if err != nil {
+		fmt.Println("binary.Write failed:", err)
+		return err
+	}
+
+	wb := newNetlinkAuditRequest(AUDIT_ADD_RULE, syscall.AF_NETLINK, int(buff.Len())+int(rule.Buflen))
+	wb.Data = append(wb.Data[:], buff.Bytes()[:]...)
+	if err := s.Send(wb); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -695,6 +720,9 @@ done:
 // function that sets each rule after reading configuration file
 func SetRules(s *NetlinkSocket) {
 
+	//var rule AuditRuleData
+	//AuditWatchRuleData(s, &rule, []byte("/etc/passwd"))
+
 	// Load all rules
 	content, err := ioutil.ReadFile("netlinkAudit/audit.rules.json")
 	if err != nil {
@@ -705,11 +733,15 @@ func SetRules(s *NetlinkSocket) {
 	err = json.Unmarshal(content, &rules)
 
 	m := rules.(map[string]interface{})
+
+	if _, ok := m["delete"]; ok {
+		//First Delete All rules and then add rules
+		fmt.Print("Deleting all rules")
+		DeleteAllRules(s)
+	}
+
 	for k, v := range m {
 		switch k {
-		// TODO: use ordred maps instead of go inbuild maps
-		//case "delete":
-		//	DeleteAllRules(s)
 		case "syscall_rules":
 			vi := v.([]interface{})
 			for sruleNo := range vi {

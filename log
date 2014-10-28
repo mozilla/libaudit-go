@@ -1,6 +1,0 @@
-audit(1414423093.893:318): auid=4294967295 ses=4294967295 op="add rule" key=(null) list=4 res=1
-audit(1414423093.893:319): auid=4294967295 ses=4294967295 op="add rule" key=(null) list=4 res=1
-audit(1414423101.145:322): auid=4294967295 ses=4294967295 op="remove rule" key=(null) list=4 res=1
-audit(1414423101.145:323): auid=4294967295 ses=4294967295 op="remove rule" key=(null) list=4 res=1
-audit(1414423101.145:324): auid=4294967295 ses=4294967295 op="add rule" key=(null) list=4 res=1
-audit(1414423101.145:325): auid=4294967295 ses=4294967295 op="add rule" key=(null) list=4 res=1

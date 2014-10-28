@@ -19,14 +19,11 @@ func main() {
 
 	netlinkAudit.AuditSetEnabled(s)
 	err = netlinkAudit.AuditIsEnabled(s)
-	fmt.Println("parsedResult")
 	fmt.Println(netlinkAudit.ParsedResult)
 	if err == nil {
-		fmt.Println("Horrah")
+		fmt.Println("Enabled Audit")
 	}
 	netlinkAudit.AuditSetPid(s, uint32(syscall.Getpid()))
-	//First Delete All rules and then add rules
-	netlinkAudit.DeleteAllRules(s)
 
 	// we need audit_name_to_field( ) && audit_rule_fieldpair_data
 	netlinkAudit.SetRules(s)
