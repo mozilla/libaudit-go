@@ -236,26 +236,14 @@ done:
 			}
 			if m.Header.Type == AUDIT_GET {
 				fmt.Println("AUDIT_GET")
-				//				break done
-			}
-			if m.Header.Type == AUDIT_FIRST_USER_MSG {
-				fmt.Println("AUDIT_FIRST_USER_MS")
-				//break done
-			}
-			if m.Header.Type == AUDIT_LIST_RULES {
-				fmt.Println("AUDIT_LIST_RULES")
-				//break done
-			}
-			if m.Header.Type == AUDIT_FIRST_USER_MSG {
-				fmt.Println("AUDIT_FIRST_USER_MSG")
-				//break done
+				break done
 			}
 		}
 	}
 	return nil
 }
 
-func AuditSetEnabled(s *NetlinkSocket /*, seq int*/) error {
+func AuditSetEnabled(s *NetlinkSocket) error {
 	var status AuditStatus
 	status.Enabled = 1
 	status.Mask = AUDIT_STATUS_ENABLED
@@ -280,7 +268,7 @@ func AuditSetEnabled(s *NetlinkSocket /*, seq int*/) error {
 	return nil
 }
 
-func AuditIsEnabled(s *NetlinkSocket /*seq int*/) error {
+func AuditIsEnabled(s *NetlinkSocket) error {
 	wb := newNetlinkAuditRequest(AUDIT_GET, syscall.AF_NETLINK, 0)
 
 	if err := s.Send(wb); err != nil {
@@ -434,8 +422,6 @@ func AuditAddRuleData(s *NetlinkSocket, rule *AuditRuleData, flags int, action i
 	}
 	return nil
 }
-
-//A very gibberish hack right now , Need to work on the design of this package.
 func isDone(msgchan chan string, errchan chan error, done <-chan bool) bool {
 	var d bool
 	select {
