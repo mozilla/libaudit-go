@@ -53,10 +53,11 @@ type CMap struct {
 	Name string
 	Id   int
 }
+
 //for fieldtab
 type FMap struct {
-	Name string
-	Field_id   int
+	Name     string
+	Field_id int
 }
 
 // for config
@@ -119,14 +120,14 @@ func nlmAlignOf(msglen int) int {
 */
 
 func ParseAuditNetlinkMessage(b []byte) ([]syscall.NetlinkMessage, error) {
-	
+
 	var msgs []syscall.NetlinkMessage
 	h, dbuf, dlen, err := netlinkMessageHeaderAndData(b)
 	if err != nil {
 		fmt.Println("Error in parsing")
 		return nil, err
 	}
-	
+
 	m := syscall.NetlinkMessage{Header: *h, Data: dbuf[:int(h.Len) /* -syscall.NLMSG_HDRLEN*/]}
 	msgs = append(msgs, m)
 	b = b[dlen:]
@@ -376,6 +377,7 @@ func AuditRuleSyscallData(rule *AuditRuleData, scall int) error {
 	return nil
 }
 
+/*
 func AuditWatchRuleData(s *NetlinkSocket, rule *AuditRuleData, path []byte) error {
 	rule.Flags = uint32(AUDIT_FILTER_EXIT)
 	rule.Action = uint32(AUDIT_ALWAYS)
@@ -386,7 +388,6 @@ func AuditWatchRuleData(s *NetlinkSocket, rule *AuditRuleData, path []byte) erro
 	rule.Fieldflags[0] = uint32(AUDIT_EQUAL)
 	rule.Buflen = uint32(len(path))
 	rule.Buf = append(rule.Buf[:], path[:]...)
-
 
 	buff := new(bytes.Buffer)
 	err := binary.Write(buff, nativeEndian(), *rule)
@@ -403,7 +404,7 @@ func AuditWatchRuleData(s *NetlinkSocket, rule *AuditRuleData, path []byte) erro
 
 	return nil
 }
-
+*/
 func AuditAddRuleData(s *NetlinkSocket, rule *AuditRuleData, flags int, action int) error {
 
 	if flags == AUDIT_FILTER_ENTRY {
@@ -435,7 +436,7 @@ func AuditAddRuleData(s *NetlinkSocket, rule *AuditRuleData, flags int, action i
 }
 
 //A very gibberish hack right now , Need to work on the design of this package.
-func isDone(msgchan chan<- syscall.NetlinkMessage, errchan chan<- error, done <-chan bool) bool {
+func isDone(msgchan chan string, errchan chan error, done <-chan bool) bool {
 	var d bool
 	select {
 	case d = <-done:
@@ -526,76 +527,65 @@ func GetreplyWithoutSync(s *NetlinkSocket) {
 	}
 }
 
-func Getreply(s *NetlinkSocket, msgchan chan<- syscall.NetlinkMessage, errchan chan<- error, done <-chan bool) {
-
-	//	rb := make([]byte, syscall.Getpagesize())
+func Getreply(s *NetlinkSocket, done <-chan bool, msgchan chan string, errchan chan error) {
 	for {
 		rb := make([]byte, MAX_AUDIT_MESSAGE_LENGTH)
-		nr, _, err := syscall.Recvfrom(s.fd, rb, 0 /*Do not use syscall.MSG_DONTWAIT*/)
-		/*
-			if isDone(msgchan, errchan, done) {
-				return
-			}
-		*/
+		nr, _, err := syscall.Recvfrom(s.fd, rb, 0)
+		if isDone(msgchan, errchan, done) {
+			return
+		}
 		if err != nil {
-			//errchan <- err
+			fmt.Println("Error While Recieving !!")
+			errchan <- err
 			continue
 		}
 		if nr < syscall.NLMSG_HDRLEN {
-			//errchan <- syscall.EINVAL
+			fmt.Println("Message Too Short!!")
+			errchan <- syscall.EINVAL
 			continue
 		}
+
 		rb = rb[:nr]
-		msgs, err := ParseAuditNetlinkMessage(rb) //Or syscall.ParseNetlinkMessage(rb)
+		msgs, err := ParseAuditNetlinkMessage(rb)
 
 		if err != nil {
-			//errchan <- err
+			fmt.Println("Not Parsed Successfuly !!")
+			errchan <- err
 			continue
 		}
 		for _, m := range msgs {
 			//Decide on various message Types
 			if m.Header.Type == syscall.NLMSG_DONE {
 				fmt.Println("Done")
-				//msgchan <- m
-				//continue
 			} else if m.Header.Type == syscall.NLMSG_ERROR {
 				err := int32(nativeEndian().Uint32(m.Data[0:4]))
 				if err == 0 {
-					fmt.Println("Ack") //Acknowledgement from kernel
-					//continue
+					//Acknowledgement from kernel
+					fmt.Println("Ack")
 				} else {
 					fmt.Println("NLMSG_ERROR")
 				}
-				//msgchan <- m
-				//continue
 			} else if m.Header.Type == AUDIT_GET {
 				fmt.Println("AUDIT_GET")
-				//msgchan <- m
-				//continue
 			} else if m.Header.Type == AUDIT_FIRST_USER_MSG {
 				fmt.Println("AUDIT_FIRST_USER_MSG")
-				//msgchan <- m
-				//continue
 			} else if m.Header.Type == AUDIT_SYSCALL {
-				fmt.Println("Syscall Event")
-				fmt.Println(string(m.Data[:]))
-				//msgchan <- m
+				msgchan <- string(m.Data[:])
 			} else if m.Header.Type == AUDIT_CWD {
-				fmt.Println("CWD Event")
-				fmt.Println(string(m.Data[:]))
-				//msgchan <- m
+				msgchan <- string(m.Data[:])
 			} else if m.Header.Type == AUDIT_PATH {
-				fmt.Println("Path Event")
-				fmt.Println(string(m.Data[:]))
-				//msgchan <- m
+				msgchan <- string(m.Data[:])
 			} else if m.Header.Type == AUDIT_EOE {
+				//			msgchan <- string(m.Data[:])
 				fmt.Println("Event Ends ", string(m.Data[:]))
+			} else if m.Header.Type == AUDIT_CONFIG_CHANGE {
+				msgchan <- string(m.Data[:])
 			} else {
-				fmt.Println("UNKnown: ", m.Header.Type)
-				//msgchan <- m
+				fmt.Println("Unknown: ", m.Header.Type)
 			}
 		}
 	}
+
 }
 
 // List all rules
@@ -736,7 +726,7 @@ func SetRules(s *NetlinkSocket) {
 
 	if _, ok := m["delete"]; ok {
 		//First Delete All rules and then add rules
-		fmt.Print("Deleting all rules")
+		fmt.Println("Deleting all rules")
 		DeleteAllRules(s)
 	}
 
@@ -764,17 +754,17 @@ func SetRules(s *NetlinkSocket) {
 					fmt.Print("Error:", err)
 				}
 				/*
-				err = json.Unmarshal([]byte(content3), &field)	
-				if err != nil {
-					fmt.Print("Error:", err)
-				}
-				var fieldCount int
-				for f := range field.Xmap {
-					if field.Fieldmap[f].Name == srule["filter"][0] {
-						// set rules
-						fieldCount = conf.Xmap[l].Field_id
+					err = json.Unmarshal([]byte(content3), &field)
+					if err != nil {
+						fmt.Print("Error:", err)
 					}
-				}
+					var fieldCount int
+					for f := range field.Xmap {
+						if field.Fieldmap[f].Name == srule["filter"][0] {
+							// set rules
+							fieldCount = conf.Xmap[l].Field_id
+						}
+					}
 				*/
 				for l := range conf.Xmap {
 					if conf.Xmap[l].Name == srule["name"] {

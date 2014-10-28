@@ -3,8 +3,9 @@ package main
 import (
 	"./netlinkAudit" //Should be changed according to individual settings
 	"fmt"
+	"os"
 	"syscall"
-	//	"time"
+	"time"
 	//	"unsafe"
 )
 
@@ -24,38 +25,37 @@ func main() {
 		fmt.Println("Enabled Audit")
 	}
 	netlinkAudit.AuditSetPid(s, uint32(syscall.Getpid()))
-
 	// we need audit_name_to_field( ) && audit_rule_fieldpair_data
 	netlinkAudit.SetRules(s)
-	netlinkAudit.GetreplyWithoutSync(s)
-
-	/*
-		DO NOT USE SYNC VERSION! IT is not Correct.
-		done = make(chan bool)
-		msgchan := make(chan syscall.NetlinkMessage)
-		errchan := make(chan error)
-
-			go netlinkAudit.Getreply(s, msgchan, errchan, done)
-
-			go func() {
-				for {
-					select {
-					case ev := <-errchan:
-						fmt.Println("\nError Occured!", ev, "\n")
-					case ev := <-msgchan:
-						fmt.Println("\nMessage", string(ev.Data[:]), "\n")
-					}
-
+	//netlinkAudit.GetreplyWithoutSync(s)
+	done := make(chan bool, 1)
+	msg := make(chan string)
+	errchan := make(chan error)
+	f, err := os.OpenFile("log", os.O_CREATE|os.O_RDWR|os.O_APPEND, 0660)
+	if err != nil {
+		fmt.Println("Error Creating File!!")
+	}
+	defer f.Close()
+	go func() {
+		for {
+			select {
+			case ev := <-msg:
+				fmt.Println(ev)
+				_, err := f.WriteString(ev + "\n")
+				if err != nil {
+					fmt.Println("Writing Error!!")
 				}
-			}()
-			time.Sleep(5 * time.Second)
-			done <- true
-	*/
-	//Listening in a while loop from kernel when some event goes down through Kernel
-	//TODO : Make a HandleAck
-	//Remove seq dependency in AuditReply............
+			case ev := <-errchan:
+				fmt.Println(ev)
+			}
+		}
+	}()
+
+	go netlinkAudit.Getreply(s, done, msg, errchan)
+
+	time.Sleep(time.Second * 5)
+	done <- true
+	close(done)
 	//Important point is that NLMSG_ERROR is also an acknowledgement from Kernel If the first 4 bytes of Data part are zero
 	// than it means the message is acknowledged
-	//Design changes resulting from Handle Ack
-	//Incorporate more AUDIT Constants and find way to load them
 }
