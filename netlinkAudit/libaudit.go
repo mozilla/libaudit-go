@@ -56,7 +56,7 @@ type CMap struct {
 
 //for fieldtab
 type FMap struct {
-	Name string
+	Name    string
 	Fieldid int
 }
 
@@ -739,25 +739,30 @@ func SetRules(s *NetlinkSocket) {
 				if err != nil {
 					fmt.Print("Error:", err)
 				}
-				
+
 				err = json.Unmarshal([]byte(content3), &field)
 				if err != nil {
 					fmt.Print("Error:", err)
 				}
-				
+
 				for l := range conf.Xmap {
 					if conf.Xmap[l].Name == srule["name"] {
 						// set rules
 						fmt.Println("setting syscall rule", conf.Xmap[l].Name)
 						var foo AuditRuleData
 						AuditRuleSyscallData(&foo, conf.Xmap[l].Id)
-						for f := range field.Fieldmap {
-							if field.Fieldmap[f].Name == srule["filter"] {
-						// set rules
-								foo.Fields[foo.Field_count] = (uint32)(field.Fieldmap[f].Fieldid)
+						/*
+								Much work should be done on this Part : see in libaudit.c
+								int audit_rule_fieldpair_data(struct audit_rule_data **rulep, const char *pair,int flags)
+
+							for f := range field.Fieldmap {
+								if field.Fieldmap[f].Name == srule["filter"] {
+									foo.Fields[foo.Field_count] = (uint32)(field.Fieldmap[f].Fieldid)
+									foo.Field_count++
+								}
 							}
-						}
-						//foo.Fields[foo.Field_count] = AUDIT_ARCH
+						*/
+						foo.Fields[foo.Field_count] = AUDIT_ARCH
 						foo.Fieldflags[foo.Field_count] = AUDIT_EQUAL
 						foo.Values[foo.Field_count] = AUDIT_ARCH_X86_64
 						foo.Field_count++
