@@ -56,8 +56,8 @@ type CMap struct {
 
 //for fieldtab
 type FMap struct {
-	Name     string
-	Field_id int
+	Name string
+	Fieldid int
 }
 
 // for config
@@ -724,41 +724,40 @@ func SetRules(s *NetlinkSocket) {
 				srule := vi[sruleNo].(map[string]interface{})
 				// Load x86 map
 				content2, err := ioutil.ReadFile("netlinkAudit/audit_x86.json")
-				//content3, err_3 := ioutil.ReadFile("netlinkAudit/fieldtab.json")
+				content3, err_3 := ioutil.ReadFile("netlinkAudit/fieldtab.json")
 
 				if err != nil {
 					fmt.Print("Error:", err)
 				}
-				//if err_3 != nil {
-				//	fmt.Print("Error:", err)
-				//}
+				if err_3 != nil {
+					fmt.Print("Error:", err)
+				}
 
 				var conf Config
-				//var field Field
+				var field Field
 				err = json.Unmarshal([]byte(content2), &conf)
 				if err != nil {
 					fmt.Print("Error:", err)
 				}
-				/*
-					err = json.Unmarshal([]byte(content3), &field)
-					if err != nil {
-						fmt.Print("Error:", err)
-					}
-					var fieldCount int
-					for f := range field.Xmap {
-						if field.Fieldmap[f].Name == srule["filter"][0] {
-							// set rules
-							fieldCount = conf.Xmap[l].Field_id
-						}
-					}
-				*/
+				
+				err = json.Unmarshal([]byte(content3), &field)
+				if err != nil {
+					fmt.Print("Error:", err)
+				}
+				
 				for l := range conf.Xmap {
 					if conf.Xmap[l].Name == srule["name"] {
 						// set rules
 						fmt.Println("setting syscall rule", conf.Xmap[l].Name)
 						var foo AuditRuleData
 						AuditRuleSyscallData(&foo, conf.Xmap[l].Id)
-						foo.Fields[foo.Field_count] = AUDIT_ARCH
+						for f := range field.Fieldmap {
+							if field.Fieldmap[f].Name == srule["filter"] {
+						// set rules
+								foo.Fields[foo.Field_count] = (uint32)(field.Fieldmap[f].Fieldid)
+							}
+						}
+						//foo.Fields[foo.Field_count] = AUDIT_ARCH
 						foo.Fieldflags[foo.Field_count] = AUDIT_EQUAL
 						foo.Values[foo.Field_count] = AUDIT_ARCH_X86_64
 						foo.Field_count++

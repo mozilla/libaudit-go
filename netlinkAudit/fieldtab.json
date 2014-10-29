@@ -2,46 +2,46 @@
 	"fieldmap" : [
 		{
 			"name": "pid",
-			"field_id"  : 0
+			"fieldid"  : 0
 		},{
 			"name": "uid",
-			"field_id"  : 1
+			"fieldid"  : 1
 		},
 		{
 			"name": "euid",
-			"field_id"  : 2
+			"fieldid"  : 2
 		},
 		{
 			"name": "suid",
-			"field_id"  : 3
+			"fieldid"  : 3
 		},
 		{
 			"name": "fsuid",
-			"field_id"  : 4
+			"fieldid"  : 4
 		},
 		{
 			"name": "gid",
-			"field_id"  : 5
+			"fieldid"  : 5
 		},
 		{
 			"name": "egid",
-			"field_id"  : 6
+			"fieldid"  : 6
 		},
 		{
 			"name": "sgid",
-			"field_id"  : 7
+			"fieldid"  : 7
 		},
 		{
 			"name": "fsgid",
-			"field_id"  : 8
+			"fieldid"  : 8
 		},
 		{
 			"name": "loginuid",
-			"field_id"  : 9
+			"fieldid"  : 9
 		},
 		{
 			"name": "pers",
-			"field_id"  : 10
+			"fieldid"  : 10
 		},
 		{
 			"name": "arch",
@@ -49,52 +49,51 @@
 		},
 		{
 			"name": "msgtype",
-			"field_id"  : 12
+			"fieldid"  : 12
 		},
 		{
 			"name": "ppid",
-			"field_id"  : 18
+			"fieldid"  : 18
 		},
 		{
 			"name": "inode",
-			"field_id"  : 102
+			"fieldid"  : 102
 		},
 		{
 			"name": "exit",
-			"field_id"  : 103
+			"fieldid"  : 103
 		},
 		{
 			"name": "success",
-			"field_id"  : 104
+			"fieldid"  : 104
 		},
 		{
 			"name": "path",
-			"field_id"  : 105
+			"fieldid"  : 105
 		},
 		{
 			"name": "perm",
-			"field_id"  : 106
+			"fieldid"  : 106
 		},
 		{
 			"name": "dir",
-			"field_id"  : 107
+			"fieldid"  : 107
 		},
 		{
 			"name": "filetype",
-			"field_id"  : 108
+			"fieldid"  : 108
 		},
 		{
 			"name": "obj_uid",
-			"field_id"  : 109
+			"fieldid"  : 109
 		},
 		{
 			"name": "obj_gid",
-			"field_id"  : 110
+			"fieldid"  : 110
 		},
 		{
 			"name": "field_compare",
-			"field_id"  : 111
-		},
+			"fieldid"  : 111
+		}
 	]
 }
-//A ddmore rules as per needed
