@@ -770,36 +770,3 @@ func SetRules(s *NetlinkSocket) {
 		}
 	}
 }
-
-/*
-
-func int FlagS2i(s *[]byte, value *int) bool{
-	var len, i int
-	i = 0
-	c []byte
-	len = unsafe.Sizeof(s);
-	copy := make([]byte, len+1)
-	//char copy[len + 1];
-	for i < len {
-		c = &s[i]
-		if unicode.IsUpper(c){
-			copy[i] = c - 'A' + 'a'
-		}else{
-			copy[i] = c
-		}
-		i = i + 1
-	}
-	copy[i] = 0;
-	return S2i(fieldStrings, fieldS2i_s, fieldS2i_i, 42, copy, value);
-}
-
-func AuditNameToField(const char *field) bool{
-//#ifndef NO_TABLES
-	//var res bool
-
-	if FlagS2i(field, res) != false
-	    return true;
-//#endif
-	return false;
-}
-*/

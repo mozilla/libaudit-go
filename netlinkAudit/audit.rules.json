@@ -10,12 +10,12 @@
  	"syscall_rules" : [ 
  		{
 			"action" : ["always", "exit"],
-			"filter" : { "arch" : 64 },
+			"filter" : "arch",
 			"name" : "rmdir"
 		},
 		{
 			"action" : ["always", "exit"],
-			"filter" : { "arch" : 64 },
+			"filter" : "arch",
 			"name" : "mkdir"
 		}
 	]
