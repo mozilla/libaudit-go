@@ -1,11 +1,15 @@
 package main
 
 import (
-	"fmt";
-	"./netlinkAudit"
-	//	"syscall"
-	///	"unsafe"
+	"./netlinkAudit" //Should be changed according to individual settings
+	"fmt"
+	"os"
+	"syscall"
+	"time"
+	//	"unsafe"
 )
+
+var done chan bool
 
 func main() {
 	s, err := netlinkAudit.GetNetlinkSocket()
@@ -14,33 +18,44 @@ func main() {
 	}
 	defer s.Close()
 
-	//netlinkAudit.AuditSetEnabled(s, 1)
-	err = netlinkAudit.AuditIsEnabled(s, 1)
-	fmt.Println("parsedResult")
+	netlinkAudit.AuditSetEnabled(s)
+	err = netlinkAudit.AuditIsEnabled(s)
 	fmt.Println(netlinkAudit.ParsedResult)
 	if err == nil {
-		fmt.Println("Horrah")
+		fmt.Println("Enabled Audit")
 	}
-	var foo netlinkAudit.AuditRuleData
+	netlinkAudit.AuditSetPid(s, uint32(syscall.Getpid()))
 	// we need audit_name_to_field( ) && audit_rule_fieldpair_data
-	//Syscall rmdir() is 84 on table
-	//fmt.Println(unsafe.Sizeof(foo))
-	netlinkAudit.AuditRuleSyscallData(&foo, 84)
-	//fmt.Println(foo)
-	foo.Fields[foo.Field_count] = netlinkAudit.AUDIT_ARCH
-	foo.Fieldflags[foo.Field_count] = netlinkAudit.AUDIT_EQUAL
-	foo.Values[foo.Field_count] = netlinkAudit.AUDIT_ARCH_X86_64
-	foo.Field_count++
-	//seq := 3
-	netlinkAudit.AuditAddRuleData(s, &foo, netlinkAudit.AUDIT_FILTER_EXIT, netlinkAudit.AUDIT_ALWAYS)
-	//Listening in a while loop from kernel when some event goes down through Kernel
-	/*
+	netlinkAudit.SetRules(s)
+	//netlinkAudit.GetreplyWithoutSync(s)
+	done := make(chan bool, 1)
+	msg := make(chan string)
+	errchan := make(chan error)
+	f, err := os.OpenFile("log", os.O_CREATE|os.O_RDWR|os.O_APPEND, 0660)
+	if err != nil {
+		fmt.Println("Error Creating File!!")
+	}
+	defer f.Close()
+	go func() {
 		for {
-			netlinkAudit.AuditGetReply(s, syscall.Getpagesize(), syscall.MSG_DONTWAIT, seq)
-			seq++
+			select {
+			case ev := <-msg:
+				fmt.Println(ev)
+				_, err := f.WriteString(ev + "\n")
+				if err != nil {
+					fmt.Println("Writing Error!!")
+				}
+			case ev := <-errchan:
+				fmt.Println(ev)
+			}
 		}
-	*/
-	//auditctl -a rmdir exit,always
-	//Flags are exit
-	//Action is always
+	}()
+
+	go netlinkAudit.Getreply(s, done, msg, errchan)
+
+	time.Sleep(time.Second * 5)
+	done <- true
+	close(done)
+	//Important point is that NLMSG_ERROR is also an acknowledgement from Kernel If the first 4 bytes of Data part are zero
+	// than it means the message is acknowledged
 }

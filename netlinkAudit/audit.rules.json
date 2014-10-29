@@ -1,0 +1,22 @@
+{
+	"delete" : true,
+ 	"buffer" : 8192,
+ 	"panic"  : 2,
+ 	"file_rule" : { 
+ 		"path" : "/etc/passwd",
+ 		"permission" : "wa",
+ 		"key" : "passwd_changes"
+ 	},
+ 	"syscall_rules" : [ 
+ 		{
+			"action" : ["always", "exit"],
+			"filter" : "arch",
+			"name" : "rmdir"
+		},
+		{
+			"action" : ["always", "exit"],
+			"filter" : "arch",
+			"name" : "mkdir"
+		}
+	]
+}

@@ -1,0 +1,99 @@
+{
+	"fieldmap" : [
+		{
+			"name": "pid",
+			"fieldid"  : 0
+		},{
+			"name": "uid",
+			"fieldid"  : 1
+		},
+		{
+			"name": "euid",
+			"fieldid"  : 2
+		},
+		{
+			"name": "suid",
+			"fieldid"  : 3
+		},
+		{
+			"name": "fsuid",
+			"fieldid"  : 4
+		},
+		{
+			"name": "gid",
+			"fieldid"  : 5
+		},
+		{
+			"name": "egid",
+			"fieldid"  : 6
+		},
+		{
+			"name": "sgid",
+			"fieldid"  : 7
+		},
+		{
+			"name": "fsgid",
+			"fieldid"  : 8
+		},
+		{
+			"name": "loginuid",
+			"fieldid"  : 9
+		},
+		{
+			"name": "pers",
+			"fieldid"  : 10
+		},
+		{
+			"name": "arch",
+			"fields"  : 11
+		},
+		{
+			"name": "msgtype",
+			"fieldid"  : 12
+		},
+		{
+			"name": "ppid",
+			"fieldid"  : 18
+		},
+		{
+			"name": "inode",
+			"fieldid"  : 102
+		},
+		{
+			"name": "exit",
+			"fieldid"  : 103
+		},
+		{
+			"name": "success",
+			"fieldid"  : 104
+		},
+		{
+			"name": "path",
+			"fieldid"  : 105
+		},
+		{
+			"name": "perm",
+			"fieldid"  : 106
+		},
+		{
+			"name": "dir",
+			"fieldid"  : 107
+		},
+		{
+			"name": "filetype",
+			"fieldid"  : 108
+		},
+		{
+			"name": "obj_uid",
+			"fieldid"  : 109
+		},
+		{
+			"name": "obj_gid",
+			"fieldid"  : 110
+		},
+		{
+			"name": "field_compare",
+			"fieldid"  : 111
+		}
+	]
+}
