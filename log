@@ -1,2 +1,0 @@
-audit(1414591586.287:118): auid=4294967295 ses=4294967295 op="add rule" key=(null) list=4 res=1
-audit(1414591586.287:119): auid=4294967295 ses=4294967295 op="add rule" key=(null) list=4 res=1
