@@ -718,18 +718,38 @@ func SetRules(s *NetlinkSocket) {
 
 	for k, v := range m {
 		switch k {
+		case "custom_rule":
+			vi := v.([]interface{})
+			for ruleNo := range vi {
+				rule := vi[ruleNo].(map[string]interface{})
+				for l,m := range rule {
+					fmt.Print(l)
+					switch l {
+					case "action":
+						// hadnle actions here
+						action := m.([]interface{})
+						fmt.Println(" ", action[0])
+					case "fields":
+						// handle fields here
+						fields := m.([]interface{})
+						for _, q  := range fields {
+							fmt.Println(" ", q)
+						}
+					}
+				}
+			}
 		case "syscall_rules":
 			vi := v.([]interface{})
 			for sruleNo := range vi {
 				srule := vi[sruleNo].(map[string]interface{})
-				// Load x86 map
+				
+				// Load x86 map and fieldtab.json
 				content2, err := ioutil.ReadFile("netlinkAudit/audit_x86.json")
-				content3, err_3 := ioutil.ReadFile("netlinkAudit/fieldtab.json")
-
 				if err != nil {
 					fmt.Print("Error:", err)
 				}
-				if err_3 != nil {
+				content3, err := ioutil.ReadFile("netlinkAudit/fieldtab.json")
+				if err != nil {
 					fmt.Print("Error:", err)
 				}
 
@@ -739,7 +759,6 @@ func SetRules(s *NetlinkSocket) {
 				if err != nil {
 					fmt.Print("Error:", err)
 				}
-
 				err = json.Unmarshal([]byte(content3), &field)
 				if err != nil {
 					fmt.Print("Error:", err)
@@ -762,6 +781,7 @@ func SetRules(s *NetlinkSocket) {
 								}
 							}
 						*/
+						
 						foo.Fields[foo.Field_count] = AUDIT_ARCH
 						foo.Fieldflags[foo.Field_count] = AUDIT_EQUAL
 						foo.Values[foo.Field_count] = AUDIT_ARCH_X86_64
@@ -769,8 +789,6 @@ func SetRules(s *NetlinkSocket) {
 						AuditAddRuleData(s, &foo, AUDIT_FILTER_EXIT, AUDIT_ALWAYS)
 					}
 				}
-				//default:
-				//    fmt.Println(k, "is not yet supported")
 			}
 		}
 	}
