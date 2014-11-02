@@ -800,6 +800,24 @@ func  AuditRuleFieldPairData(foo *AuditRuleData,fieldval int, op string, fieldna
 		return err
 	}
 
+	if v == "nt_eq" {
+		op = AUDIT_NOT_EQUAL
+	} else if v == "gt_or_eq" {
+		op = AUDIT_GREATER_THAN_OR_EQUAL
+	} else if v == "lt_or_eq" {
+		op = AUDIT_LESS_THAN_OR_EQUAL
+	} else if v == "and_eq" {
+		op = AUDIT_BIT_TEST
+	} else if v == "eq" {
+		op = AUDIT_EQUAL
+	} else if v == "gt" {
+		op = AUDIT_GREATER_THAN
+	} else if v == "lt" {
+		op = AUDIT_LESS_THAN
+	} else if ( (v == "and" {
+		op = AUDIT_BIT_MASK
+	}
+
 	// check against the field["actions"] here and set fieldid
 	fieldid := 0
 	for f := range fieldmap.Fieldmap {
@@ -819,7 +837,34 @@ func  AuditRuleFieldPairData(foo *AuditRuleData,fieldval int, op string, fieldna
 	//set field and op
 	foo.Fields[foo.Field_count] = fieldid;
 	foo.Fieldflags[foo.Field_count] = opval;
+	
+	if t == "task"{
+		para_one = AUDIT_FILTER_TASK
+	}
+	else if t == "entry" {
+		para_one = AUDIT_FILTER_ENTRY
+	}
+	else if t == "exit"{
+		para_one = AUDIT_FILTER_EXIT
+	}
+	else if t == "user"{
+		para_one = AUDIT_FILTER_USER
+-	}
+	else if t == "exclude" {
+		para_one = AUDIT_FILTER_EXCLUDE
+		//exclude = 1;
+	}
 
+	if m == "never"{
+		para_two = AUDIT_NEVER
+	}
+	else if m == "possible" {
+		para_two = AUDIT_POSSIBLE
+	}
+	else if m == "always"{
+		para_two = AUDIT_ALWAYS
+	}
+	
 	//TODO :Now loop over the field value and set foo.Values[foo.Field_count] accordingly
 	//ALSO : Save flags in a variable i.e always,exit SEE static int lookup_filter(const char *str, int *filter)
 	//and static int lookup_action(const char *str, int *act) in auditctl.c
