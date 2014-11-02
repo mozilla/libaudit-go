@@ -393,6 +393,278 @@ func AuditWatchRuleData(s *NetlinkSocket, rule *AuditRuleData, path []byte) erro
 	return nil
 }
 */
+
+/*
+func  AuditRuleFieldPairData(s *NetlinkSocket, foo *AuditRuleData, pair *string, flags int, fields int, fieldmap Fieldmap) error {
+	if rule.Field_count >= (AUDIT_MAX_FIELDS - 1) {
+		err :=
+		return err
+	}
+
+	// check against the field["actions"] here and set fieldid
+	fieldid := 0
+	for f := range fieldmap.Fieldmap {
+		if fieldmap.Fieldmap[f].Name == field["action"] {
+			fieldid = (uint32)(fieldmap.Fieldmap[f].Fieldid)
+		}
+	}
+
+	// check against the field["actions"] here and set fieldid
+	op := 0
+	for f := range fieldmap.Fieldmap {
+		if fieldmap.Fieldmap[f].Name == field["op"] {
+			op = (uint32)(fieldmap.Fieldmap[f].Fieldid)
+		}
+	}
+
+	//set field and op
+	foo.Fields[foo.Field_count] = field;
+	foo.Fieldflags[foo.Field_count] = op;
+
+	//TODO :Now loop over the field value and set foo.Values[foo.Field_count] accordingly
+	//ALSO : Save flags in a variable i.e always,exit SEE static int lookup_filter(const char *str, int *filter)
+	//and static int lookup_action(const char *str, int *act) in auditctl.c
+	//filters are like entry,exit,task, and action in always or never
+	switch field {
+    	case AUDIT_UID:
+		case AUDIT_UID:
+		case AUDIT_EUID:
+		case AUDIT_SUID:
+		case AUDIT_FSUID:
+		case AUDIT_LOGINUID:
+		case AUDIT_OBJ_UID:
+		case AUDIT_OBJ_GID:
+			//SO WE GET TO SET *ID
+			//Determine the value to be set by doing some magic
+			vlen = strlen(v);
+			//IF ALL DIGITS THEN
+			if (isdigit((char)*(v)))
+				rule->values[rule->field_count] = //SEE HERE
+					strtoul(v, NULL, 0);
+			else if (vlen >= 2 && *(v)=='-' &&
+						(isdigit((char)*(v+1))))
+				rule->values[rule->field_count] = //SEE HERE
+					strtol(v, NULL, 0);
+			else {
+				if (strcmp(v, "unset") == 0)
+					rule->values[rule->field_count] = //SEE ERROR handling HERE
+								4294967295;
+				//IF NOT DIGITS THEN
+				else if (audit_name_to_uid(v,
+					&rule->values[rule->field_count])) {
+					audit_msg(LOG_ERR, "Unknown user: %s",
+						v);
+					return -2;
+				}
+			}
+			break;
+		case AUDIT_GID:
+		case AUDIT_EGID:
+		case AUDIT_SGID:
+		case AUDIT_FSGID:
+			//IF DIGITS THEN
+			if (isdigit((char)*(v)))
+				rule->values[rule->field_count] = //SEE HERE
+					strtol(v, NULL, 0);
+			else {
+				//IF NOT DIGITS THEN
+				if (audit_name_to_gid(v,
+					&rule->values[rule->field_count])) {
+					audit_msg(LOG_ERR, "Unknown group: %s",
+						v);
+					return -2;
+				}
+			}
+			break;
+		case AUDIT_EXIT:
+			if (flags != AUDIT_FILTER_EXIT)
+				return -7;
+			vlen = strlen(v);
+			if (isdigit((char)*(v)))//SAME THINGS ABOUT DIGITS
+				rule->values[rule->field_count] = //SEE HERE
+					strtol(v, NULL, 0);
+			else if (vlen >= 2 && *(v)=='-' &&
+						(isdigit((char)*(v+1))))
+				rule->values[rule->field_count] =
+					strtol(v, NULL, 0);
+			else {
+				rule->values[rule->field_count] = //SEE HERE
+						audit_name_to_errno(v);
+				if (rule->values[rule->field_count] == 0)
+					return -15;
+			}
+			break;
+		case AUDIT_MSGTYPE://CONFUSING
+			if (flags != AUDIT_FILTER_EXCLUDE &&
+					flags != AUDIT_FILTER_USER)
+				return -9;
+
+			if (isdigit((char)*(v)))
+				rule->values[rule->field_count] = //SEE HERE
+					strtol(v, NULL, 0);
+			else
+				if (audit_name_to_msg_type(v) > 0)
+					rule->values[rule->field_count] = //SEE ERROR handling HERE
+						audit_name_to_msg_type(v);
+				else
+					return -8;
+			break;
+		case AUDIT_OBJ_USER:
+		case AUDIT_OBJ_ROLE:
+		case AUDIT_OBJ_TYPE:
+		case AUDIT_OBJ_LEV_LOW:
+		case AUDIT_OBJ_LEV_HIGH:
+		case AUDIT_WATCH:
+		case AUDIT_DIR: //DETERMINE WHY they are doing this
+			if (flags != AUDIT_FILTER_EXIT)
+				return -7;
+			if (field == AUDIT_WATCH || field == AUDIT_DIR)
+				_audit_permadded = 1;
+
+		case AUDIT_SUBJ_USER:
+		case AUDIT_SUBJ_ROLE:
+		case AUDIT_SUBJ_TYPE:
+		case AUDIT_SUBJ_SEN:
+		case AUDIT_SUBJ_CLR:
+		case AUDIT_FILTERKEY: //////DUNNO WHAT THEY ARE DOING BUT SMTH IMPORTANT HERE LIKE SETTING FILTERKEY
+			if (field == AUDIT_FILTERKEY && !(_audit_syscalladded || _audit_permadded))
+                                return -19;
+			vlen = strlen(v);
+			if (field == AUDIT_FILTERKEY &&
+					vlen > AUDIT_MAX_KEY_LEN)
+				return -11;
+			else if (vlen > PATH_MAX)
+				return -11;
+			rule->values[rule->field_count] = vlen;
+			offset = rule->buflen;
+			rule->buflen += vlen;
+			//*RULEP IS THE RULEDATA STRUCT POINTER
+			*rulep = realloc(rule, sizeof(*rule) + rule->buflen);
+			if (*rulep == NULL) {
+				free(rule);
+				audit_msg(LOG_ERR, "Cannot realloc memory!\n");
+				return -3;
+			} else {
+				rule = *rulep;
+			}
+			strncpy(&rule->buf[offset], v, vlen);
+
+			break;
+		case AUDIT_ARCH://WE ARE already doing this
+			if (_audit_syscalladded)
+				return -3;
+			if (!(op == AUDIT_NOT_EQUAL || op == AUDIT_EQUAL))
+				return -13;
+			if (isdigit((char)*(v))) {
+				int machine;
+
+				errno = 0;
+				_audit_elf = strtoul(v, NULL, 0);
+				if (errno)
+					return -5;
+
+				machine = audit_elf_to_machine(_audit_elf);
+				if (machine < 0)
+					return -5;
+			}
+			else {
+				const char *arch=v;
+				unsigned int machine, elf;
+				machine = audit_determine_machine(arch);
+
+				elf = audit_machine_to_elf(machine);
+				if (elf == 0)
+					return -5;
+
+				_audit_elf = elf;
+			}
+			rule->values[rule->field_count] = _audit_elf;
+			_audit_archadded = 1;
+			break;
+		case AUDIT_PERM:///////////////////////ANOTHER IMPORTANT STUFF
+			if (flags != AUDIT_FILTER_EXIT)
+				return -7;
+			else if (op != AUDIT_EQUAL)
+				return -13;
+			else {
+				unsigned int i, len, val = 0;
+
+				len = strlen(v);
+				if (len > 4)
+					return -11;
+
+				for (i = 0; i < len; i++) {
+					switch (tolower(v[i])) {
+						case 'r':
+							val |= AUDIT_PERM_READ;
+							break;
+						case 'w':
+							val |= AUDIT_PERM_WRITE;
+							break;
+						case 'x':
+							val |= AUDIT_PERM_EXEC;
+							break;
+						case 'a':
+							val |= AUDIT_PERM_ATTR;
+							break;
+						default:
+							return -14;
+					}
+				}
+				rule->values[rule->field_count] = val;
+			}
+			break;
+		case AUDIT_FILETYPE:////////////////////OH YEAH ONCE AGAIN
+			if (!(flags == AUDIT_FILTER_EXIT || flags == AUDIT_FILTER_ENTRY))
+				return -17;
+			rule->values[rule->field_count] =
+				audit_name_to_ftype(v);
+			if ((int)rule->values[rule->field_count] < 0) {
+				return -16;
+			}
+			break;
+		case AUDIT_ARG0...AUDIT_ARG3: //WHAT IS THIS FIND OUT
+			vlen = strlen(v);
+			if (isdigit((char)*(v)))
+				rule->values[rule->field_count] =
+					strtoul(v, NULL, 0);
+			else if (vlen >= 2 && *(v)=='-' &&
+						(isdigit((char)*(v+1))))
+				rule->values[rule->field_count] =
+					strtol(v, NULL, 0);
+			else
+				return -21;
+			break;
+		case AUDIT_DEVMAJOR...AUDIT_INODE:
+		case AUDIT_SUCCESS:
+			if (flags != AUDIT_FILTER_EXIT)
+				return -7;
+
+		default:///DEFAULT CASE ARE WE HANDLING IT ????
+			if (field == AUDIT_INODE) {
+				if (!(op == AUDIT_NOT_EQUAL ||
+							op == AUDIT_EQUAL))
+					return -13;
+			}
+
+			if (field == AUDIT_PPID && !(flags == AUDIT_FILTER_EXIT
+				|| flags == AUDIT_FILTER_ENTRY))
+				return -17;
+
+			if (!isdigit((char)*(v)))
+				return -21;
+
+			if (field == AUDIT_INODE)
+				rule->values[rule->field_count] =
+					strtoul(v, NULL, 0);
+			else
+				rule->values[rule->field_count] =
+					strtol(v, NULL, 0);
+			break;
+    }
+}
+*/
+
 func AuditAddRuleData(s *NetlinkSocket, rule *AuditRuleData, flags int, action int) error {
 
 	if flags == AUDIT_FILTER_ENTRY {
@@ -723,17 +995,16 @@ func SetRules(s *NetlinkSocket) {
 			for ruleNo := range vi {
 				rule := vi[ruleNo].(map[string]interface{})
 				for l,m := range rule {
-					fmt.Print(l)
 					switch l {
 					case "action":
-						// hadnle actions here
+						//TODO: hadnle actions case here
 						action := m.([]interface{})
-						fmt.Println(" ", action[0])
+						fmt.Println("actions are : ", action[0])
 					case "fields":
-						// handle fields here
+						//TODO: handle fields case here
 						fields := m.([]interface{})
 						for _, q  := range fields {
-							fmt.Println(" ", q)
+							fmt.Println("fields are", q)
 						}
 					}
 				}
@@ -770,22 +1041,18 @@ func SetRules(s *NetlinkSocket) {
 						fmt.Println("setting syscall rule", conf.Xmap[l].Name)
 						var foo AuditRuleData
 						AuditRuleSyscallData(&foo, conf.Xmap[l].Id)
-						/*
-								Much work should be done on this Part : see in libaudit.c
-								int audit_rule_fieldpair_data(struct audit_rule_data **rulep, const char *pair,int flags)
-
-							for f := range field.Fieldmap {
-								if field.Fieldmap[f].Name == srule["filter"] {
-									foo.Fields[foo.Field_count] = (uint32)(field.Fieldmap[f].Fieldid)
-									foo.Field_count++
-								}
-							}
-						*/
 						
-						foo.Fields[foo.Field_count] = AUDIT_ARCH
-						foo.Fieldflags[foo.Field_count] = AUDIT_EQUAL
-						foo.Values[foo.Field_count] = AUDIT_ARCH_X86_64
-						foo.Field_count++
+						// TODO: fetch actions and set them
+						for _, field  := range srule["fields"].([]interface{}) {
+							field = field.(map[string]interface{})["value"]
+							// TODO send field["action"], field["op"] and field["value"] 
+							// to AuditRuleFieldPairData() and sent things there
+							// 
+							foo.Fields[foo.Field_count] = AUDIT_ARCH
+							foo.Fieldflags[foo.Field_count] = AUDIT_EQUAL
+							foo.Values[foo.Field_count] = AUDIT_ARCH_X86_64
+							foo.Field_count++
+						}
 						AuditAddRuleData(s, &foo, AUDIT_FILTER_EXIT, AUDIT_ALWAYS)
 					}
 				}
