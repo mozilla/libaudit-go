@@ -91,7 +91,7 @@ func (rr *NetlinkAuditRequest) ToWireFormat() []byte {
 	return b
 }
 
-func newNetlinkAuditRequest(proto /*seq,*/, family, sizeofData int) *NetlinkAuditRequest {
+func newNetlinkAuditRequest(proto, family, sizeofData int) *NetlinkAuditRequest {
 	rr := &NetlinkAuditRequest{}
 
 	rr.Header.Len = uint32(syscall.NLMSG_HDRLEN + sizeofData)
@@ -227,10 +227,10 @@ done:
 			if m.Header.Type == syscall.NLMSG_ERROR {
 				error := int32(nativeEndian().Uint32(m.Data[0:4]))
 				if error == 0 {
-					fmt.Println("ACK")
+					fmt.Println("Acknowledged!!")
 					break done
 				} else {
-					fmt.Println("NLMSG_ERROR")
+					fmt.Println("NLMSG_ERROR Received")
 				}
 				break done
 			}
@@ -303,7 +303,7 @@ done:
 
 			}
 			if m.Header.Type == syscall.NLMSG_ERROR {
-				fmt.Println("NLMSG_ERROR\n")
+				fmt.Println("NLMSG_ERROR Received")
 			}
 			if m.Header.Type == AUDIT_GET {
 				//Convert the data part written to AuditStatus struct
@@ -359,7 +359,7 @@ func AuditRuleSyscallData(rule *AuditRuleData, scall int) error {
 	bit := auditBit(scall)
 
 	if word >= AUDIT_BITMASK_SIZE-1 {
-		fmt.Println("Some error occured")
+		fmt.Println("Word Size greater than AUDIT_BITMASK_SIZE")
 	}
 	rule.Mask[word] |= bit
 	return nil
@@ -395,7 +395,8 @@ func AuditWatchRuleData(s *NetlinkSocket, rule *AuditRuleData, path []byte) erro
 */
 
 /*
-func  AuditRuleFieldPairData(s *NetlinkSocket, foo *AuditRuleData, pair *string, flags int, fields int, fieldmap Fieldmap) error {
+func  AuditRuleFieldPairData(foo *AuditRuleData,flags int, fields int, fieldmap Fieldmap) error {
+
 	if rule.Field_count >= (AUDIT_MAX_FIELDS - 1) {
 		err :=
 		return err
@@ -681,7 +682,6 @@ func AuditAddRuleData(s *NetlinkSocket, rule *AuditRuleData, flags int, action i
 		fmt.Println("binary.Write failed:", err)
 		return err
 	}
-	//	err = AuditSend(s, AUDIT_ADD_RULE, buff.Bytes(), int(buff.Len())+int(rule.Buflen))
 	wb := newNetlinkAuditRequest(AUDIT_ADD_RULE, syscall.AF_NETLINK, int(buff.Len())+int(rule.Buflen))
 	wb.Data = append(wb.Data[:], buff.Bytes()[:]...)
 	if err := s.Send(wb); err != nil {
@@ -706,7 +706,6 @@ func isDone(msgchan chan string, errchan chan error, done <-chan bool) bool {
 }
 
 func GetreplyWithoutSync(s *NetlinkSocket) {
-	//	f, err := os.Create("log")
 	f, err := os.OpenFile("log", os.O_CREATE|os.O_RDWR|os.O_APPEND, 0660)
 	if err != nil {
 		fmt.Println("Error Creating File!!")
@@ -876,11 +875,11 @@ done:
 			}
 
 			if m.Header.Type == syscall.NLMSG_DONE {
-				fmt.Println("All rules deleted\n")
+				fmt.Println("All rules deleted")
 				break done
 			}
 			if m.Header.Type == syscall.NLMSG_ERROR {
-				fmt.Println("NLMSG_ERROR\n")
+				fmt.Println("NLMSG_ERROR")
 			}
 			if m.Header.Type == AUDIT_LIST_RULES {
 				b := m.Data[:]
@@ -896,7 +895,6 @@ done:
 
 //Delete Rule Data Function
 func AuditDeleteRuleData(s *NetlinkSocket, rule *AuditRuleData, flags uint32, action uint32) error {
-	//var rc int;
 	var sizePurpose AuditRuleData
 	if flags == AUDIT_FILTER_ENTRY {
 		fmt.Println("Error in delete")
@@ -947,7 +945,7 @@ done:
 			}
 
 			if m.Header.Type == syscall.NLMSG_DONE {
-				fmt.Println("Done\n")
+				fmt.Println("Deleting Done!")
 				break done
 
 			}
@@ -994,16 +992,16 @@ func SetRules(s *NetlinkSocket) {
 			vi := v.([]interface{})
 			for ruleNo := range vi {
 				rule := vi[ruleNo].(map[string]interface{})
-				for l,m := range rule {
+				for l, m := range rule {
 					switch l {
 					case "action":
-						//TODO: hadnle actions case here
+						//TODO: handle actions case here
 						action := m.([]interface{})
 						fmt.Println("actions are : ", action[0])
 					case "fields":
 						//TODO: handle fields case here
 						fields := m.([]interface{})
-						for _, q  := range fields {
+						for _, q := range fields {
 							fmt.Println("fields are", q)
 						}
 					}
@@ -1013,7 +1011,7 @@ func SetRules(s *NetlinkSocket) {
 			vi := v.([]interface{})
 			for sruleNo := range vi {
 				srule := vi[sruleNo].(map[string]interface{})
-				
+
 				// Load x86 map and fieldtab.json
 				content2, err := ioutil.ReadFile("netlinkAudit/audit_x86.json")
 				if err != nil {
@@ -1041,18 +1039,22 @@ func SetRules(s *NetlinkSocket) {
 						fmt.Println("setting syscall rule", conf.Xmap[l].Name)
 						var foo AuditRuleData
 						AuditRuleSyscallData(&foo, conf.Xmap[l].Id)
-						
-						// TODO: fetch actions and set them
-						for _, field  := range srule["fields"].([]interface{}) {
-							field = field.(map[string]interface{})["value"]
-							// TODO send field["action"], field["op"] and field["value"] 
-							// to AuditRuleFieldPairData() and sent things there
-							// 
-							foo.Fields[foo.Field_count] = AUDIT_ARCH
-							foo.Fieldflags[foo.Field_count] = AUDIT_EQUAL
-							foo.Values[foo.Field_count] = AUDIT_ARCH_X86_64
-							foo.Field_count++
+						actions := srule["action"].([]interface{})
+						fmt.Println(actions)
+						//NOW APPLY ACTIONS ON SYSCALLS by separating the filters i.e exit from action i.e. always
+
+						for _, field := range srule["fields"].([]interface{}) {
+							fieldval := field.(map[string]interface{})["value"]
+							op := field.(map[string]interface{})["op"]
+							fieldname := field.(map[string]interface{})["name"]
+							fmt.Println(fieldval, op, fieldname)
+							// AuditRuleFieldPairData(&foo,fieldval,op,fieldname)
 						}
+						foo.Fields[foo.Field_count] = AUDIT_ARCH
+						foo.Fieldflags[foo.Field_count] = AUDIT_EQUAL
+						foo.Values[foo.Field_count] = AUDIT_ARCH_X86_64
+						foo.Field_count++
+
 						AuditAddRuleData(s, &foo, AUDIT_FILTER_EXIT, AUDIT_ALWAYS)
 					}
 				}
