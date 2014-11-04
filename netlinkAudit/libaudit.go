@@ -14,6 +14,7 @@ import (
 
 var ParsedResult AuditStatus
 var nextSeqNr uint32
+var rulesRetrieved AuditRuleData
 
 type AuditStatus struct {
 	Mask          uint32 /* Bit mask for valid entries */
@@ -575,7 +576,7 @@ func Getreply(s *NetlinkSocket, done <-chan bool, msgchan chan string, errchan c
 
 // List all rules
 // TODO: this funcion needs a lot of work to print actual rules
-func ListAllRules(s *NetlinkSocket) {
+func ListAllRules(s *NetlinkSocket){
 	wb := newNetlinkAuditRequest(AUDIT_LIST_RULES, syscall.AF_NETLINK, 0)
 	if err := s.Send(wb); err != nil {
 		fmt.Print("Error:", err)
@@ -615,7 +616,7 @@ done:
 				var rules AuditRuleData
 				err = binary.Read(buf, nativeEndian(), &rules)
 				// TODO : save all rules to an array so delete all rules function can use this
-				fmt.Println(rules)
+				rulesRetrieved = rules
 			}
 		}
 	}
@@ -781,7 +782,7 @@ func SetRules(s *NetlinkSocket) {
 						}
 						foo.Fields[foo.Field_count] = AUDIT_ARCH
 						foo.Fieldflags[foo.Field_count] = AUDIT_EQUAL
-						foo.Values[foo.Field_count] = AUDIT_ARCH_X86_64
+						//foo.Values[foo.Field_count] = AUDIT_ARCH_X86_64
 						foo.Field_count++
 
 						AuditAddRuleData(s, &foo, AUDIT_FILTER_EXIT, AUDIT_ALWAYS)
@@ -792,8 +793,8 @@ func SetRules(s *NetlinkSocket) {
 	}
 }
 
-/*
-func  AuditRuleFieldPairData(foo *AuditRuleData,fieldval int, op string, fieldname string ,fieldmap Field , flags int) error {
+/
+func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldname string ,fieldmap Field , flags int) error {
 
 	if rule.Field_count >= (AUDIT_MAX_FIELDS - 1) {
 		err :=
@@ -835,8 +836,8 @@ func  AuditRuleFieldPairData(foo *AuditRuleData,fieldval int, op string, fieldna
 	}
 
 	//set field and op
-	foo.Fields[foo.Field_count] = fieldid;
-	foo.Fieldflags[foo.Field_count] = opval;
+	rule.Fields[foo.Field_count] = fieldid;
+	rule.Fieldflags[foo.Field_count] = opval;
 	
 	if t == "task"{
 		para_one = AUDIT_FILTER_TASK
@@ -881,10 +882,10 @@ func  AuditRuleFieldPairData(foo *AuditRuleData,fieldval int, op string, fieldna
 			//SO WE GET TO SET *ID
 
 			//Lets say the values provided are digits only in "fieldval"
-			rule.Values[rule.Field_count] = uint32(fieldval)
+			//rule.Values[rule.Field_count] = uint32(fieldval)
 
 			// C ERROR Handling
-				vlen = strlen(v);
+				vlen = len(v)
 				if (isdigit((char)*(v)))
 					rule->values[rule->field_count] = //SEE HERE
 						strtoul(v, NULL, 0);

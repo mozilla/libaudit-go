@@ -58,7 +58,8 @@ func main() {
 	}()
 
 	go netlinkAudit.Getreply(s, done, msg, errchan)
-
+	//fmt.Println("bogogogogog")
+	//ListAllRules(s)
 	time.Sleep(time.Second * 10)
 	done <- true
 	close(done)
