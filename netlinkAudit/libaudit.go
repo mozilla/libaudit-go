@@ -11,14 +11,19 @@ import (
 	"syscall"
 	"unsafe"
 	//"unicode"
-	"strings"
-	"runtime"
-	"unsafe"
+	//"strings"
+	//"runtime"
 )
 
 var ParsedResult AuditStatus
 var nextSeqNr uint32
 var rulesRetrieved AuditRuleData
+audit_elf := 0U
+var MachineStrings []byte
+MachineStrings = ["armeb","armv5tejl","armv7l","i386","i486","i586","i686","ia64","ppc","ppc64"
+"s390","s390x","x86_64"]
+MachineS2iS := [0,6,16,23,28,33,38,43,48,52,58,63,69]
+MachineS2iI[] = [8,8,8,0,0,0,0,2,4,3,6,5,1]
 
 type AuditStatus struct {
 	Mask          uint32 /* Bit mask for valid entries */
@@ -778,7 +783,11 @@ func SetRules(s *NetlinkSocket) {
 
 						for _, field := range srule["fields"].([]interface{}) {
 							fieldval := field.(map[string]interface{})["value"]
+							fmt.Println("here yaha")
+							fmt.Println(fieldval)
 							op := field.(map[string]interface{})["op"]
+							fmt.Println("here aa")
+							fmt.Println(op)
 							fieldname := field.(map[string]interface{})["name"]
 							fmt.Println(fieldval, op, fieldname)
 							// AuditRuleFieldPairData(&foo,fieldval,op,fieldname,fieldmap)
@@ -797,6 +806,7 @@ func SetRules(s *NetlinkSocket) {
 	}
 }
 
+/*
 func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldname string ,fieldmap Field , flags int) error {
 
 	if rule.Field_count >= (AUDIT_MAX_FIELDS - 1) {
@@ -826,7 +836,7 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 		op = AUDIT_BIT_MASK
 	}
 
-	// check against the field["actions"] here and set fieldid
+	// check against  the field["actions"] here and set fieldid
 	fieldid := 0
 	for f := range fieldmap.Fieldmap {
 		if fieldmap.Fieldmap[f].Name == fieldname {
@@ -892,16 +902,17 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 					rule.Values[rule.Field_count] = v;
 				}
 				else {
-					if runtime·strcmp(v, "unset") == 0 {
+					if vlen >= 2 and strings.Contains(v, "-")//look at it
+						rule.Values[rule.Field_count] = v;
+					else if runtime·strcmp(v, "unset") == 0 {
 						rule->values[rule->field_count] = 4294967295;
+						else{
+							fmt.Println("error",v);
+						}		
 					}
+				}		
 			//
 			//IF NOT DIGITS THEN DO WE NEED audit_name_to_uid for audit-go ?
-					else if (audit_name_to_uid(v,&rule->values[rule->field_count])) {
-						fmt.Println("error",v);
-					}
-			}
-			break;
 		case AUDIT_GID:
 		case AUDIT_EGID:
 		case AUDIT_SGID:
@@ -930,8 +941,17 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 
 			vlen = len(v)
 			if unicode.IsDigit(v){
+
 					rule.Values[rule.Field_count] = v;
-			}
+				}
+				else {
+					if vlen >= 2 and strings.Contains(v, "-")//look at it
+						rule.Values[rule.Field_count] = v;
+					else {
+							fmt.Println("error",v);
+						}		
+					}
+				
 			//error handling part need to be done 
 			//else {
 			//	rule->values[rule->field_count] = //SEE HERE
@@ -948,10 +968,26 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 				fmt.Println("SOmething went wrong")
 			}
 				
-
+			vlen = len(v)
 			if unicode.IsDigit(v){
 					rule.Values[rule.Field_count] = v;
 			}
+
+			/*
+			if unicode.IsDigit(v){
+					rule.Values[rule.Field_count] = v;
+			}
+			else if (vlen >= 2 && *(v)=='-' && 
+						(isdigit((char)*(v+1)))) 
+				rule->values[rule->field_count] = 
+					strtol(v, NULL, 0);
+			else {
+				rule->values[rule->field_count] = 
+						audit_name_to_errno(v);
+				if (rule->values[rule->field_count] == 0) 
+					return -15;
+			}
+			
 			//Error handling part after initial work is done
 			//else
 			//	if (audit_name_to_msg_type(v) > 0)
@@ -984,7 +1020,7 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 		//TODO : Get our own to determine the above conditions
 
 			if Field == AUDIT_FILTERKEY and !(_audit_syscalladded or _audit_permadded){
-                  	fmt.Println("error");
+                  	fmt.Println("error in filetr");
             }                    	
 			vlen = len(v);
 			if Field == AUDIT_FILTERKEY and vlen > AUDIT_MAX_KEY_LEN {
@@ -999,34 +1035,34 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 			//*RULEP IS THE RULEDATA STRUCT POINTER
 			*rulep = realloc(rule, unsafe.SizeOf(*rule) + rule.buflen);
 			if (*rulep == NULL) {
-				free(rule);
-				audit_msg(LOG_ERR, "Cannot realloc memory!\n");
-				return -3;
+				fmt.Println("error rulep")
 			} else {
-				rule = *rulep;
+				rule = *rulep
 			}
-			strncpy(&rule->buf[offset], v, vlen);
+			v := &rule.buf[offset]
+			//strncpy(&rule.buf[offset], v, vlen);
 
-			break;
+			break
 		case AUDIT_ARCH:
 			//A syscall should not be added before doing this if this field is applied
-
+			//unsigned int _audit_elf = 0U;
 			if (_audit_syscalladded)
-				return -3;
+				fmt.Println("some error arch")
 			if (!(op == AUDIT_NOT_EQUAL || op == AUDIT_EQUAL))
-				return -13;
+				fmt.Println("Some error occured")
 
-			if (isdigit((char)*(v))) {
-				int machine;
+			if unicode.IsDigit(v) {
+				var machine int
 
-				errno = 0;
-				_audit_elf = strtoul(v, NULL, 0);
-				if (errno)
-					return -5;
+				errno := 0
+				_audit_elf = v
+				if errno{
+					fmt.Println(errno)
+				}
 
-				machine = audit_elf_to_machine(_audit_elf);
+				machine = audit_elf_to_machine(_audit_elf)
 				if (machine < 0)
-					return -5;
+					fmt.Println("Zero machine")
 			}
 			else {
 				const char *arch=v;
