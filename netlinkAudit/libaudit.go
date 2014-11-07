@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"sync/atomic"
 	"syscall"
@@ -18,12 +19,13 @@ import (
 var ParsedResult AuditStatus
 var nextSeqNr uint32
 var rulesRetrieved AuditRuleData
-audit_elf := 0U
-var MachineStrings []byte
-MachineStrings = ["armeb","armv5tejl","armv7l","i386","i486","i586","i686","ia64","ppc","ppc64"
-"s390","s390x","x86_64"]
-MachineS2iS := [0,6,16,23,28,33,38,43,48,52,58,63,69]
-MachineS2iI[] = [8,8,8,0,0,0,0,2,4,3,6,5,1]
+var audit_elf = 0
+
+//var MachineStrings []byte
+var MachineStrings = []string{"armeb", "armv5tejl", "armv7l", "i386", "i486", "i586", "i686", "ia64", "ppc", "ppc64", "s390", "s390x", "x86_64"}
+
+var MachineS2iS = []int{0, 6, 16, 23, 28, 33, 38, 43, 48, 52, 58, 63, 69}
+var MachineS2iI = []int{8, 8, 8, 0, 0, 0, 0, 2, 4, 3, 6, 5, 1}
 
 type AuditStatus struct {
 	Mask          uint32 /* Bit mask for valid entries */
@@ -134,7 +136,7 @@ func ParseAuditNetlinkMessage(b []byte) ([]syscall.NetlinkMessage, error) {
 	var msgs []syscall.NetlinkMessage
 	h, dbuf, dlen, err := netlinkMessageHeaderAndData(b)
 	if err != nil {
-		fmt.Println("Error in parsing")
+		log.Println("Error in parsing")
 		return nil, err
 	}
 
@@ -150,9 +152,8 @@ func netlinkMessageHeaderAndData(b []byte) (*syscall.NlMsghdr, []byte, int, erro
 	h := (*syscall.NlMsghdr)(unsafe.Pointer(&b[0]))
 	if int(h.Len) < syscall.NLMSG_HDRLEN || int(h.Len) > len(b) {
 		foo := int32(nativeEndian().Uint32(b[0:4]))
-		fmt.Println("Headerlength with ", foo, b[0]) //!bug ! FIX THIS
-		//IT happens only when message don't contain any useful message only dummy strings
-		fmt.Println("Error due to....HDRLEN:", syscall.NLMSG_HDRLEN, " Header Length:", h.Len, " Length of BYTE Array:", len(b))
+		log.Println("Headerlength with ", foo, b[0]) //!bug ! FIX THIS
+		log.Println("Error due to....HDRLEN:", syscall.NLMSG_HDRLEN, " Header Length:", h.Len, " Length of BYTE Array:", len(b))
 		return nil, nil, 0, syscall.EINVAL
 	}
 	return h, b[syscall.NLMSG_HDRLEN:], nlmAlignOf(int(h.Len)), nil
@@ -237,15 +238,15 @@ done:
 			if m.Header.Type == syscall.NLMSG_ERROR {
 				error := int32(nativeEndian().Uint32(m.Data[0:4]))
 				if error == 0 {
-					fmt.Println("Acknowledged!!")
+					log.Println("Acknowledged!!")
 					break done
 				} else {
-					fmt.Println("NLMSG_ERROR Received")
+					log.Println("NLMSG_ERROR Received..")
 				}
 				break done
 			}
 			if m.Header.Type == AUDIT_GET {
-				fmt.Println("AUDIT_GET")
+				log.Println("AUDIT_GET")
 				break done
 			}
 		}
@@ -260,7 +261,7 @@ func AuditSetEnabled(s *NetlinkSocket) error {
 	buff := new(bytes.Buffer)
 	err := binary.Write(buff, nativeEndian(), status)
 	if err != nil {
-		fmt.Println("binary.Write failed:", err)
+		log.Println("binary.Write failed:", err)
 		return err
 	}
 
@@ -308,12 +309,12 @@ done:
 				return syscall.EINVAL
 			}
 			if m.Header.Type == syscall.NLMSG_DONE {
-				fmt.Println("Done")
+				log.Println("Done")
 				break done
 
 			}
 			if m.Header.Type == syscall.NLMSG_ERROR {
-				fmt.Println("NLMSG_ERROR Received")
+				log.Println("NLMSG_ERROR Received..")
 			}
 			if m.Header.Type == AUDIT_GET {
 				//Convert the data part written to AuditStatus struct
@@ -336,7 +337,7 @@ func AuditSetPid(s *NetlinkSocket, pid uint32 /*,Wait mode WAIT_YES | WAIT_NO */
 	buff := new(bytes.Buffer)
 	err := binary.Write(buff, nativeEndian(), status)
 	if err != nil {
-		fmt.Println("binary.Write failed:", err)
+		log.Println("binary.Write failed:", err)
 		return err
 	}
 
@@ -369,7 +370,8 @@ func AuditRuleSyscallData(rule *AuditRuleData, scall int) error {
 	bit := auditBit(scall)
 
 	if word >= AUDIT_BITMASK_SIZE-1 {
-		fmt.Println("Word Size greater than AUDIT_BITMASK_SIZE")
+		log.Println("Word Size greater than AUDIT_BITMASK_SIZE")
+		return syscall.EINVAL
 	}
 	rule.Mask[word] |= bit
 	return nil
@@ -390,7 +392,7 @@ func AuditWatchRuleData(s *NetlinkSocket, rule *AuditRuleData, path []byte) erro
 	buff := new(bytes.Buffer)
 	err := binary.Write(buff, nativeEndian(), *rule)
 	if err != nil {
-		fmt.Println("binary.Write failed:", err)
+		log.Println("binary.Write failed:", err)
 		return err
 	}
 
@@ -407,7 +409,7 @@ func AuditWatchRuleData(s *NetlinkSocket, rule *AuditRuleData, path []byte) erro
 func AuditAddRuleData(s *NetlinkSocket, rule *AuditRuleData, flags int, action int) error {
 
 	if flags == AUDIT_FILTER_ENTRY {
-		fmt.Println("Use of entry filter is deprecated")
+		log.Println("Use of entry filter is deprecated")
 		return nil
 	}
 
@@ -417,7 +419,7 @@ func AuditAddRuleData(s *NetlinkSocket, rule *AuditRuleData, flags int, action i
 	buff := new(bytes.Buffer)
 	err := binary.Write(buff, nativeEndian(), *rule)
 	if err != nil {
-		fmt.Println("binary.Write failed:", err)
+		log.Println("binary.Write failed:", err)
 		return err
 	}
 	wb := newNetlinkAuditRequest(AUDIT_ADD_RULE, syscall.AF_NETLINK, int(buff.Len())+int(rule.Buflen))
@@ -427,7 +429,7 @@ func AuditAddRuleData(s *NetlinkSocket, rule *AuditRuleData, flags int, action i
 	}
 
 	if err != nil {
-		fmt.Println("Error sending add rule data request ()")
+		log.Println("Error sending add rule data request ()")
 		return err
 	}
 	return nil
@@ -446,18 +448,19 @@ func isDone(msgchan chan string, errchan chan error, done <-chan bool) bool {
 func GetreplyWithoutSync(s *NetlinkSocket) {
 	f, err := os.OpenFile("log", os.O_CREATE|os.O_RDWR|os.O_APPEND, 0660)
 	if err != nil {
-		fmt.Println("Error Creating File!!")
+		log.Println("Error Creating File!!")
+		return
 	}
 	defer f.Close()
 	for {
 		rb := make([]byte, MAX_AUDIT_MESSAGE_LENGTH)
 		nr, _, err := syscall.Recvfrom(s.fd, rb, 0)
 		if err != nil {
-			fmt.Println("Error While Recieving !!")
+			log.Println("Error While Recieving !!")
 			continue
 		}
 		if nr < syscall.NLMSG_HDRLEN {
-			fmt.Println("Message Too Short!!")
+			log.Println("Message Too Short!!")
 			continue
 		}
 
@@ -465,58 +468,58 @@ func GetreplyWithoutSync(s *NetlinkSocket) {
 		msgs, err := ParseAuditNetlinkMessage(rb)
 
 		if err != nil {
-			fmt.Println("Not Parsed Successfuly !!")
+			log.Println("Not Parsed Successfuly !!")
 			continue
 		}
 		for _, m := range msgs {
 			//Decide on various message Types
 			if m.Header.Type == syscall.NLMSG_DONE {
-				fmt.Println("Done")
+				log.Println("Done")
 			} else if m.Header.Type == syscall.NLMSG_ERROR {
 				err := int32(nativeEndian().Uint32(m.Data[0:4]))
 				if err == 0 {
 					//Acknowledgement from kernel
-					fmt.Println("Ack")
+					log.Println("Ack")
 				} else {
-					fmt.Println("NLMSG_ERROR")
+					log.Println("NLMSG_ERROR...")
 				}
 			} else if m.Header.Type == AUDIT_GET {
-				fmt.Println("AUDIT_GET")
+				log.Println("AUDIT_GET")
 			} else if m.Header.Type == AUDIT_FIRST_USER_MSG {
-				fmt.Println("AUDIT_FIRST_USER_MSG")
+				log.Println("AUDIT_FIRST_USER_MSG")
 			} else if m.Header.Type == AUDIT_SYSCALL {
-				fmt.Println("Syscall Event")
-				fmt.Println(string(m.Data[:]))
+				log.Println("Syscall Event")
+				log.Println(string(m.Data[:]))
 				_, err := f.WriteString(string(m.Data[:]) + "\n")
 				if err != nil {
-					fmt.Println("Writing Error!!")
+					log.Println("Writing Error!!")
 				}
 			} else if m.Header.Type == AUDIT_CWD {
-				fmt.Println("CWD Event")
-				fmt.Println(string(m.Data[:]))
+				log.Println("CWD Event")
+				log.Println(string(m.Data[:]))
 				_, err := f.WriteString(string(m.Data[:]) + "\n")
 				if err != nil {
-					fmt.Println("Writing Error!!")
+					log.Println("Writing Error!!")
 				}
 
 			} else if m.Header.Type == AUDIT_PATH {
-				fmt.Println("Path Event")
-				fmt.Println(string(m.Data[:]))
+				log.Println("Path Event")
+				log.Println(string(m.Data[:]))
 				_, err := f.WriteString(string(m.Data[:]) + "\n")
 				if err != nil {
-					fmt.Println("Writing Error!!")
+					log.Println("Writing Error!!")
 				}
 
 			} else if m.Header.Type == AUDIT_EOE {
-				fmt.Println("Event Ends ", string(m.Data[:]))
+				log.Println("Event Ends ", string(m.Data[:]))
 			} else if m.Header.Type == AUDIT_CONFIG_CHANGE {
-				fmt.Println("Config Change ", string(m.Data[:]))
+				log.Println("Config Change ", string(m.Data[:]))
 				_, err := f.WriteString(string(m.Data[:]) + "\n")
 				if err != nil {
-					fmt.Println("Writing Error!!")
+					log.Println("Writing Error!!")
 				}
 			} else {
-				fmt.Println("Unknown: ", m.Header.Type)
+				log.Println("Unknown: ", m.Header.Type)
 			}
 		}
 	}
@@ -530,12 +533,12 @@ func Getreply(s *NetlinkSocket, done <-chan bool, msgchan chan string, errchan c
 			return
 		}
 		if err != nil {
-			fmt.Println("Error While Recieving !!")
+			log.Println("Error While Recieving !!")
 			errchan <- err
 			continue
 		}
 		if nr < syscall.NLMSG_HDRLEN {
-			fmt.Println("Message Too Short!!")
+			log.Println("Message Too Short!!")
 			errchan <- syscall.EINVAL
 			continue
 		}
@@ -544,26 +547,26 @@ func Getreply(s *NetlinkSocket, done <-chan bool, msgchan chan string, errchan c
 		msgs, err := ParseAuditNetlinkMessage(rb)
 
 		if err != nil {
-			fmt.Println("Not Parsed Successfuly !!")
+			log.Println("Not Parsed Successfuly !!")
 			errchan <- err
 			continue
 		}
 		for _, m := range msgs {
 			//Decide on various message Types
 			if m.Header.Type == syscall.NLMSG_DONE {
-				fmt.Println("Done")
+				log.Println("Done")
 			} else if m.Header.Type == syscall.NLMSG_ERROR {
 				err := int32(nativeEndian().Uint32(m.Data[0:4]))
 				if err == 0 {
 					//Acknowledgement from kernel
-					fmt.Println("Ack")
+					log.Println("Ack")
 				} else {
-					fmt.Println("NLMSG_ERROR")
+					log.Println("NLMSG_ERROR")
 				}
 			} else if m.Header.Type == AUDIT_GET {
-				fmt.Println("AUDIT_GET")
+				log.Println("AUDIT_GET")
 			} else if m.Header.Type == AUDIT_FIRST_USER_MSG {
-				fmt.Println("AUDIT_FIRST_USER_MSG")
+				log.Println("AUDIT_FIRST_USER_MSG")
 			} else if m.Header.Type == AUDIT_SYSCALL {
 				msgchan <- string(m.Data[:])
 			} else if m.Header.Type == AUDIT_CWD {
@@ -572,11 +575,11 @@ func Getreply(s *NetlinkSocket, done <-chan bool, msgchan chan string, errchan c
 				msgchan <- string(m.Data[:])
 			} else if m.Header.Type == AUDIT_EOE {
 				//			msgchan <- string(m.Data[:])
-				fmt.Println("Event Ends ", string(m.Data[:]))
+				log.Println("Event Ends ", string(m.Data[:]))
 			} else if m.Header.Type == AUDIT_CONFIG_CHANGE {
 				msgchan <- string(m.Data[:])
 			} else {
-				fmt.Println("Unknown: ", m.Header.Type)
+				log.Println("Unknown: ", m.Header.Type)
 			}
 		}
 	}
@@ -585,39 +588,39 @@ func Getreply(s *NetlinkSocket, done <-chan bool, msgchan chan string, errchan c
 
 // List all rules
 // TODO: this funcion needs a lot of work to print actual rules
-func ListAllRules(s *NetlinkSocket){
+func ListAllRules(s *NetlinkSocket) {
 	wb := newNetlinkAuditRequest(AUDIT_LIST_RULES, syscall.AF_NETLINK, 0)
 	if err := s.Send(wb); err != nil {
-		fmt.Print("Error:", err)
+		log.Print("Error:", err)
 	}
 
 done:
 	for {
 		msgs, err := s.Receive(MAX_AUDIT_MESSAGE_LENGTH, syscall.MSG_DONTWAIT)
 		if err != nil {
-			fmt.Println("ERROR while receiving rules:", err)
+			log.Println("ERROR while receiving rules:", err)
 		}
 
 		for _, m := range msgs {
 			lsa, er := syscall.Getsockname(s.fd)
 			if er != nil {
-				fmt.Println("ERROR:", er)
+				log.Println("ERROR:", er)
 			}
 			switch v := lsa.(type) {
 			case *syscall.SockaddrNetlink:
 				if m.Header.Seq != uint32(wb.Header.Seq) || m.Header.Pid != v.Pid {
-					fmt.Println("ERROR:", syscall.EINVAL)
+					log.Println("ERROR:", syscall.EINVAL)
 				}
 			default:
-				fmt.Println("ERROR:", syscall.EINVAL)
+				log.Println("ERROR:", syscall.EINVAL)
 			}
 
 			if m.Header.Type == syscall.NLMSG_DONE {
-				fmt.Println("All rules deleted")
+				log.Println("All rules deleted")
 				break done
 			}
 			if m.Header.Type == syscall.NLMSG_ERROR {
-				fmt.Println("NLMSG_ERROR")
+				log.Println("NLMSG_ERROR")
 			}
 			if m.Header.Type == AUDIT_LIST_RULES {
 				b := m.Data[:]
@@ -635,7 +638,7 @@ done:
 func AuditDeleteRuleData(s *NetlinkSocket, rule *AuditRuleData, flags uint32, action uint32) error {
 	var sizePurpose AuditRuleData
 	if flags == AUDIT_FILTER_ENTRY {
-		fmt.Println("Error in delete")
+		log.Println("Error in delete")
 		return nil
 	}
 	rule.Flags = flags
@@ -644,7 +647,7 @@ func AuditDeleteRuleData(s *NetlinkSocket, rule *AuditRuleData, flags uint32, ac
 	buff := new(bytes.Buffer)
 	err := binary.Write(buff, nativeEndian(), *rule)
 	if err != nil {
-		fmt.Println("binary.Write failed:", err)
+		log.Println("binary.Write failed:", err)
 		return err
 	}
 	wb := newNetlinkAuditRequest(AUDIT_DEL_RULE, syscall.AF_NETLINK, int(unsafe.Sizeof(sizePurpose))+int(rule.Buflen))
@@ -659,7 +662,7 @@ func AuditDeleteRuleData(s *NetlinkSocket, rule *AuditRuleData, flags uint32, ac
 func DeleteAllRules(s *NetlinkSocket) {
 	wb := newNetlinkAuditRequest(AUDIT_LIST_RULES, syscall.AF_NETLINK, 0)
 	if err := s.Send(wb); err != nil {
-		fmt.Print("Error:", err)
+		log.Print("Error:", err)
 	}
 
 done:
@@ -667,28 +670,28 @@ done:
 		//Make the rb byte bigger because of large messages from Kernel doesn't fit in 4096
 		msgs, err := s.Receive(MAX_AUDIT_MESSAGE_LENGTH, syscall.MSG_DONTWAIT)
 		if err != nil {
-			fmt.Println("ERROR while receiving rules:", err)
+			log.Println("ERROR while receiving rules:", err)
 		}
 
 		for _, m := range msgs {
 			lsa, er := syscall.Getsockname(s.fd)
 			if er != nil {
-				fmt.Println("ERROR:", er)
+				log.Println("ERROR:", er)
 			}
 			switch v := lsa.(type) {
 			case *syscall.SockaddrNetlink:
 				if m.Header.Seq != uint32(wb.Header.Seq) || m.Header.Pid != v.Pid {
-					fmt.Println("ERROR:", syscall.EINVAL)
+					log.Println("ERROR:", syscall.EINVAL)
 				}
 			}
 
 			if m.Header.Type == syscall.NLMSG_DONE {
-				fmt.Println("Deleting Done!")
+				log.Println("Deleting Done!")
 				break done
 
 			}
 			if m.Header.Type == syscall.NLMSG_ERROR {
-				fmt.Println("NLMSG_ERROR\n")
+				log.Println("NLMSG_ERROR\n")
 			}
 			if m.Header.Type == AUDIT_LIST_RULES {
 				b := m.Data[:]
@@ -710,7 +713,7 @@ func SetRules(s *NetlinkSocket) {
 	// Load all rules
 	content, err := ioutil.ReadFile("netlinkAudit/audit.rules.json")
 	if err != nil {
-		fmt.Print("Error:", err)
+		log.Print("Error:", err)
 	}
 
 	var rules interface{}
@@ -720,7 +723,7 @@ func SetRules(s *NetlinkSocket) {
 
 	if _, ok := m["delete"]; ok {
 		//First Delete All rules and then add rules
-		fmt.Println("Deleting all rules")
+		log.Println("Deleting all rules")
 		DeleteAllRules(s)
 	}
 
@@ -735,12 +738,12 @@ func SetRules(s *NetlinkSocket) {
 					case "action":
 						//TODO: handle actions case here
 						action := m.([]interface{})
-						fmt.Println("actions are : ", action[0])
+						log.Println("actions are : ", action[0])
 					case "fields":
 						//TODO: handle fields case here
 						fields := m.([]interface{})
 						for _, q := range fields {
-							fmt.Println("fields are", q)
+							log.Println("fields are", q)
 						}
 					}
 				}
@@ -753,43 +756,39 @@ func SetRules(s *NetlinkSocket) {
 				// Load x86 map and fieldtab.json
 				content2, err := ioutil.ReadFile("netlinkAudit/audit_x86.json")
 				if err != nil {
-					fmt.Print("Error:", err)
+					log.Print("Error:", err)
 				}
 				content3, err := ioutil.ReadFile("netlinkAudit/fieldtab.json")
 				if err != nil {
-					fmt.Print("Error:", err)
+					log.Print("Error:", err)
 				}
 
 				var conf Config
 				var fieldmap Field
 				err = json.Unmarshal([]byte(content2), &conf)
 				if err != nil {
-					fmt.Print("Error:", err)
+					log.Print("Error:", err)
 				}
 				err = json.Unmarshal([]byte(content3), &fieldmap)
 				if err != nil {
-					fmt.Print("Error:", err)
+					log.Print("Error:", err)
 				}
 
 				for l := range conf.Xmap {
 					if conf.Xmap[l].Name == srule["name"] {
 						// set rules
-						fmt.Println("setting syscall rule", conf.Xmap[l].Name)
+						log.Println("setting syscall rule", conf.Xmap[l].Name)
 						var foo AuditRuleData
 						AuditRuleSyscallData(&foo, conf.Xmap[l].Id)
 						actions := srule["action"].([]interface{})
-						fmt.Println(actions)
+						log.Println(actions)
 						//NOW APPLY ACTIONS ON SYSCALLS by separating the filters i.e exit from action i.e. always
 
 						for _, field := range srule["fields"].([]interface{}) {
 							fieldval := field.(map[string]interface{})["value"]
-							fmt.Println("here yaha")
-							fmt.Println(fieldval)
 							op := field.(map[string]interface{})["op"]
-							fmt.Println("here aa")
-							fmt.Println(op)
 							fieldname := field.(map[string]interface{})["name"]
-							fmt.Println(fieldval, op, fieldname)
+							log.Println(fieldval, op, fieldname)
 							// AuditRuleFieldPairData(&foo,fieldval,op,fieldname,fieldmap)
 							//SEND flags in above function as " filter & AUDIT_BIT_MASK
 						}
@@ -814,7 +813,7 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 		return err
 	}
 	var _audit_syscalladded, _audit_permadded int
-	_audit_syscalladded = 0 
+	_audit_syscalladded = 0
 	_audit_permadded = 0
 	var _audit_permadded =1 int
 
@@ -855,7 +854,7 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 	//set field and op
 	rule.Fields[foo.Field_count] = fieldid;
 	rule.Fieldflags[foo.Field_count] = opval;
-	
+
 	if t == "task"{
 		para_one = AUDIT_FILTER_TASK
 	}
@@ -882,7 +881,7 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 	else if m == "always"{
 		para_two = AUDIT_ALWAYS
 	}
-	
+
 	//TODO :Now loop over the field value and set foo.Values[foo.Field_count] accordingly
 	//ALSO : Save flags in a variable i.e always,exit SEE static int lookup_filter(const char *str, int *filter)
 	//and static int lookup_action(const char *str, int *act) in auditctl.c
@@ -907,10 +906,10 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 					else if runtime·strcmp(v, "unset") == 0 {
 						rule->values[rule->field_count] = 4294967295;
 						else{
-							fmt.Println("error",v);
-						}		
+							log.Println("error",v);
+						}
 					}
-				}		
+				}
 			//
 			//IF NOT DIGITS THEN DO WE NEED audit_name_to_uid for audit-go ?
 		case AUDIT_GID:
@@ -949,10 +948,10 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 						rule.Values[rule.Field_count] = v;
 					else {
 							fmt.Println("error",v);
-						}		
+						}
 					}
-				
-			//error handling part need to be done 
+
+			//error handling part need to be done
 			//else {
 			//	rule->values[rule->field_count] = //SEE HERE
 			//			audit_name_to_errno(v);
@@ -967,7 +966,7 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 			if (Flags != AUDIT_FILTER_EXCLUDE && Flags != AUDIT_FILTER_USER){
 				fmt.Println("SOmething went wrong")
 			}
-				
+
 			vlen = len(v)
 			if unicode.IsDigit(v){
 					rule.Values[rule.Field_count] = v;
@@ -977,17 +976,17 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 			if unicode.IsDigit(v){
 					rule.Values[rule.Field_count] = v;
 			}
-			else if (vlen >= 2 && *(v)=='-' && 
-						(isdigit((char)*(v+1)))) 
-				rule->values[rule->field_count] = 
+			else if (vlen >= 2 && *(v)=='-' &&
+						(isdigit((char)*(v+1))))
+				rule->values[rule->field_count] =
 					strtol(v, NULL, 0);
 			else {
-				rule->values[rule->field_count] = 
+				rule->values[rule->field_count] =
 						audit_name_to_errno(v);
-				if (rule->values[rule->field_count] == 0) 
+				if (rule->values[rule->field_count] == 0)
 					return -15;
 			}
-			
+
 			//Error handling part after initial work is done
 			//else
 			//	if (audit_name_to_msg_type(v) > 0)
@@ -1021,7 +1020,7 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 
 			if Field == AUDIT_FILTERKEY and !(_audit_syscalladded or _audit_permadded){
                   	fmt.Println("error in filetr");
-            }                    	
+            }
 			vlen = len(v);
 			if Field == AUDIT_FILTERKEY and vlen > AUDIT_MAX_KEY_LEN {
 				fmt.Println("Error here")
