@@ -1,8 +1,8 @@
 package main
 
 import (
-	"./netlinkAudit" //Should be changed according to individual settings
-	"fmt"
+	"./netlinkAudit"
+	"log"
 	"os"
 	"syscall"
 	"time"
@@ -14,24 +14,37 @@ var debug bool
 func main() {
 	s, err := netlinkAudit.GetNetlinkSocket()
 	if err != nil {
-		fmt.Println(err)
+		log.Println(err)
+		log.Fatalln("Error while availing socket! Exiting!")
 	}
 	defer s.Close()
-	debug = true
-	netlinkAudit.AuditSetEnabled(s)
+	debug = false
+
+	if os.Getuid() != 0 {
+		log.Fatalln("Not Root User! Exiting!")
+	}
+	err = netlinkAudit.AuditSetEnabled(s)
+	if err != nil {
+		log.Fatal("Error while enabling Audit !", err)
+	}
 	err = netlinkAudit.AuditIsEnabled(s)
+
 	if debug == true {
-		fmt.Println(netlinkAudit.ParsedResult)
-	}
-	if err == nil && netlinkAudit.ParsedResult.Enabled == 1 {
-		fmt.Println("Enabled Audit!!")
-	}
-	err = netlinkAudit.AuditSetPid(s, uint32(syscall.Getpid()))
-	if err == nil {
-		fmt.Println("Set pid successful!!")
+		log.Println(netlinkAudit.ParsedResult)
 	}
 
-	// we need audit_name_to_field( ) && audit_rule_fieldpair_data
+	if err == nil && netlinkAudit.ParsedResult.Enabled == 1 {
+		log.Println("Enabled Audit!!")
+	} else {
+		log.Fatalln("Audit Not Enabled! Exiting")
+	}
+
+	err = netlinkAudit.AuditSetPid(s, uint32(syscall.Getpid()))
+
+	if err == nil {
+		log.Println("Set pid successful!!")
+	}
+
 	netlinkAudit.SetRules(s)
 	//netlinkAudit.GetreplyWithoutSync(s)
 	done := make(chan bool, 1)
@@ -39,30 +52,29 @@ func main() {
 	errchan := make(chan error)
 	f, err := os.OpenFile("/tmp/log", os.O_CREATE|os.O_RDWR|os.O_APPEND, 0660)
 	if err != nil {
-		fmt.Println("Error Creating File!!")
+		log.Fatalln("Error Creating File!!")
 	}
 	defer f.Close()
 	go func() {
 		for {
 			select {
 			case ev := <-msg:
-				fmt.Println("Message :" + ev + "\n")
+				log.Println("Message :" + ev + "\n")
 				_, err := f.WriteString(ev + "\n")
 				if err != nil {
-					fmt.Println("Writing Error!!")
+					log.Println("Writing Error!!")
 				}
 			case ev := <-errchan:
-				fmt.Println(ev)
+				log.Println(ev)
 			}
 		}
 	}()
 
 	go netlinkAudit.Getreply(s, done, msg, errchan)
-	//fmt.Println("bogogogogog")
-	//ListAllRules(s)
+
 	time.Sleep(time.Second * 10)
 	done <- true
 	close(done)
-	//Important point is that NLMSG_ERROR is also an acknowledgement from Kernel If the first 4 bytes of Data part are zero
-	// than it means the message is acknowledged
+	//Important point is that NLMSG_ERROR is also an acknowledgement from Kernel.
+	//If the first 4 bytes of Data part are zero then it means the message is acknowledged
 }
