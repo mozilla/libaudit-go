@@ -166,4 +166,7 @@ const (
 	EM_S390_OLD = 0xA390
 	/* Also Panasonic/MEI MN10300, AM33 */
 	EM_CYGNUS_MN10300 = 0xbeef
+	//AUDIT_ARCH determination purpose
+	_UTSNAME_LENGTH = 65
+	_UTSNAME_DOMAIN_LENGTH = _UTSNAME_LENGTH
 )
