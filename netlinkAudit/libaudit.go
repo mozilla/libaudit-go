@@ -16,11 +16,21 @@ import (
 	//"runtime"
 )
 
+/*
+func Gt_Isupper(x []byte) bool{
+	var decision bool
+	decision = (x) >= "A" && (x) <= "Z"
+	return decision
+}
+*/
 var ParsedResult AuditStatus
 var nextSeqNr uint32
 var rulesRetrieved AuditRuleData
 var audit_elf = 0
 
+//FtypeStrings[] = [07]string{"block","character","dir","fifo","file","link","socket"}
+//FtypeS2iS := []uint{ 0,6,16,20,25,30,35}
+//FtypeS2iI = []int{ 24576,8192,16384,4096,32768,40960,49152}
 //var audit_elf uint
 //audit_elf = "0U"
 //MachineStrings := [13]string{"armeb","armv5tejl","armv7l","i386","i486","i586","i686","ia64","ppc","ppc64","s390","s390x","x86_64"}
@@ -824,21 +834,74 @@ func SetRules(s *NetlinkSocket) {
 	}
 }
 
-
 /*
-func MachineS2i( s string, value int) {
+func S2i( strings char, s_table uint, i_table int, n int, s char, value int) int{
+	var left, right int
+	left = 0
+	right = n - 1
+	while left <= right { // invariant: left <= x <= right 
+	var mid int
+	var r int
+	mid = (left + right) / 2
+	// FIXME? avoid recomparing a common prefix 
+	r = (s == strings + s_table[mid])
+	if r == 0 {
+		value = i_table[mid]
+		return 1
+	}
+	if r < 0{
+		right = mid - 1
+	}else{
+		left = mid + 1
+	}
+	return 0
+}
+
+
+func AuditNameToFtype(name *char) int{
+	var res int
+	if FtypeS2i(name, res) != 0{
+		return res
+	}
+	return 0
+}
+
+func FtypeS2i( s *char, value *int) int{
 	var len, i int
 	len = len(s);
- char copy[len + 1];
-	for i = 0; i < len; i++ {
-		var c = s[i];
-		copy[i] = GT_ISUPPER(c) ? c - 'A' + 'a' : c;
+	var copy [len + 1]char
+	for i := 0; i < len; i++ {
+		var c char
+		c = s[i]
+		if Gt_Isupper(c){
+			copy[i] = c - 'A' + 'a'
+		}
+		else{
+			copy[i] = c
+		}
 	}
-	copy[i] = 0;
+	copy[i] = 0
+	return S2i(ftype_strings, ftype_s2i_s, ftype_s2i_i, 7, copy, value)
+}
+
+func MachineS2i( s string, value int) {
+	var len, i int
+	len = len(s)
+ char copy[len + 1]
+	for i = 0; i < len; i++ {
+		var c = s[i]
+		if GT_ISUPPER(c){
+		copy[i] = c - 'A' + 'a'
+		}
+		else{
+			copy[i] = c
+		}
+		//copy[i] = GT_ISUPPER(c) ? : c;
+	}
+	//copy[i] = 0;
 	return s2i__(machine_strings, machine_s2i_s, machine_s2i_i, 13, copy, value);
 
 }
-
 
 func AuditNameToMachine( machine string) int{
 	var res int
@@ -1111,7 +1174,6 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 					rule.Values[rule.Field_count] = v;
 			}
 
-			/*
 			if unicode.IsDigit(v){
 					rule.Values[rule.Field_count] = v;
 			}
@@ -1156,12 +1218,12 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 		case AUDIT_FILTERKEY:
 		//IF And only if a syscall is added or a permisission is added then this field should be set
 		//TODO : Get our own to determine the above conditions
-
-			if Field == AUDIT_FILTERKEY and !(_audit_syscalladded or _audit_permadded){
+			var sizePurpose AuditRuleData
+			if Field == AUDIT_FILTERKEY && !(_audit_syscalladded || _audit_permadded){
                   	fmt.Println("error in filetr");
             }                    	
 			vlen = len(v);
-			if Field == AUDIT_FILTERKEY and vlen > AUDIT_MAX_KEY_LEN {
+			if Field == AUDIT_FILTERKEY && vlen > AUDIT_MAX_KEY_LEN {
 				fmt.Println("Error here")
 			}
 			else if vlen > PATH_MAX{
@@ -1171,135 +1233,104 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 			offset = rule.Buflen
 			rule.buflen += vlen
 			//*RULEP IS THE RULEDATA STRUCT POINTER
-			*rulep = realloc(rule, unsafe.SizeOf(*rule) + rule.buflen);
-			if (*rulep == NULL) {
-				fmt.Println("error rulep")
-			} else {
-				rule = *rulep
-			}
-			v := &rule.buf[offset]
+			//*rulep = realloc(rule, unsafe.SizeOf(*rule) + rule.buflen);
+			//unsafe.Sizeof(sizePurpose))+int(rule.Buflen)
+			v := &rule.Buf[offset]
 			//strncpy(&rule.buf[offset], v, vlen);
 
 			break
 		case AUDIT_ARCH:
-			//A syscall should not be added before doing this if this field is applied
-			//unsigned int _audit_elf = 0U;
-			if (_audit_syscalladded)
-				fmt.Println("some error arch")
-			if (!(op == AUDIT_NOT_EQUAL || op == AUDIT_EQUAL))
-				fmt.Println("Some error occured")
-
-			if unicode.IsDigit(v) {
-				var machine int
-
-				errno := 0
-				_audit_elf = v
-				if errno{
-					fmt.Println(errno)
-				}
-
-				machine = audit_elf_to_machine(_audit_elf)
-				if (machine < 0)
-					fmt.Println("Zero machine")
-			}
-			else {
-				const char *arch=v;
-				unsigned int machine, elf;
-				machine = audit_determine_machine(arch);
-
-				elf = audit_machine_to_elf(machine);
-				if (elf == 0)
-					return -5;
-
-				_audit_elf = elf;
-			}
-			rule->values[rule->field_count] = _audit_elf;
-			_audit_archadded = 1;
+			//AUDIT_ARCH_X86_64 is made specifically for Mozilla Heka purpose, please make changes as per required
+			rule.Values[rule.Field_count] = AUDIT_ARCH_X86_64;
 			break;
 
 		case AUDIT_PERM:
 			//DECIDE ON VARIOUS ERROR TYPES
-			if (flags != AUDIT_FILTER_EXIT)
-				return -7;
-			else if (op != AUDIT_EQUAL)
-				return -13;
+			if Flags != AUDIT_FILTER_EXIT {
+				fmt.Println("Some error with AUDIT_FILTER_EXIT")
+			}
+			else if op != AUDIT_EQUAL {
+				fmt.Println("Some error with AUDIT_EQUAL")
+			}
 			else {
-				unsigned int i, len, val = 0;
+				var i, len, val uint = 0
 
-				len = strlen(v);
-				if (len > 4)
-					return -11;
 
-				for (i = 0; i < len; i++) {
-					switch (tolower(v[i])) {
+				len = len(v);
+				if len > 4{
+					fmt.Println("Error 11")
+				}
+
+				for i := 0; i < len; i++ {
+					switch (strings.ToLower(v[i])) {
 						case 'r':
-							val |= AUDIT_PERM_READ;
-							break;
+							val |= AUDIT_PERM_READ
+							break
 						case 'w':
-							val |= AUDIT_PERM_WRITE;
-							break;
+							val |= AUDIT_PERM_WRITE
+							break
 						case 'x':
-							val |= AUDIT_PERM_EXEC;
-							break;
+							val |= AUDIT_PERM_EXEC
+							break
 						case 'a':
-							val |= AUDIT_PERM_ATTR;
-							break;
+							val |= AUDIT_PERM_ATTR
+							break
 						default:
-							return -14;
+							fmt.Println("Error in AUDIT_PERM")
 					}
 				}
-				rule->values[rule->field_count] = val;
+				rule.Values[rule.Field_count] = val
 			}
-			break;
+			break
 		case AUDIT_FILETYPE:
 
-			if (!(flags == AUDIT_FILTER_EXIT || flags == AUDIT_FILTER_ENTRY))
-				return -17;
-			rule->values[rule->field_count] =
-				audit_name_to_ftype(v);
-			if ((int)rule->values[rule->field_count] < 0) {
-				return -16;
+			if !(Flags == AUDIT_FILTER_EXIT) && Flags == AUDIT_FILTER_ENTRY
+				fmt.Println("Error in AUDIT_FILETYPE")
+			rule->values[rule->field_count] = AuditNameToFtype(v)
+			if (int)(rule->values[rule->field_count]) < 0 {
+				fmt.Println("Error in AUDIT_FILETYPE")
 			}
-			break;
+			break
 
 		case AUDIT_ARG0...AUDIT_ARG3: //ARGUMENTS GIVEN
-			vlen = strlen(v);
-			if (isdigit((char)*(v)))
-				rule->values[rule->field_count] =
-					strtoul(v, NULL, 0);
-			else if (vlen >= 2 && *(v)=='-' &&
-						(isdigit((char)*(v+1))))
-				rule->values[rule->field_count] =
-					strtol(v, NULL, 0);
-			else
-				return -21;
+			vlen = len(v);
+			if unicode.IsDigit(v){
+
+					rule.Values[rule.Field_count] = v;
+				}
+				else {
+					if vlen >= 2 and strings.Contains(v, "-")//look at it
+						rule.Values[rule.Field_count] = v;
+					else
+						fmt.Println("Error number 21");
+				}
 			break;
 		case AUDIT_DEVMAJOR...AUDIT_INODE:
 		case AUDIT_SUCCESS:
-			if (flags != AUDIT_FILTER_EXIT)
-				return -7;
-
-		default:
-			if (field == AUDIT_INODE) {
-				if (!(op == AUDIT_NOT_EQUAL ||
-							op == AUDIT_EQUAL))
-					return -13;
+			if Flags != AUDIT_FILTER_EXIT{
+				fmt.Println("Error in flag AUDIT_FILTER_EXIT")
 			}
 
-			if (field == AUDIT_PPID && !(flags == AUDIT_FILTER_EXIT
-				|| flags == AUDIT_FILTER_ENTRY))
-				return -17;
+		default:
+			if Field == AUDIT_INODE {
+				if !(op == AUDIT_NOT_EQUAL || op == AUDIT_EQUAL)
+					fmt.Println("Error in AUDIT_INODE")
+			}
 
-			if (!isdigit((char)*(v)))
-				return -21;
+			if Field == AUDIT_PPID && !(Flags == AUDIT_FILTER_EXIT || flags == AUDIT_FILTER_ENTRY){
+				fmt.Println("Error in AUDIT_PPID")
+			}
 
-			if (field == AUDIT_INODE)
-				rule->values[rule->field_count] =
-					strtoul(v, NULL, 0);
-			else
-				rule->values[rule->field_count] =
-					strtol(v, NULL, 0);
-			break;
+			if !IsDigit((char)(v)){
+				fmt.Println("error")
+			}
+
+			if Field == AUDIT_INODE {
+				rule.Values[rule.Field_count] = v
+			}
+			else{
+				rule.Values[rule.Field_count] = v
+			}
     }
 }
 */
