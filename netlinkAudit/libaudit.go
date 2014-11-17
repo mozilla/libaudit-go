@@ -11,35 +11,32 @@ import (
 	"sync/atomic"
 	"syscall"
 	"unsafe"
-	//"unicode"
-	//"strings"
-	//"runtime"
+//	"unicode"
+//	"strings"
+//	"runtime"
 )
 
 var ParsedResult AuditStatus
 var nextSeqNr uint32
 var rulesRetrieved AuditRuleData
-var audit_elf = 0
 var MachineStrings = []string{"armeb", "armv5tejl", "armv7l", "i386", "i486", "i586", "i686", "ia64", "ppc", "ppc64", "s390", "s390x", "x86_64"}
 
 var MachineS2iS = []int{0, 6, 16, 23, 28, 33, 38, 43, 48, 52, 58, 63, 69}
 var MachineS2iI = []int{8, 8, 8, 0, 0, 0, 0, 2, 4, 3, 6, 5, 1}
 
 /*
-func Gt_Isupper(x string) bool{
+func GtIsupper(x string) bool{
 	var decision bool
 	decision = (x) >= "A" && (x) <= "Z"
 	return decision
 }
 
 
-FtypeStrings[] = [07]string{"block","character","dir","fifo","file","link","socket"}
-FtypeS2iS := []uint{ 0,6,16,20,25,30,35}
-FtypeS2iI = []int{ 24576,8192,16384,4096,32768,40960,49152}
-var audit_elf uint
-audit_elf = "0U"
+var FtypeStrings = []string{"block","character","dir","fifo","file","link","socket"}
+var FtypeS2iS = []uint{ 0,6,16,20,25,30,35}
+var FtypeS2iI = []int{ 24576,8192,16384,4096,32768,40960,49152}
+var audit_elf uint = 0
 */
-
 type AuditStatus struct {
 	Mask          uint32 /* Bit mask for valid entries */
 	Enabled       uint32 /* 1 = enabled, 0 = disabled */
@@ -881,27 +878,26 @@ func SetRules(s *NetlinkSocket) {
 }
 
 /*
-func S2i(strings string, s_table uint, i_table int, n int, s string, value int) int{
-	var left, right int
+func S2i(strings string, s_table uint, i_table int, n int, s []string, value int) int{
+	var left, right, mid, r int
 	left = 0
 	right = n - 1
-	while left <= right { // invariant: left <= x <= right
-	var mid int
-	var r int
-	mid = (left + right) / 2
-	// FIXME? avoid recomparing a common prefix
-	r = (s == strings + s_table[mid])
-	if r == 0 {
-		value = i_table[mid]
-		return 1
-	}
-	if r < 0{
-		right = mid - 1
-	}else{
-		left = mid + 1
-	}
+	for left <= right { // invariant: left <= x <= right
+		mid = (left + right) / 2
+		// FIXME? avoid recomparing a common prefix
+		r = (s == strings + s_table[mid])
+		if r == 0 {
+			value = i_table[mid]
+			return 1
+		}
+		if r < 0{
+			right = mid - 1
+		}else{
+			left = mid + 1
+		}
+	}	
 	return 0
-}
+}	
 
 
 func AuditNameToFtype(name string) int{
@@ -914,17 +910,19 @@ func AuditNameToFtype(name string) int{
 
 func FtypeS2i( s string, value int) int{
 	var len, i int
-	len = len(s);
-	var copy [len + 1]char
-	for i := 0; i < len; i++ {
-		var c char
+	i = 0
+	len = len(s)
+	var c string
+	var copy [len + 1]string
+	for i < len {
 		c = s[i]
-		if Gt_Isupper(c){
+		boolean := GtIsupper(c)
+		if boolean{
 			copy[i] = c - 'A' + 'a'
-		}
-		else{
+		}else {
 			copy[i] = c
 		}
+		i = i+1
 	}
 	copy[i] = 0
 	return S2i(ftype_strings, ftype_s2i_s, ftype_s2i_i, 7, copy, value)
@@ -1052,19 +1050,18 @@ func AuditDetermineMachine(arch *string){
 	return machine;
 }
 
-
+////////
 
 
 func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldname string ,fieldmap Field , flags int) error {
 
 	if rule.Field_count >= (AUDIT_MAX_FIELDS - 1) {
-		err :=
-		return err
+		fmt.Println(rule.Field_count) 
+		//return err
 	}
 	var _audit_syscalladded, _audit_permadded int
 	_audit_syscalladded = 0
 	_audit_permadded = 0
-	var _audit_permadded =1 int
 
 	// check against  the field["actions"] here and set fieldid
 	fieldid := 0
@@ -1095,16 +1092,12 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 				if unicode.IsDigit(v){
 
 					rule.Values[rule.Field_count] = v;
-				}
-				else {
-					if vlen >= 2 and strings.Contains(v, "-")//look at it
+				}else if vlen >= 2 && strings.Contains(v, "-"){
 						rule.Values[rule.Field_count] = v;
-					else if runtime·strcmp(v, "unset") == 0 {
-						rule->values[rule->field_count] = 4294967295;
-						else{
-							fmt.Println("error",v);
-						}
-					}
+				}else if runtime·strcmp(v, "unset") == 0 {
+					rule.Values[rule.Field_count] = 4294967295;
+				} else {
+					fmt.Println("error",v);
 				}
 			//
 			//IF NOT DIGITS THEN DO WE NEED audit_name_to_uid for audit-go ?
@@ -1119,16 +1112,14 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 			if unicode.IsDigit(v){
 
 					rule.Values[rule.Field_count] = v;
-			}
-			else {
+			}else {
 					fmt.Println("error", v);
 					//return -2;
-				}
 			}
 
 		case AUDIT_EXIT:
 
-			if Flags != AUDIT_FILTER_EXIT{
+			if flags != AUDIT_FILTER_EXIT{
 				fmt.Println("Something Went Wrong")
 			}
 			//rule.Values[rule.Field_count] = fieldval
@@ -1138,14 +1129,11 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 			if unicode.IsDigit(v){
 
 					rule.Values[rule.Field_count] = v;
-				}
-				else {
-					if vlen >= 2 and strings.Contains(v, "-")//look at it
-						rule.Values[rule.Field_count] = v;
-					else {
-							fmt.Println("error",v);
-						}
-					}
+			} else if vlen >= 2 && strings.Contains(v, "-"){
+					rule.Values[rule.Field_count] = v;
+			}else {
+						fmt.Println("error",v);
+			}
 
 			//error handling part need to be done
 			//else {
@@ -1159,23 +1147,20 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 		case AUDIT_MSGTYPE:
 			//DO we need this type ?
 
-			if (Flags != AUDIT_FILTER_EXCLUDE && Flags != AUDIT_FILTER_USER){
+			if (flags != AUDIT_FILTER_EXCLUDE && flags != AUDIT_FILTER_USER){
 				fmt.Println("SOmething went wrong")
 			}
 
 			vlen = len(v)
 			if unicode.IsDigit(v){
-					rule.Values[rule.Field_count] = v;
+					rule.Values[rule.Field_count] = v
 			}
 
 			if unicode.IsDigit(v){
-					rule.Values[rule.Field_count] = v;
-			}
-			else if (vlen >= 2 && *(v)=='-' &&
-						(isdigit((char)*(v+1))))
-				rule.Values[rule->field_count] =
-					strtol(v, NULL, 0);
-			else {
+					rule.Values[rule.Field_count] = v
+			} else if vlen >= 2 && *(v)=='-'{
+				rule.Values[rule.Field_count] = v
+			} else {
 				fmt.Println("Error in AUDIT_MSGTYPE")
 			}
 
@@ -1186,11 +1171,12 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 		case AUDIT_OBJ_LEV_HIGH:
 		case AUDIT_WATCH:
 		case AUDIT_DIR: //DETERMINE WHY they are doing this
-			if Flags != AUDIT_FILTER_EXIT{
+			if flags != AUDIT_FILTER_EXIT{
 				fmt.Println("error")
 			}
-			if Fields == AUDIT_WATCH || Fields == AUDIT_DIR
-				_audit_permadded = 1;
+			if Fields == AUDIT_WATCH || Fields == AUDIT_DIR{
+				_audit_permadded = 1
+			}
 
 		case AUDIT_SUBJ_USER:
 		case AUDIT_SUBJ_ROLE:
@@ -1207,8 +1193,7 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 			vlen = len(v);
 			if Field == AUDIT_FILTERKEY && vlen > AUDIT_MAX_KEY_LEN {
 				fmt.Println("Error here")
-			}
-			else if vlen > PATH_MAX{
+			} else if vlen > PATH_MAX{
 				fmt.Println("Error 11")
 			}
 			rule.Values[rule.Field_count] = vlen
@@ -1228,22 +1213,18 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 
 		case AUDIT_PERM:
 			//DECIDE ON VARIOUS ERROR TYPES
-			if Flags != AUDIT_FILTER_EXIT {
+			if flags != AUDIT_FILTER_EXIT {
 				fmt.Println("Some error with AUDIT_FILTER_EXIT")
-			}
-			else if op != AUDIT_EQUAL {
+			} else if op != AUDIT_EQUAL {
 				fmt.Println("Some error with AUDIT_EQUAL")
-			}
-			else {
-				var i, len, val uint = 0
-
-
-				len = len(v);
+			} else {
+				var i, len, val uint
+				len = len(v)
 				if len > 4{
 					fmt.Println("Error 11")
 				}
 
-				for i := 0; i < len; i++ {
+				for i=0; i < len; i++ {
 					switch (strings.ToLower(v[i])) {
 						case 'r':
 							val |= AUDIT_PERM_READ
@@ -1266,10 +1247,11 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 			break
 		case AUDIT_FILETYPE:
 
-			if !(Flags == AUDIT_FILTER_EXIT) && Flags == AUDIT_FILTER_ENTRY
+			if !(flags == AUDIT_FILTER_EXIT) && flags == AUDIT_FILTER_ENTRY {
 				fmt.Println("Error in AUDIT_FILETYPE")
-			rule->values[rule->field_count] = AuditNameToFtype(v)
-			if (int)(rule->values[rule->field_count]) < 0 {
+			}	
+			rule.Values[rule.Field_count] = AuditNameToFtype(v)
+			if (int)(rule.Values[rule.Field_count]) < 0 {
 				fmt.Println("Error in AUDIT_FILETYPE")
 			}
 			break
@@ -1280,20 +1262,17 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 		case AUDIT_ARG3:
 			vlen = len(v);
 			if unicode.IsDigit(v){
-
-					rule.Values[rule.Field_count] = v;
-				}
-				else {
-					if vlen >= 2 and strings.Contains(v, "-")//look at it
-						rule.Values[rule.Field_count] = v;
-					else
-						fmt.Println("Error number 21");
-				}
+				rule.Values[rule.Field_count] = v;
+			} else if vlen >= 2 and strings.Contains(v, "-"){
+				rule.Values[rule.Field_count] = v;
+			}else{
+				fmt.Println("Error number 21");
+			}
 			break;
 		case AUDIT_DEVMAJOR:
 		case AUDIT_INODE:
 		case AUDIT_SUCCESS:
-			if Flags != AUDIT_FILTER_EXIT{
+			if flags != AUDIT_FILTER_EXIT{
 				fmt.Println("Error in flag AUDIT_FILTER_EXIT")
 			}
 
@@ -1303,7 +1282,7 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 					fmt.Println("Error in AUDIT_INODE")
 			}
 
-			if Field == AUDIT_PPID && !(Flags == AUDIT_FILTER_EXIT || flags == AUDIT_FILTER_ENTRY){
+			if Field == AUDIT_PPID && !(flags == AUDIT_FILTER_EXIT || flags == AUDIT_FILTER_ENTRY){
 				fmt.Println("Error in AUDIT_PPID")
 			}
 
@@ -1319,4 +1298,5 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 			}
     }
 }
+
 */
