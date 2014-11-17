@@ -6,8 +6,8 @@
  		{
  			"action" : ["always", "exit"],
  			"fields" : [
- 				{"name":"path", "op":"=", "value":"/bin/ls"},
- 				{"name":"perm", "op":"=", "value":"x"}
+ 				{"name":"path", "op":"eq", "value":"/bin/ls"},
+ 				{"name":"perm", "op":"eq", "value":"x"}
  			]
  		}
  	],
@@ -21,14 +21,14 @@
  		{
 			"action" : ["always", "exit"],
 			"fields" : [
- 				{"name":"arch", "op":"=", "value":"32"}
+ 				{"name":"arch", "op":"eq", "value":"32"}
  			],
 			"name" : "rmdir"
 		},
 		{
 			"action" : ["always", "exit"],
 			"fields" : [
- 				{"name":"arch", "op":"=", "value":"32"}
+ 				{"name":"arch", "op":"eq", "value":"32"}
  			],
 			"name" : "mkdir"
 		}

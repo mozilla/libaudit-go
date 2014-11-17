@@ -16,6 +16,15 @@ import (
 	//"runtime"
 )
 
+var ParsedResult AuditStatus
+var nextSeqNr uint32
+var rulesRetrieved AuditRuleData
+var audit_elf = 0
+var MachineStrings = []string{"armeb", "armv5tejl", "armv7l", "i386", "i486", "i586", "i686", "ia64", "ppc", "ppc64", "s390", "s390x", "x86_64"}
+
+var MachineS2iS = []int{0, 6, 16, 23, 28, 33, 38, 43, 48, 52, 58, 63, 69}
+var MachineS2iI = []int{8, 8, 8, 0, 0, 0, 0, 2, 4, 3, 6, 5, 1}
+
 /*
 func Gt_Isupper(x string) bool{
 	var decision bool
@@ -23,19 +32,12 @@ func Gt_Isupper(x string) bool{
 	return decision
 }
 
-var ParsedResult AuditStatus
-var nextSeqNr uint32
-var rulesRetrieved AuditRuleData
-var audit_elf = 0
 
 FtypeStrings[] = [07]string{"block","character","dir","fifo","file","link","socket"}
 FtypeS2iS := []uint{ 0,6,16,20,25,30,35}
 FtypeS2iI = []int{ 24576,8192,16384,4096,32768,40960,49152}
 var audit_elf uint
 audit_elf = "0U"
-//MachineStrings := [13]string{"armeb","armv5tejl","armv7l","i386","i486","i586","i686","ia64","ppc","ppc64","s390","s390x","x86_64"}
-//MachineS2iS := []int{0,6,16,23,28,33,38,43,48,52,58,63,69}
-//MachineS2iI := []int{8,8,8,0,0,0,0,2,4,3,6,5,1}
 */
 
 type AuditStatus struct {
@@ -49,22 +51,20 @@ type AuditStatus struct {
 	Backlog       uint32 /* messages waiting in queue */
 }
 
+type UtsName struct {
+	/* Name of the implementation of the operating system.  */
+	Sysname [_UTSNAME_LENGTH]string
 
-type UtsName struct{
-    /* Name of the implementation of the operating system.  */
-    Sysname[_UTSNAME_LENGTH] string
+	/* Name of this node on the network.  */
+	Nodename [_UTSNAME_NODENAME_LENGTH]string
 
-    /* Name of this node on the network.  */
-    Nodename[_UTSNAME_NODENAME_LENGTH] string
+	/* Current release level of this implementation.  */
+	Release [_UTSNAME_LENGTH]string
+	/* Current version level of this release.  */
+	Version [_UTSNAME_LENGTH]string
 
-    /* Current release level of this implementation.  */
-    Release[_UTSNAME_LENGTH] string
-    /* Current version level of this release.  */
-    Version[_UTSNAME_LENGTH] string
-
-    /* Name of the hardware type the system is running on.  */
-    Machine[_UTSNAME_LENGTH] string
-
+	/* Name of the hardware type the system is running on.  */
+	Machine [_UTSNAME_LENGTH]string
 }
 
 type AuditRuleData struct {
@@ -811,14 +811,60 @@ func SetRules(s *NetlinkSocket) {
 						AuditRuleSyscallData(&foo, conf.Xmap[l].Id)
 						actions := srule["action"].([]interface{})
 						log.Println(actions)
+
 						//NOW APPLY ACTIONS ON SYSCALLS by separating the filters i.e exit from action i.e. always
+						action := 0
+						filter := 0
+						if actions[0] == "never" {
+							action = AUDIT_NEVER
+						} else if actions[0] == "possible" {
+							action = AUDIT_POSSIBLE
+						} else if actions[0] == "always" {
+							action = AUDIT_ALWAYS
+
+						}
+						log.Println(action)
+						if actions[1] == "task" {
+							filter = AUDIT_FILTER_TASK
+						} else if actions[1] == "entry" {
+							filter = AUDIT_FILTER_ENTRY
+						} else if actions[1] == "exit" {
+							filter = AUDIT_FILTER_EXIT
+						} else if actions[1] == "user" {
+							filter = AUDIT_FILTER_USER
+						} else if actions[1] == "exclude" {
+							filter = AUDIT_FILTER_EXCLUDE
+							//exclude = 1;
+						}
+						log.Println(filter)
 
 						for _, field := range srule["fields"].([]interface{}) {
 							fieldval := field.(map[string]interface{})["value"]
 							op := field.(map[string]interface{})["op"]
 							fieldname := field.(map[string]interface{})["name"]
 							log.Println(fieldval, op, fieldname)
-							// AuditRuleFieldPairData(&foo,fieldval,op,fieldname,fieldmap)
+							opval := 0
+							if op == "nt_eq" {
+								opval = AUDIT_NOT_EQUAL
+							} else if op == "gt_or_eq" {
+								opval = AUDIT_GREATER_THAN_OR_EQUAL
+							} else if op == "lt_or_eq" {
+								opval = AUDIT_LESS_THAN_OR_EQUAL
+							} else if op == "and_eq" {
+								opval = AUDIT_BIT_TEST
+							} else if op == "eq" {
+								opval = AUDIT_EQUAL
+								log.Print("Equal!!\n")
+							} else if op == "gt" {
+								opval = AUDIT_GREATER_THAN
+							} else if op == "lt" {
+								opval = AUDIT_LESS_THAN
+							} else if op == "and" {
+								opval = AUDIT_BIT_MASK
+							}
+							log.Print(opval)
+							//Pass filter to this function
+							// AuditRuleFieldPairData(&foo,fieldval,opval,fieldname,fieldmap)
 							//SEND flags in above function as " filter & AUDIT_BIT_MASK
 						}
 						foo.Fields[foo.Field_count] = AUDIT_ARCH
@@ -839,11 +885,11 @@ func S2i(strings string, s_table uint, i_table int, n int, s string, value int) 
 	var left, right int
 	left = 0
 	right = n - 1
-	while left <= right { // invariant: left <= x <= right 
+	while left <= right { // invariant: left <= x <= right
 	var mid int
 	var r int
 	mid = (left + right) / 2
-	// FIXME? avoid recomparing a common prefix 
+	// FIXME? avoid recomparing a common prefix
 	r = (s == strings + s_table[mid])
 	if r == 0 {
 		value = i_table[mid]
@@ -920,7 +966,7 @@ func AuditDetectMachine() {
 	        fmt.Println("Error with machine setting");
 }
 
-func AuditDetermineMachine(arch *string){	
+func AuditDetermineMachine(arch *string){
 // What do we want? i686, x86_64, ia64 or b64, b32
 	var machine int
 	var bits uint
@@ -932,7 +978,7 @@ func AuditDetermineMachine(arch *string){
 	} else if arch == "b32" {
 		bits = ^__AUDIT_ARCH_64BIT;
 		machine = AuditDetectMachine();
-	} else { 
+	} else {
 		machine = audit_name_to_machine(arch);
 		if (machine < 0) {
 			// See if its numeric
@@ -945,11 +991,11 @@ func AuditDetermineMachine(arch *string){
 		}
 	}
 
-	if (machine < 0) 
+	if (machine < 0)
 		return -4;
 
 	// Here's where we fixup the machine. For example, they give
-	// x86_64 & want 32 bits we translate that to i686. 
+	// x86_64 & want 32 bits we translate that to i686.
 	if (bits == ~__AUDIT_ARCH_64BIT && machine == MACH_86_64)
 		machine = MACH_X86;
 	else if (bits == ~__AUDIT_ARCH_64BIT && machine == MACH_PPC64)
@@ -959,8 +1005,8 @@ func AuditDetermineMachine(arch *string){
 	else if (bits == ~__AUDIT_ARCH_64BIT && machine == MACH_AARCH64)
 		machine = MACH_ARM;
 
-	 //Check for errors - return -6 
-	 //We don't allow 32 bit machines to specify 64 bit. 
+	 //Check for errors - return -6
+	 //We don't allow 32 bit machines to specify 64 bit.
 	switch (machine)
 	{
 		case MACH_X86:
@@ -996,9 +1042,9 @@ func AuditDetermineMachine(arch *string){
 				return -6;
 			break;
 
-		case MACH_86_64: 
-		case MACH_PPC64: 
-		case MACH_S390X: 
+		case MACH_86_64:
+		case MACH_PPC64:
+		case MACH_S390X:
 			break;
 		default:
 			return -6;
@@ -1016,7 +1062,7 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 		return err
 	}
 	var _audit_syscalladded, _audit_permadded int
-	_audit_syscalladded = 0 
+	_audit_syscalladded = 0
 	_audit_permadded = 0
 	var _audit_permadded =1 int
 
@@ -1057,7 +1103,7 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 	//set field and op
 	rule.Fields[foo.Field_count] = fieldid;
 	rule.Fieldflags[foo.Field_count] = opval;
-	
+
 	if t == "task"{
 		para_one = AUDIT_FILTER_TASK
 	}
@@ -1084,7 +1130,7 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 	else if m == "always"{
 		para_two = AUDIT_ALWAYS
 	}
-	
+
 	//TODO :Now loop over the field value and set foo.Values[foo.Field_count] accordingly
 	//ALSO : Save flags in a variable i.e always,exit SEE static int lookup_filter(const char *str, int *filter)
 	//and static int lookup_action(const char *str, int *act) in auditctl.c
@@ -1100,7 +1146,7 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 		case AUDIT_OBJ_GID:
 				vlen = len(v)
 				if unicode.IsDigit(v){
-					
+
 					rule.Values[rule.Field_count] = v;
 				}
 				else {
@@ -1110,9 +1156,9 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 						rule->values[rule->field_count] = 4294967295;
 						else{
 							fmt.Println("error",v);
-						}		
+						}
 					}
-				}		
+				}
 			//
 			//IF NOT DIGITS THEN DO WE NEED audit_name_to_uid for audit-go ?
 		case AUDIT_GID:
@@ -1151,10 +1197,10 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 						rule.Values[rule.Field_count] = v;
 					else {
 							fmt.Println("error",v);
-						}		
+						}
 					}
-				
-			//error handling part need to be done 
+
+			//error handling part need to be done
 			//else {
 			//	rule->values[rule->field_count] = //SEE HERE
 			//			audit_name_to_errno(v);
@@ -1169,7 +1215,7 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 			if (Flags != AUDIT_FILTER_EXCLUDE && Flags != AUDIT_FILTER_USER){
 				fmt.Println("SOmething went wrong")
 			}
-				
+
 			vlen = len(v)
 			if unicode.IsDigit(v){
 					rule.Values[rule.Field_count] = v;
@@ -1178,14 +1224,14 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 			if unicode.IsDigit(v){
 					rule.Values[rule.Field_count] = v;
 			}
-			else if (vlen >= 2 && *(v)=='-' && 
-						(isdigit((char)*(v+1)))) 
-				rule.Values[rule->field_count] = 
+			else if (vlen >= 2 && *(v)=='-' &&
+						(isdigit((char)*(v+1))))
+				rule.Values[rule->field_count] =
 					strtol(v, NULL, 0);
 			else {
 				fmt.Println("Error in AUDIT_MSGTYPE")
 			}
-			
+
 		case AUDIT_OBJ_USER:
 		case AUDIT_OBJ_ROLE:
 		case AUDIT_OBJ_TYPE:
@@ -1210,7 +1256,7 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 			var sizePurpose AuditRuleData
 			if Field == AUDIT_FILTERKEY && !(_audit_syscalladded || _audit_permadded){
                   	fmt.Println("error in filetr");
-            }                    	
+            }
 			vlen = len(v);
 			if Field == AUDIT_FILTERKEY && vlen > AUDIT_MAX_KEY_LEN {
 				fmt.Println("Error here")
@@ -1283,7 +1329,7 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 
 		case AUDIT_ARG0:
 		case AUDIT_ARG1:
-		case AUDIT_ARG2:	
+		case AUDIT_ARG2:
 		case AUDIT_ARG3:
 			vlen = len(v);
 			if unicode.IsDigit(v){
@@ -1326,4 +1372,4 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 			}
     }
 }
-/*
+*/
