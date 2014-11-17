@@ -17,26 +17,26 @@ import (
 )
 
 /*
-func Gt_Isupper(x []byte) bool{
+func Gt_Isupper(x string) bool{
 	var decision bool
 	decision = (x) >= "A" && (x) <= "Z"
 	return decision
 }
-*/
+
 var ParsedResult AuditStatus
 var nextSeqNr uint32
 var rulesRetrieved AuditRuleData
 var audit_elf = 0
 
-//FtypeStrings[] = [07]string{"block","character","dir","fifo","file","link","socket"}
-//FtypeS2iS := []uint{ 0,6,16,20,25,30,35}
-//FtypeS2iI = []int{ 24576,8192,16384,4096,32768,40960,49152}
-//var audit_elf uint
-//audit_elf = "0U"
+FtypeStrings[] = [07]string{"block","character","dir","fifo","file","link","socket"}
+FtypeS2iS := []uint{ 0,6,16,20,25,30,35}
+FtypeS2iI = []int{ 24576,8192,16384,4096,32768,40960,49152}
+var audit_elf uint
+audit_elf = "0U"
 //MachineStrings := [13]string{"armeb","armv5tejl","armv7l","i386","i486","i586","i686","ia64","ppc","ppc64","s390","s390x","x86_64"}
 //MachineS2iS := []int{0,6,16,23,28,33,38,43,48,52,58,63,69}
 //MachineS2iI := []int{8,8,8,0,0,0,0,2,4,3,6,5,1}
-
+*/
 
 type AuditStatus struct {
 	Mask          uint32 /* Bit mask for valid entries */
@@ -835,7 +835,7 @@ func SetRules(s *NetlinkSocket) {
 }
 
 /*
-func S2i( strings char, s_table uint, i_table int, n int, s char, value int) int{
+func S2i(strings string, s_table uint, i_table int, n int, s string, value int) int{
 	var left, right int
 	left = 0
 	right = n - 1
@@ -858,7 +858,7 @@ func S2i( strings char, s_table uint, i_table int, n int, s char, value int) int
 }
 
 
-func AuditNameToFtype(name *char) int{
+func AuditNameToFtype(name string) int{
 	var res int
 	if FtypeS2i(name, res) != 0{
 		return res
@@ -866,7 +866,7 @@ func AuditNameToFtype(name *char) int{
 	return 0
 }
 
-func FtypeS2i( s *char, value *int) int{
+func FtypeS2i( s string, value int) int{
 	var len, i int
 	len = len(s);
 	var copy [len + 1]char
@@ -884,6 +884,7 @@ func FtypeS2i( s *char, value *int) int{
 	return S2i(ftype_strings, ftype_s2i_s, ftype_s2i_i, 7, copy, value)
 }
 
+/*
 func MachineS2i( s string, value int) {
 	var len, i int
 	len = len(s)
@@ -1099,7 +1100,7 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 		case AUDIT_OBJ_GID:
 				vlen = len(v)
 				if unicode.IsDigit(v){
-
+					
 					rule.Values[rule.Field_count] = v;
 				}
 				else {
@@ -1179,24 +1180,12 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 			}
 			else if (vlen >= 2 && *(v)=='-' && 
 						(isdigit((char)*(v+1)))) 
-				rule->values[rule->field_count] = 
+				rule.Values[rule->field_count] = 
 					strtol(v, NULL, 0);
 			else {
-				rule->values[rule->field_count] = 
-						audit_name_to_errno(v);
-				if (rule->values[rule->field_count] == 0) 
-					return -15;
+				fmt.Println("Error in AUDIT_MSGTYPE")
 			}
 			
-			//Error handling part after initial work is done
-			//else
-			//	if (audit_name_to_msg_type(v) > 0)
-			//		rule->values[rule->field_count] = //SEE ERROR handling HERE
-			//			audit_name_to_msg_type(v);
-			//	else
-			//		return -8;
-			//break;
-
 		case AUDIT_OBJ_USER:
 		case AUDIT_OBJ_ROLE:
 		case AUDIT_OBJ_TYPE:
@@ -1292,7 +1281,10 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 			}
 			break
 
-		case AUDIT_ARG0...AUDIT_ARG3: //ARGUMENTS GIVEN
+		case AUDIT_ARG0:
+		case AUDIT_ARG1:
+		case AUDIT_ARG2:	
+		case AUDIT_ARG3:
 			vlen = len(v);
 			if unicode.IsDigit(v){
 
@@ -1305,7 +1297,8 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 						fmt.Println("Error number 21");
 				}
 			break;
-		case AUDIT_DEVMAJOR...AUDIT_INODE:
+		case AUDIT_DEVMAJOR:
+		case AUDIT_INODE:
 		case AUDIT_SUCCESS:
 			if Flags != AUDIT_FILTER_EXIT{
 				fmt.Println("Error in flag AUDIT_FILTER_EXIT")
@@ -1321,7 +1314,7 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 				fmt.Println("Error in AUDIT_PPID")
 			}
 
-			if !IsDigit((char)(v)){
+			if !unicode.IsDigit((char)(v)){
 				fmt.Println("error")
 			}
 
@@ -1333,4 +1326,4 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 			}
     }
 }
-*/
+/*
