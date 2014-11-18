@@ -18,11 +18,15 @@ const (
 	AUDIT_FILTER_WATCH = 0x03 /* Apply rule to file system watches */
 	AUDIT_FILTER_EXIT  = 0x04 /* Apply rule at syscall exit */
 	AUDIT_FILTER_TYPE  = 0x05 /* Apply rule at audit_log_start */
-	AUDIT_DEL_RULE     = 1012 
+	/* These are used in filter control */
+	AUDIT_FILTER_MASK  = 0x07 /* Mask to get actual filter */
+	AUDIT_FILTER_UNSET = 0x80 /* This value means filter is unset */
+
 	/* Rule actions */
 	AUDIT_NEVER    = 0 /* Do not build context if rule matches */
 	AUDIT_POSSIBLE = 1 /* Build context if rule matches  */
 	AUDIT_ALWAYS   = 2 /* Generate audit record if rule matches */
+	AUDIT_DEL_RULE = 1012
 
 	/*Audit Message Types */
 	AUDIT_SYSCALL       = 1300 /* Syscall event */
@@ -49,9 +53,17 @@ const (
 	AUDIT_SGID                  = 7
 	AUDIT_FSGID                 = 8
 	AUDIT_LOGINUID              = 9
+	AUDIT_OBJ_GID               = 110
+	AUDIT_OBJ_UID               = 109
+	AUDIT_EXIT                  = 103
 	AUDIT_PERS                  = 10
+	AUDIT_FILTER_EXCLUDE        = 0x05
 	AUDIT_ARCH                  = 11
+	PATH_MAX                    = 4096
 	AUDIT_MSGTYPE               = 12
+	AUDIT_MAX_KEY_LEN           = 256
+	AUDIT_PERM                  = 106
+	AUDIT_FILTERKEY             = 210
 	AUDIT_SUBJ_USER             = 13 /* security label user */
 	AUDIT_SUBJ_ROLE             = 14 /* security label role */
 	AUDIT_SUBJ_TYPE             = 15 /* security label type */
@@ -61,9 +73,23 @@ const (
 	AUDIT_OBJ_USER              = 19
 	AUDIT_OBJ_ROLE              = 20
 	AUDIT_OBJ_TYPE              = 21
+	AUDIT_WATCH                 = 105
+	AUDIT_DIR                   = 107
 	AUDIT_OBJ_LEV_LOW           = 22
 	AUDIT_OBJ_LEV_HIGH          = 23
 	AUDIT_LOGINUID_SET          = 24
+	AUDIT_DEVMAJOR              = 100
+	AUDIT_INODE                 = 102
+	AUDIT_SUCCESS               = 104
+	AUDIT_PERM_EXEC             = 1
+	AUDIT_PERM_WRITE            = 2
+	AUDIT_PERM_READ             = 4
+	AUDIT_PERM_ATTR             = 8
+	AUDIT_FILETYPE              = 108
+	AUDIT_ARG0                  = 200
+	AUDIT_ARG1                  = (AUDIT_ARG0 + 1)
+	AUDIT_ARG2                  = (AUDIT_ARG0 + 2)
+	AUDIT_ARG3                  = (AUDIT_ARG0 + 3)
 	AUDIT_BIT_MASK              = 0x08000000
 	AUDIT_LESS_THAN             = 0x10000000
 	AUDIT_GREATER_THAN          = 0x20000000
@@ -166,4 +192,8 @@ const (
 	EM_S390_OLD = 0xA390
 	/* Also Panasonic/MEI MN10300, AM33 */
 	EM_CYGNUS_MN10300 = 0xbeef
+	//AUDIT_ARCH determination purpose
+	_UTSNAME_LENGTH          = 65
+	_UTSNAME_DOMAIN_LENGTH   = _UTSNAME_LENGTH
+	_UTSNAME_NODENAME_LENGTH = _UTSNAME_DOMAIN_LENGTH
 )
