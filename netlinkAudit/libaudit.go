@@ -876,7 +876,6 @@ func SetRules(s *NetlinkSocket) {
 		}
 	}
 }
-
 /*
 func S2i(strings string, s_table uint, i_table int, n int, s []string, value int) int{
 	var left, right, mid, r int
