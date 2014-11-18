@@ -11,9 +11,9 @@ import (
 	"sync/atomic"
 	"syscall"
 	"unsafe"
-//	"unicode"
-//	"strings"
-//	"runtime"
+	//	"unicode"
+	//	"strings"
+	//	"runtime"
 )
 
 var ParsedResult AuditStatus
@@ -685,10 +685,11 @@ func AuditDeleteRuleData(s *NetlinkSocket, rule *AuditRuleData, flags uint32, ac
 }
 
 // This function Deletes all rules
-func DeleteAllRules(s *NetlinkSocket) {
+func DeleteAllRules(s *NetlinkSocket) error {
 	wb := newNetlinkAuditRequest(AUDIT_LIST_RULES, syscall.AF_NETLINK, 0)
 	if err := s.Send(wb); err != nil {
 		log.Print("Error:", err)
+		return err
 	}
 
 done:
@@ -697,17 +698,20 @@ done:
 		msgs, err := s.Receive(MAX_AUDIT_MESSAGE_LENGTH, syscall.MSG_DONTWAIT)
 		if err != nil {
 			log.Println("ERROR while receiving rules:", err)
+			return err
 		}
 
 		for _, m := range msgs {
 			lsa, er := syscall.Getsockname(s.fd)
 			if er != nil {
 				log.Println("ERROR:", er)
+				return er
 			}
 			switch v := lsa.(type) {
 			case *syscall.SockaddrNetlink:
 				if m.Header.Seq != uint32(wb.Header.Seq) || m.Header.Pid != v.Pid {
 					log.Println("ERROR:", syscall.EINVAL)
+					return syscall.EINVAL
 				}
 			}
 
@@ -724,14 +728,19 @@ done:
 				buf := bytes.NewBuffer(b)
 				var rules AuditRuleData
 				err = binary.Read(buf, nativeEndian(), &rules)
+				if err != nil {
+					log.Println("Binary Read Failed !!")
+					return err
+				}
 				AuditDeleteRuleData(s, &rules, rules.Flags, rules.Action)
 			}
 		}
 	}
+	return nil
 }
 
 // function that sets each rule after reading configuration file
-func SetRules(s *NetlinkSocket) {
+func SetRules(s *NetlinkSocket) error {
 
 	//var rule AuditRuleData
 	//AuditWatchRuleData(s, &rule, []byte("/etc/passwd"))
@@ -740,17 +749,26 @@ func SetRules(s *NetlinkSocket) {
 	content, err := ioutil.ReadFile("netlinkAudit/audit.rules.json")
 	if err != nil {
 		log.Print("Error:", err)
+		return err
 	}
 
 	var rules interface{}
 	err = json.Unmarshal(content, &rules)
+	if err != nil {
+		log.Print("Error:", err)
+		return err
+	}
 
 	m := rules.(map[string]interface{})
 
 	if _, ok := m["delete"]; ok {
 		//First Delete All rules and then add rules
 		log.Println("Deleting all rules")
-		DeleteAllRules(s)
+		err := DeleteAllRules(s)
+		if err != nil {
+			log.Println("Error Deleting Rules!")
+			return err
+		}
 	}
 
 	for k, v := range m {
@@ -783,10 +801,12 @@ func SetRules(s *NetlinkSocket) {
 				content2, err := ioutil.ReadFile("netlinkAudit/audit_x86.json")
 				if err != nil {
 					log.Print("Error:", err)
+					return err
 				}
 				content3, err := ioutil.ReadFile("netlinkAudit/fieldtab.json")
 				if err != nil {
 					log.Print("Error:", err)
+					return err
 				}
 
 				var conf Config
@@ -794,10 +814,12 @@ func SetRules(s *NetlinkSocket) {
 				err = json.Unmarshal([]byte(content2), &conf)
 				if err != nil {
 					log.Print("Error:", err)
+					return err
 				}
 				err = json.Unmarshal([]byte(content3), &fieldmap)
 				if err != nil {
 					log.Print("Error:", err)
+					return err
 				}
 
 				for l := range conf.Xmap {
@@ -875,6 +897,7 @@ func SetRules(s *NetlinkSocket) {
 			}
 		}
 	}
+	return nil
 }
 
 /*
@@ -895,9 +918,9 @@ func S2i(strings string, s_table uint, i_table int, n int, s []string, value int
 		}else{
 			left = mid + 1
 		}
-	}	
+	}
 	return 0
-}	
+}
 
 
 func AuditNameToFtype(name string) int{
@@ -1056,7 +1079,7 @@ func AuditDetermineMachine(arch *string){
 func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldname string ,fieldmap Field , flags int) error {
 
 	if rule.Field_count >= (AUDIT_MAX_FIELDS - 1) {
-		fmt.Println(rule.Field_count) 
+		fmt.Println(rule.Field_count)
 		//return err
 	}
 	var _audit_syscalladded, _audit_permadded int
@@ -1249,7 +1272,7 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 
 			if !(flags == AUDIT_FILTER_EXIT) && flags == AUDIT_FILTER_ENTRY {
 				fmt.Println("Error in AUDIT_FILETYPE")
-			}	
+			}
 			rule.Values[rule.Field_count] = AuditNameToFtype(v)
 			if (int)(rule.Values[rule.Field_count]) < 0 {
 				fmt.Println("Error in AUDIT_FILETYPE")

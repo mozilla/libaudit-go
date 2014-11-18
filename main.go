@@ -45,7 +45,10 @@ func main() {
 		log.Println("Set pid successful!!")
 	}
 
-	netlinkAudit.SetRules(s)
+	err = netlinkAudit.SetRules(s)
+	if err != nil {
+		log.Fatalln("Setting Rules Unsuccessful! Exiting")
+	}
 	//netlinkAudit.GetreplyWithoutSync(s)
 	done := make(chan bool, 1)
 	msg := make(chan string)
