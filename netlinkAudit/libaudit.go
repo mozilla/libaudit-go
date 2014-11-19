@@ -8,12 +8,13 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	// "reflect"
 	"sync/atomic"
 	"syscall"
 	"unsafe"
 	//	"unicode"
-	//	"strings"
-	//	"runtime"
+	"strings"
+	// "runtime"
 )
 
 var ParsedResult AuditStatus
@@ -862,7 +863,7 @@ func SetRules(s *NetlinkSocket) error {
 							op := field.(map[string]interface{})["op"]
 							fieldname := field.(map[string]interface{})["name"]
 							log.Println(fieldval, op, fieldname)
-							opval := 0
+							var opval uint32
 							if op == "nt_eq" {
 								opval = AUDIT_NOT_EQUAL
 							} else if op == "gt_or_eq" {
@@ -883,7 +884,8 @@ func SetRules(s *NetlinkSocket) error {
 							}
 							log.Print(opval)
 							//Pass filter to this function
-							// AuditRuleFieldPairData(&foo,fieldval,opval,fieldname,fieldmap)
+							var dd AuditRuleData
+							AuditRuleFieldPairData(&dd, fieldval, opval, fieldname.(string), fieldmap, filter&AUDIT_BIT_MASK)
 							//SEND flags in above function as " filter & AUDIT_BIT_MASK
 						}
 						foo.Fields[foo.Field_count] = AUDIT_ARCH
@@ -950,7 +952,7 @@ func FtypeS2i( s string, value int) int{
 	copy[i] = 0
 	return S2i(ftype_strings, ftype_s2i_s, ftype_s2i_i, 7, copy, value)
 }
-
+*/
 /*
 func MachineS2i( s string, value int) {
 	var len, i int
@@ -1072,208 +1074,234 @@ func AuditDetermineMachine(arch *string){
 	}
 	return machine;
 }
+*/
 
-////////
-
-
-func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldname string ,fieldmap Field , flags int) error {
+func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uint32, fieldname string, fieldmap Field, flags int) error {
 
 	if rule.Field_count >= (AUDIT_MAX_FIELDS - 1) {
-		fmt.Println(rule.Field_count)
+		log.Println(rule.Field_count)
 		//return err
 	}
-	var _audit_syscalladded, _audit_permadded int
-	_audit_syscalladded = 0
-	_audit_permadded = 0
+	var _audit_permadded bool
+	var _audit_syscalladded bool
 
 	// check against  the field["actions"] here and set fieldid
-	fieldid := 0
+	var fieldid uint32
 	for f := range fieldmap.Fieldmap {
 		if fieldmap.Fieldmap[f].Name == fieldname {
+			log.Println("Found :", fieldname)
 			fieldid = (uint32)(fieldmap.Fieldmap[f].Fieldid)
 		}
 	}
 
 	//set field and op
-	rule.Fields[foo.Field_count] = fieldid;
-	rule.Fieldflags[foo.Field_count] = opval;
+	rule.Fields[rule.Field_count] = fieldid
+	rule.Fieldflags[rule.Field_count] = opval
 
-	//TODO :Now loop over the field value and set foo.Values[foo.Field_count] accordingly
+	//Now loop over the field value and set foo.Values[foo.Field_count] accordingly
 	//ALSO : Save flags in a variable i.e always,exit SEE static int lookup_filter(const char *str, int *filter)
 	//and static int lookup_action(const char *str, int *act) in auditctl.c
 	//filters are like entry,exit,task, and action in always or never
 	switch fieldid {
-    	case AUDIT_UID:
-		case AUDIT_UID:
-		case AUDIT_EUID:
-		case AUDIT_SUID:
-		case AUDIT_FSUID:
-		case AUDIT_LOGINUID:
-		case AUDIT_OBJ_UID:
-		case AUDIT_OBJ_GID:
-				vlen = len(v)
-				if unicode.IsDigit(v){
+	case AUDIT_UID, AUDIT_EUID, AUDIT_SUID, AUDIT_FSUID, AUDIT_LOGINUID, AUDIT_OBJ_UID, AUDIT_OBJ_GID:
 
-					rule.Values[rule.Field_count] = v;
-				}else if vlen >= 2 && strings.Contains(v, "-"){
-						rule.Values[rule.Field_count] = v;
-				}else if runtime·strcmp(v, "unset") == 0 {
-					rule.Values[rule.Field_count] = 4294967295;
-				} else {
-					fmt.Println("error",v);
-				}
-			//
-			//IF NOT DIGITS THEN DO WE NEED audit_name_to_uid for audit-go ?
-		case AUDIT_GID:
-		case AUDIT_EGID:
-		case AUDIT_SGID:
-		case AUDIT_FSGID:
-
-			//rule.Values[rule.Field_count] = uint32(fieldval)
-
-			//IF DIGITS THEN
-			if unicode.IsDigit(v){
-
-					rule.Values[rule.Field_count] = v;
-			}else {
-					fmt.Println("error", v);
-					//return -2;
-			}
-
-		case AUDIT_EXIT:
-
-			if flags != AUDIT_FILTER_EXIT{
-				fmt.Println("Something Went Wrong")
-			}
-			//rule.Values[rule.Field_count] = fieldval
-
-
-			vlen = len(v)
-			if unicode.IsDigit(v){
-
-					rule.Values[rule.Field_count] = v;
-			} else if vlen >= 2 && strings.Contains(v, "-"){
-					rule.Values[rule.Field_count] = v;
-			}else {
-						fmt.Println("error",v);
-			}
-
-			//error handling part need to be done
-			//else {
-			//	rule->values[rule->field_count] = //SEE HERE
-			//			audit_name_to_errno(v);
-			//	if (rule->values[rule->field_count] == 0)
-			//		return -15;
-			//}
-			//break;
-
-		case AUDIT_MSGTYPE:
-			//DO we need this type ?
-
-			if (flags != AUDIT_FILTER_EXCLUDE && flags != AUDIT_FILTER_USER){
-				fmt.Println("SOmething went wrong")
-			}
-
-			vlen = len(v)
-			if unicode.IsDigit(v){
-					rule.Values[rule.Field_count] = v
-			}
-
-			if unicode.IsDigit(v){
-					rule.Values[rule.Field_count] = v
-			} else if vlen >= 2 && *(v)=='-'{
-				rule.Values[rule.Field_count] = v
+		if val, isInt := fieldval.(float64); isInt {
+			rule.Values[rule.Field_count] = (uint32)(val)
+			log.Println("Yeah Done")
+		} else if val, isString := fieldval.(string); isString {
+			if fieldval.(string) == "unset" {
+				rule.Values[rule.Field_count] = 4294967295
 			} else {
-				fmt.Println("Error in AUDIT_MSGTYPE")
+				log.Println("No support for string values yet !", val)
 			}
+		} else {
+			log.Println("Error Setting Value:", fieldval)
+		}
+		//vlen := len(fieldval)
+		// vtype := reflect.TypeOf(fieldval)
+		// if vtype.Kind() == reflect.Int {
+		// 	rule.Values[rule.Field_count] = (uint32)(fieldval.(int))
+		// } else if vtype.Kind() == reflect.String {
+		// 	if fieldval.(string) == "unset" {
+		// 		rule.Values[rule.Field_count] = 4294967295
+		// 	} else {
+		// 		log.Println("No support for string values yet !")
+		// 	}
+		// } else {
+		// 	log.Println("Error Setting Value:", fieldval, vtype.Kind())
+		// }
 
-		case AUDIT_OBJ_USER:
-		case AUDIT_OBJ_ROLE:
-		case AUDIT_OBJ_TYPE:
-		case AUDIT_OBJ_LEV_LOW:
-		case AUDIT_OBJ_LEV_HIGH:
-		case AUDIT_WATCH:
-		case AUDIT_DIR: //DETERMINE WHY they are doing this
-			if flags != AUDIT_FILTER_EXIT{
-				fmt.Println("error")
-			}
-			if Fields == AUDIT_WATCH || Fields == AUDIT_DIR{
-				_audit_permadded = 1
-			}
+	case AUDIT_GID, AUDIT_EGID, AUDIT_SGID, AUDIT_FSGID:
+		//IF DIGITS THEN
+		if val, isInt := fieldval.(float64); isInt {
+			rule.Values[rule.Field_count] = (uint32)(val)
+			log.Println("Yeah Done")
+		} else if val, isString := fieldval.(string); isString {
+			log.Println("No support for string values yet !", val)
+		} else {
+			log.Println("Error Setting Value:", fieldval)
+		}
+	//IF NOT DIGITS THEN DO WE NEED audit_name_to_uid for audit-go ?
 
-		case AUDIT_SUBJ_USER:
-		case AUDIT_SUBJ_ROLE:
-		case AUDIT_SUBJ_TYPE:
-		case AUDIT_SUBJ_SEN:
-		case AUDIT_SUBJ_CLR:
-		case AUDIT_FILTERKEY:
+	case AUDIT_EXIT:
+
+		if flags != AUDIT_FILTER_EXIT {
+			fmt.Println("AUDIT_EXIT can only be used with filter AUDIT_FILTER_EXIT")
+		}
+		if val, isInt := fieldval.(float64); isInt {
+			rule.Values[rule.Field_count] = (uint32)(val)
+			log.Println("Yeah Done")
+		} else if val, isString := fieldval.(string); isString {
+			log.Println("No support for string values yet !", val)
+		} else {
+			log.Println("Error Setting Value:", fieldval)
+		}
+
+		// vlen = len(fieldval)
+		// if unicode.IsDigit(fieldval) {
+
+		// 	rule.Values[rule.Field_count] = fieldval
+		// } else if vlen >= 2 && strings.Contains(fieldval, "-") {
+		// 	rule.Values[rule.Field_count] = fieldval
+		// } else {
+		// 	fmt.Println("error", fieldval)
+		// }
+
+		//error handling part need to be done
+		//else {
+		//	rule->values[rule->field_count] = //SEE HERE
+		//			audit_name_to_errno(v);
+		//	if (rule->values[rule->field_count] == 0)
+		//		return -15;
+		//}
+		//break;
+
+	case AUDIT_MSGTYPE:
+
+		if flags != AUDIT_FILTER_EXCLUDE && flags != AUDIT_FILTER_USER {
+			fmt.Println("SOmething went wrong")
+		}
+		if val, isInt := fieldval.(float64); isInt {
+			rule.Values[rule.Field_count] = (uint32)(val)
+			log.Println("Yeah Done")
+		} else if val, isString := fieldval.(string); isString {
+			log.Println("No support for string values yet !", val)
+		} else {
+			log.Println("Error Setting Value:", fieldval)
+		}
+
+		// vlen = len(fieldval)
+		// if unicode.IsDigit(fieldval){
+		// 		rule.Values[rule.Field_count] = fieldval
+		// }
+
+		// if unicode.IsDigit(fieldval){
+		// 		rule.Values[rule.Field_count] = fieldval
+		// } else if vlen >= 2 && *(v)=='-'{
+		// 	rule.Values[rule.Field_count] = v
+		// } else {
+		// 	fmt.Println("Error in AUDIT_MSGTYPE")
+		// }
+
+	//Strings
+	case AUDIT_OBJ_USER, AUDIT_OBJ_ROLE, AUDIT_OBJ_TYPE, AUDIT_OBJ_LEV_LOW, AUDIT_OBJ_LEV_HIGH, AUDIT_WATCH, AUDIT_DIR: //DETERMINE WHY they are doing this
+		/* Watch & object filtering is invalid on anything
+		 * but exit */
+
+		if flags != AUDIT_FILTER_EXIT {
+			log.Println("error")
+		}
+		if fieldid == AUDIT_WATCH || fieldid == AUDIT_DIR {
+			_audit_permadded = true
+		}
+
+		fallthrough //IMP Point
+	case AUDIT_SUBJ_USER, AUDIT_SUBJ_ROLE, AUDIT_SUBJ_TYPE, AUDIT_SUBJ_SEN, AUDIT_SUBJ_CLR, AUDIT_FILTERKEY:
 		//IF And only if a syscall is added or a permisission is added then this field should be set
 		//TODO : Get our own to determine the above conditions
-			var sizePurpose AuditRuleData
-			if Field == AUDIT_FILTERKEY && !(_audit_syscalladded || _audit_permadded){
-                  	fmt.Println("error in filetr");
-            }
-			vlen = len(v);
-			if Field == AUDIT_FILTERKEY && vlen > AUDIT_MAX_KEY_LEN {
-				fmt.Println("Error here")
-			} else if vlen > PATH_MAX{
-				fmt.Println("Error 11")
+		//MORE Debugging Required
+		// var sizePurpose AuditRuleData
+		if fieldid == AUDIT_FILTERKEY && !(_audit_syscalladded || _audit_permadded) {
+			log.Println("error in filter")
+		}
+		if val, isString := fieldval.(string); isString {
+			vlen := len(val)
+			if fieldid == AUDIT_FILTERKEY && vlen > AUDIT_MAX_KEY_LEN {
+				log.Println("Error here")
+			} else if vlen > PATH_MAX {
+				log.Println("Error 11")
 			}
-			rule.Values[rule.Field_count] = vlen
-			offset = rule.Buflen
-			rule.buflen += vlen
+			// rule.Values[rule.Field_count] = vlen
+			// offset = rule.Buflen
+			// rule.buflen += vlen
 			//*RULEP IS THE RULEDATA STRUCT POINTER
 			//*rulep = realloc(rule, unsafe.SizeOf(*rule) + rule.buflen);
 			//unsafe.Sizeof(sizePurpose))+int(rule.Buflen)
-			v := &rule.Buf[offset]
+			// v := &rule.Buf[offset]
 			//strncpy(&rule.buf[offset], v, vlen);
+		} else {
+			log.Println("Error Specifying Value for FILTERKEY")
+		}
 
-			break
-		case AUDIT_ARCH:
-			//AUDIT_ARCH_X86_64 is made specifically for Mozilla Heka purpose, please make changes as per required
-			rule.Values[rule.Field_count] = AUDIT_ARCH_X86_64;
-			break;
+	case AUDIT_ARCH:
+		//AUDIT_ARCH_X86_64 is made specifically for Mozilla Heka purpose, please make changes as per required
+		if _, isInt := fieldval.(float64); isInt {
+			rule.Values[rule.Field_count] = AUDIT_ARCH_X86_64
+			log.Println("Yeah Done")
+		} else if val, isString := fieldval.(string); isString {
+			log.Println("No support for string values yet !", val)
+		} else {
+			log.Println("Error Setting Value:", fieldval)
+		}
 
-		case AUDIT_PERM:
-			//DECIDE ON VARIOUS ERROR TYPES
-			if flags != AUDIT_FILTER_EXIT {
-				fmt.Println("Some error with AUDIT_FILTER_EXIT")
-			} else if op != AUDIT_EQUAL {
-				fmt.Println("Some error with AUDIT_EQUAL")
-			} else {
-				var i, len, val uint
-				len = len(v)
-				if len > 4{
-					fmt.Println("Error 11")
+	case AUDIT_PERM:
+		//DECIDE ON VARIOUS ERROR TYPES
+		if flags != AUDIT_FILTER_EXIT {
+			log.Println("Flag can only be AUDIT_FILTER_EXIT in case of PERM")
+		} else if opval != AUDIT_EQUAL {
+			log.Println("OP can only be AUDIT_EQUAL in case of PERM")
+		} else {
+			if val, isString := fieldval.(string); isString {
+
+				var i, vallen int
+				vallen = len(val)
+				var permval uint32
+				if vallen > 4 {
+					log.Println("PERM String too large!!")
+					//Return an error
 				}
-
-				for i=0; i < len; i++ {
-					switch (strings.ToLower(v[i])) {
-						case 'r':
-							val |= AUDIT_PERM_READ
-							break
-						case 'w':
-							val |= AUDIT_PERM_WRITE
-							break
-						case 'x':
-							val |= AUDIT_PERM_EXEC
-							break
-						case 'a':
-							val |= AUDIT_PERM_ATTR
-							break
-						default:
-							fmt.Println("Error in AUDIT_PERM")
+				lowerval := strings.ToLower(val)
+				for i = 0; i < vallen; i++ {
+					switch lowerval[i] {
+					case 'r':
+						permval |= AUDIT_PERM_READ
+					case 'w':
+						permval |= AUDIT_PERM_WRITE
+					case 'x':
+						permval |= AUDIT_PERM_EXEC
+					case 'a':
+						permval |= AUDIT_PERM_ATTR
+					default:
+						log.Println("Error in AUDIT_PERM ! NO CONSTANT FOUND")
 					}
 				}
-				rule.Values[rule.Field_count] = val
+				rule.Values[rule.Field_count] = permval
+
 			}
-			break
+		}
+
+	}
+	rule.Field_count++
+	return nil
+}
+
+/*
 		case AUDIT_FILETYPE:
 
 			if !(flags == AUDIT_FILTER_EXIT) && flags == AUDIT_FILTER_ENTRY {
 				fmt.Println("Error in AUDIT_FILETYPE")
 			}
-			rule.Values[rule.Field_count] = AuditNameToFtype(v)
+			rule.Values[rule.Field_count] = AuditNameToFtype(fieldval)
 			if (int)(rule.Values[rule.Field_count]) < 0 {
 				fmt.Println("Error in AUDIT_FILETYPE")
 			}
@@ -1283,11 +1311,11 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 		case AUDIT_ARG1:
 		case AUDIT_ARG2:
 		case AUDIT_ARG3:
-			vlen = len(v);
-			if unicode.IsDigit(v){
-				rule.Values[rule.Field_count] = v;
-			} else if vlen >= 2 and strings.Contains(v, "-"){
-				rule.Values[rule.Field_count] = v;
+			vlen = len(fieldval);
+			if unicode.IsDigit(fieldval){
+				rule.Values[rule.Field_count] = fieldval;
+			} else if vlen >= 2 and strings.Contains(fieldval, "-"){
+				rule.Values[rule.Field_count] = fieldval;
 			}else{
 				fmt.Println("Error number 21");
 			}
@@ -1309,17 +1337,18 @@ func  AuditRuleFieldPairData(rule AuditRuleData,fieldval int, op string, fieldna
 				fmt.Println("Error in AUDIT_PPID")
 			}
 
-			if !unicode.IsDigit((char)(v)){
+			if !unicode.IsDigit((char)(fieldval)){
 				fmt.Println("error")
 			}
 
 			if Field == AUDIT_INODE {
-				rule.Values[rule.Field_count] = v
+				rule.Values[rule.Field_count] = fieldval
 			}
 			else{
-				rule.Values[rule.Field_count] = v
+				rule.Values[rule.Field_count] = fieldval
 			}
     }
+    return nil
 }
 
 */
