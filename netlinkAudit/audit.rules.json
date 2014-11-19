@@ -21,7 +21,7 @@
  		{
 			"action" : ["always", "exit"],
 			"fields" : [
- 				{"name":"arch", "op":"eq", "value":"32"},
+ 				{"name":"arch", "op":"eq", "value":32},
  				{"name":"uid", "op":"eq", "value":1}
  			],
 			"name" : "rmdir"
@@ -29,7 +29,7 @@
 		{
 			"action" : ["always", "exit"],
 			"fields" : [
- 				{"name":"arch", "op":"eq", "value":"32"}
+ 				{"name":"arch", "op":"eq", "value":32}
  			],
 			"name" : "mkdir"
 		}
