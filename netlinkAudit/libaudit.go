@@ -27,6 +27,28 @@ var MachineStrings = []string{"armeb", "armv5tejl", "armv7l", "i386", "i486", "i
 var MachineS2iS = []int{0, 6, 16, 23, 28, 33, 38, 43, 48, 52, 58, 63, 69}
 var MachineS2iI = []int{8, 8, 8, 0, 0, 0, 0, 2, 4, 3, 6, 5, 1}
 
+var ErrStrings = []strings{"E2BIG","EACCES","EADDRINUSE","EADDRNOTAVAIL","EADV","EAFNOSUPPORT","EAGAIN","EALREADY","EBADE","EBADF",
+"EBADFD","EBADMSG","EBADR","EBADRQC","EBADSLT","EBFONT","EBUSY","ECANCELED","ECHILD","ECHRNG",
+"ECOMM","ECONNABORTED","ECONNREFUSED","ECONNRESET","EDEADLK","EDEADLOCK","EDESTADDRREQ","EDOM","EDOTDOT","EDQUOT",
+"EEXIST","EFAULT","EFBIG","EHOSTDOWN","EHOSTUNREACH","EIDRM","EILSEQ","EINPROGRESS","EINTR","EINVAL"
+"EIO","EISCONN","EISDIR","EISNAM","EKEYEXPIRED","EKEYREJECTED","EKEYREVOKED","EL2HLT","EL2NSYNC","EL3HLT",
+"EL3RST","ELIBACC","ELIBBAD","ELIBEXEC","ELIBMAX","ELIBSCN","ELNRNG","ELOOP","EMEDIUMTYPE","EMFILE",
+"EMLINK","EMSGSIZE","EMULTIHOP","ENAMETOOLONG","ENAVAIL","ENETDOWN","ENETRESET","ENETUNREACH","ENFILE","ENOANO",
+"ENOBUFS","ENOCSI","ENODATA","ENODEV","ENOENT","ENOEXEC","ENOKEY","ENOLCK","ENOLINK","ENOMEDIUM",
+"ENOMEM","ENOMSG","ENONET","ENOPKG","ENOPROTOOPT","ENOSPC","ENOSR","ENOSTR","ENOSYS","ENOTBLK",
+"ENOTCONN","ENOTDIR","ENOTEMPTY","ENOTNAM","ENOTRECOVERABLE","ENOTSOCK","ENOTTY","ENOTUNIQ","ENXIO","EOPNOTSUPP",
+"EOVERFLOW","EOWNERDEAD","EPERM","EPFNOSUPPORT","EPIPE","EPROTO","EPROTONOSUPPORT","EPROTOTYPE","ERANGE","EREMCHG",
+"EREMOTE","EREMOTEIO","ERESTART","EROFS","ESHUTDOWN","ESOCKTNOSUPPORT","ESPIPE","ESRCH","ESRMNT","ESTALE"
+"ESTRPIPE","ETIME","ETIMEDOUT","ETOOMANYREFS","ETXTBSY","EUCLEAN","EUNATCH","EUSERS","EWOULDBLOCK","EXDEV"
+"EXFULL"}
+
+var ErrS2iS = []int{0,6,13,24,38,43,56,63,72,78,84,91,99,105,113,121,128,134,144,151,158,164,177,190,201,209,219,232,237,245,252,259,266,272,282,295,301,308,320,326,333,337,345,352,359,371,384,396,403,412,419,426,434,442,451,459,467,474,480,492,499,506,515,525,538,546,555,565,577,584,
+591,599,606,614,621,628,636,643,650,658,668,675,682,689,696,708,715,721,728,735,743,752,760,770,778,794,803,810,819,825,836,846,857,863,876,882,889,905,916,923,
+931,939,949,958,964,974,990,997,1003,1010,1017,1026,1032,1042,1055,1063,1071,1079,1086,1098,1104}
+
+var ErrS2iI = []int{7,13,98,99,68,97,11,114,52,9,77,74,53,56,57,59,16,125,10,44,70,103,111,104,35,35,89,33,73,122,17,14,27,112,113,43,84,115,4,22,
+5,106,21,120,127,129,128,51,45,46,47,79,80,83,82,81,48,40,124,24,31,90,72,36,119,100,102,101,23,55,105,50,61,19,2,8,126,37,67,123,12,42,64,65,92,28,63,60,38,15,
+107,20,39,118,131,88,25,76,6,95,75,130,1,96,32,71,93,91,34,78,66,121,85,30,108,94,29,3,69,116,86,62,110,109,26,117,49,87,11,18,54}
 /*
 func GtIsupper(x string) bool{
 	var decision bool
@@ -1136,20 +1158,6 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 			log.Println("Error Setting Value:", fieldval)
 			//raise error
 		}
-		//vlen := len(fieldval)
-		// vtype := reflect.TypeOf(fieldval)
-		// if vtype.Kind() == reflect.Int {
-		// 	rule.Values[rule.Field_count] = (uint32)(fieldval.(int))
-		// } else if vtype.Kind() == reflect.String {
-		// 	if fieldval.(string) == "unset" {
-		// 		rule.Values[rule.Field_count] = 4294967295
-		// 	} else {
-		// 		log.Println("No support for string values yet !")
-		// 	}
-		// } else {
-		// 	log.Println("Error Setting Value:", fieldval, vtype.Kind())
-		// }
-
 	case AUDIT_GID, AUDIT_EGID, AUDIT_SGID, AUDIT_FSGID:
 		//IF DIGITS THEN
 		if val, isInt := fieldval.(float64); isInt {
@@ -1258,11 +1266,6 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 				rule.Buf[offset] = val 
 				//append(rule.Buf[offset],val)
 			}
-			//*RULEP IS THE RULEDATA STRUCT POINTER
-			//*rulep = realloc(rule, unsafe.SizeOf(rule) + rule.buflen);
-			//unsafe.Sizeof(sizePurpose))+int(rule.Buflen)
-			// v := &rule.Buf[offset]
-			//strncpy(&rule.buf[offset], v, vlen);
 			
 		}
 	case AUDIT_ARCH:
