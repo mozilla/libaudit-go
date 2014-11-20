@@ -76,7 +76,7 @@ type AuditRuleData struct {
 	Values      [AUDIT_MAX_FIELDS]uint32
 	Fieldflags  [AUDIT_MAX_FIELDS]uint32
 	Buflen      uint32  /* total length of string fields */
-	Buf         [0]byte //[0]string /* string fields buffer */
+	Buf         []string //[0]string /* string fields buffer */
 }
 
 type NetlinkSocket struct {
@@ -1248,19 +1248,23 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 				log.Println("Error 11")
 				//raise error
 			}
-			// rule.Values[rule.Field_count] = vlen
-			// offset = rule.Buflen
-			// rule.buflen += vlen
+			rule.Values[rule.Field_count] = (uint32)(vlen)
+			offset := rule.Buflen
+			rule.Buflen = rule.Buflen + (uint32)(vlen)
+			err := (uint32)(unsafe.Sizeof(rule)) + rule.Buflen
+			if err == 0 {
+				fmt.Println("Cannot append the rule Buf")
+			} else {
+				rule.Buf[offset] = val 
+				//append(rule.Buf[offset],val)
+			}
 			//*RULEP IS THE RULEDATA STRUCT POINTER
-			//*rulep = realloc(rule, unsafe.SizeOf(*rule) + rule.buflen);
+			//*rulep = realloc(rule, unsafe.SizeOf(rule) + rule.buflen);
 			//unsafe.Sizeof(sizePurpose))+int(rule.Buflen)
 			// v := &rule.Buf[offset]
 			//strncpy(&rule.buf[offset], v, vlen);
-		} else {
-			log.Println("Error Specifying Value for FILTERKEY")
-			//raise error
+			
 		}
-
 	case AUDIT_ARCH:
 		//AUDIT_ARCH_X86_64 is made specifically for Mozilla Heka purpose, please make changes as per required
 		if _, isInt := fieldval.(float64); isInt {
