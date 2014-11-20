@@ -190,8 +190,7 @@ func netlinkMessageHeaderAndData(b []byte) (*syscall.NlMsghdr, []byte, int, erro
 }
 
 func FloatToString(input_num float64) string {
-	
-	// to convert a float number to a string
+	// to Function to convert a float number to a string
 	return strconv.FormatFloat(input_num, 'f', 6, 64)
 }
 
@@ -1188,15 +1187,6 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 			//raise error
 		}
 
-		// vlen = len(fieldval)
-		// if unicode.IsDigit(fieldval) {
-
-		// 	rule.Values[rule.Field_count] = fieldval
-		// } else if vlen >= 2 && strings.Contains(fieldval, "-") {
-		// 	rule.Values[rule.Field_count] = fieldval
-		// } else {
-		// 	fmt.Println("error", fieldval)
-		// }
 
 		//error handling part need to be done
 		//else {
@@ -1225,19 +1215,6 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 			//raise error
 
 		}
-
-		// vlen = len(fieldval)
-		// if unicode.IsDigit(fieldval){
-		// 		rule.Values[rule.Field_count] = fieldval
-		// }
-
-		// if unicode.IsDigit(fieldval){
-		// 		rule.Values[rule.Field_count] = fieldval
-		// } else if vlen >= 2 && *(v)=='-'{
-		// 	rule.Values[rule.Field_count] = v
-		// } else {
-		// 	fmt.Println("Error in AUDIT_MSGTYPE")
-		// }
 
 	//Strings
 	case AUDIT_OBJ_USER, AUDIT_OBJ_ROLE, AUDIT_OBJ_TYPE, AUDIT_OBJ_LEV_LOW, AUDIT_OBJ_LEV_HIGH, AUDIT_WATCH, AUDIT_DIR: //DETERMINE WHY they are doing this
@@ -1355,15 +1332,6 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 			log.Println("Error Setting Value:", fieldval)
 			//raise error
 		}
-
-	// vlen = len(fieldval)
-	// if unicode.IsDigit(fieldval) {
-	// 	rule.Values[rule.Field_count] = fieldval
-	// } else if vlen >= 2 && strings.Contains(fieldval, "-") {
-	// 	rule.Values[rule.Field_count] = fieldval
-	// } else {
-	// 	fmt.Println("Error number 21")
-	// }
 	case AUDIT_DEVMAJOR, AUDIT_INODE, AUDIT_SUCCESS:
 		if flags != AUDIT_FILTER_EXIT {
 			log.Println("Error! Flags can only be AUDIT_FILTER_EXIT !!")

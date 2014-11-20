@@ -36,6 +36,10 @@
 			"fieldid"  : 8
 		},
 		{
+			"name": "auid",
+			"fieldid"  : 9
+		},
+		{
 			"name": "loginuid",
 			"fieldid"  : 9
 		},
@@ -52,8 +56,56 @@
 			"fieldid"  : 12
 		},
 		{
+			"name": "subj_user",
+			"fieldid"  : 13
+		},
+		{
+			"name": "subj_role",
+			"fieldid"  : 14
+		},
+		{
+			"name": "subj_type",
+			"fieldid"  : 15
+		},
+		{
+			"name": "subj_sen",
+			"fieldid"  : 16
+		},
+		{
+			"name": "subj_clr",
+			"fieldid"  : 17
+		},
+		{
 			"name": "ppid",
 			"fieldid"  : 18
+		},
+		{
+			"name": "obj_user",
+			"fieldid"  : 19
+		},
+		{
+			"name": "obj_role",
+			"fieldid"  : 20
+		},
+		{
+			"name": "obj_type",
+			"fieldid"  : 21
+		},
+		{
+			"name": "obj_lev_low",
+			"fieldid"  : 22
+		},
+		{
+			"name": "obj_lev_high",
+			"fieldid"  : 23
+		},
+		{
+			"name": "devmajor",
+			"fieldid"  : 100
+		},
+		{
+			"name": "devminor",
+			"fieldid"  : 101
 		},
 		{
 			"name": "inode",
@@ -94,6 +146,26 @@
 		{
 			"name": "field_compare",
 			"fieldid"  : 111
+		},
+		{
+			"name": "a0",
+			"fieldid"  : 200
+		},
+		{
+			"name": "a1",
+			"fieldid"  : 201
+		},
+		{
+			"name": "a2",
+			"fieldid"  : 202
+		},
+		{
+			"name": "a3",
+			"fieldid"  : 203
+		},
+		{
+			"name": "key",
+			"fieldid"  : 210
 		}
 	]
 }
