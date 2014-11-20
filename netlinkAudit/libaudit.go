@@ -12,8 +12,10 @@ import (
 	"sync/atomic"
 	"syscall"
 	"unsafe"
-	//	"unicode"
+	//"unicode"
 	"strings"
+	"strconv"
+	//"regexp"
 	// "runtime"
 )
 
@@ -117,6 +119,7 @@ func nativeEndian() binary.ByteOrder {
 	return binary.LittleEndian
 }
 
+//re := regexp.MustCompile( "[^0-9]" )
 //The recvfrom in go takes only a byte [] to put the data recieved from the kernel that removes the need
 //for having a separate audit_reply Struct for recieving data from kernel.
 func (rr *NetlinkAuditRequest) ToWireFormat() []byte {
@@ -184,6 +187,12 @@ func netlinkMessageHeaderAndData(b []byte) (*syscall.NlMsghdr, []byte, int, erro
 		return nil, nil, 0, syscall.EINVAL
 	}
 	return h, b[syscall.NLMSG_HDRLEN:], nlmAlignOf(int(h.Len)), nil
+}
+
+func FloatToString(input_num float64) string {
+	
+	// to convert a float number to a string
+	return strconv.FormatFloat(input_num, 'f', 6, 64)
 }
 
 // This function makes a conncetion with kernel space and is to be used for all further socket communication
@@ -1104,9 +1113,18 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 	//filters are like entry,exit,task, and action in always or never
 	switch fieldid {
 	case AUDIT_UID, AUDIT_EUID, AUDIT_SUID, AUDIT_FSUID, AUDIT_LOGINUID, AUDIT_OBJ_UID, AUDIT_OBJ_GID:
-
+		//fieldvalUid := strings.Replace(fieldval.(string), "-", "", -1)
+		//val_dash := strings.Trim(safe, "-")
+		//strconv.ParseFloat(fieldvalUid, 64)
 		if val, isInt := fieldval.(float64); isInt {
-			rule.Values[rule.Field_count] = (uint32)(val)
+			//For trimming "-" and evaluating th condition vlen >=2 (which is not needed)
+			valString := FloatToString(val)
+			fieldvalUid := strings.Replace(valString, "-", "", -1)
+			a,err := strconv.Atoi(fieldvalUid)
+			if err != nil{
+				fmt.Println("Conversion not possible")
+			}
+			rule.Values[rule.Field_count] = (uint32)(a)
 			log.Println("Yeah Done")
 		} else if val, isString := fieldval.(string); isString {
 			if fieldval.(string) == "unset" {
@@ -1153,7 +1171,14 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 			log.Println("AUDIT_EXIT can only be used with filter AUDIT_FILTER_EXIT")
 		}
 		if val, isInt := fieldval.(float64); isInt {
-			rule.Values[rule.Field_count] = (uint32)(val)
+			//For trimming "-" and evaluating th condition vlen >=2 (which is not needed)
+			valString := FloatToString(val)
+			fieldvalUid := strings.Replace(valString, "-", "", -1)
+			a,err := strconv.Atoi(fieldvalUid)
+			if err != nil{
+				fmt.Println("Conversion not possible")
+			}
+			rule.Values[rule.Field_count] = (uint32)(a)
 			log.Println("Yeah Done")
 		} else if val, isString := fieldval.(string); isString {
 			log.Println("No support for string values yet !", val)
@@ -1313,7 +1338,15 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 
 	case AUDIT_ARG0, AUDIT_ARG1, AUDIT_ARG2, AUDIT_ARG3:
 		if val, isInt := fieldval.(float64); isInt {
-			rule.Values[rule.Field_count] = (uint32)(val)
+			//For trimming "-" and evaluating th condition vlen >=2 (which is not needed)
+			valString := FloatToString(val)
+			fieldvalUid := strings.Replace(valString, "-", "", -1)
+			a,err := strconv.Atoi(fieldvalUid)
+			if err != nil{
+				fmt.Println("Conversion not possible")
+			}
+
+			rule.Values[rule.Field_count] = (uint32)(a)
 			log.Println("Yeah Done")
 		} else if val, isString := fieldval.(string); isString {
 			log.Println("No support for string values yet !", val)
