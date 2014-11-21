@@ -8,13 +8,11 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	// "reflect"
+	"strconv"
+	"strings"
 	"sync/atomic"
 	"syscall"
 	"unsafe"
-	//"unicode"
-	"strconv"
-	"strings"
 	//"regexp"
 	// "runtime"
 )
@@ -848,6 +846,7 @@ func SetRules(s *NetlinkSocket) error {
 						//NOW APPLY ACTIONS ON SYSCALLS by separating the filters i.e exit from action i.e. always
 						action := 0
 						filter := 0
+						//This part supposes that actions and filters are written as always,exit or never,exit not viceversa
 						if actions[0] == "never" {
 							action = AUDIT_NEVER
 						} else if actions[0] == "possible" {
@@ -860,7 +859,8 @@ func SetRules(s *NetlinkSocket) error {
 						if actions[1] == "task" {
 							filter = AUDIT_FILTER_TASK
 						} else if actions[1] == "entry" {
-							filter = AUDIT_FILTER_ENTRY
+							log.Println("Support for Entry Filter is Deprecated!! Switching back to Exit filter")
+							filter = AUDIT_FILTER_EXIT
 						} else if actions[1] == "exit" {
 							filter = AUDIT_FILTER_EXIT
 						} else if actions[1] == "user" {
@@ -898,7 +898,7 @@ func SetRules(s *NetlinkSocket) error {
 							log.Print(opval)
 							//Pass filter to this function
 							var dd AuditRuleData
-							AuditRuleFieldPairData(&dd, fieldval, opval, fieldname.(string), fieldmap, filter&AUDIT_BIT_MASK)
+							AuditRuleFieldPairData(&dd, fieldval, opval, fieldname.(string), fieldmap, filter) // &AUDIT_BIT_MASK
 							//SEND flags in above function as " filter & AUDIT_BIT_MASK
 						}
 						foo.Fields[foo.Field_count] = AUDIT_ARCH
@@ -915,15 +915,53 @@ func SetRules(s *NetlinkSocket) error {
 	return nil
 }
 
+func AuditNameToFtype(name string, value *int) error {
+	// var res int
+	// if FtypeS2i(name, res) != 0{
+	// 	return res
+	// }
+	// return 0
+
+	content, err := ioutil.ReadFile("netlinkAudit/ftypetab.json")
+
+	if err != nil {
+		log.Print("Error:", err)
+		return err
+	}
+
+	var filemap interface{}
+	err = json.Unmarshal(content, &filemap)
+
+	if err != nil {
+		log.Print("Error:", err)
+		return err
+	}
+
+	m := filemap.(map[string]interface{})
+
+	for k, v := range m {
+		if k == name {
+			*value = int(v.(float64))
+			return nil
+		}
+	}
+
+	return syscall.EINVAL //SOME ERROR
+}
+
 /*
-func S2i(strings string, s_table uint, i_table int, n int, s []string, value int) int{
+
+func S2i(strings []string, s_table []uint, i_table []int, n int //LENGTH if table// , s string, value int) int{
 	var left, right, mid, r int
+	//APPLIED BINARY SEARCH
 	left = 0
-	right = n - 1
+	right = n - 1 //can be simply len(s) - 1
 	for left <= right { // invariant: left <= x <= right
 		mid = (left + right) / 2
 		// FIXME? avoid recomparing a common prefix
-		r = (s == strings + s_table[mid])
+		r = (s == strings + s_table[mid]) //if strings[mid] == s
+
+
 		if r == 0 {
 			value = i_table[mid]
 			return 1
@@ -937,15 +975,6 @@ func S2i(strings string, s_table uint, i_table int, n int, s []string, value int
 	return 0
 }
 
-
-func AuditNameToFtype(name string) int{
-	var res int
-	if FtypeS2i(name, res) != 0{
-		return res
-	}
-	return 0
-}
-
 func FtypeS2i( s string, value int) int{
 	var len, i int
 	i = 0
@@ -955,6 +984,7 @@ func FtypeS2i( s string, value int) int{
 	for i < len {
 		c = s[i]
 		boolean := GtIsupper(c)
+		//Convert to lowerCase
 		if boolean{
 			copy[i] = c - 'A' + 'a'
 		}else {
@@ -963,7 +993,8 @@ func FtypeS2i( s string, value int) int{
 		i = i+1
 	}
 	copy[i] = 0
-	return S2i(ftype_strings, ftype_s2i_s, ftype_s2i_i, 7, copy, value)
+	//NULL APPEND string
+	return S2i(FTypeStrings, FtypeS2iS, FtypeS2iI, 7, copy, value)
 }
 */
 /*
@@ -1147,19 +1178,6 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 			log.Println("Error Setting Value:", fieldval)
 			//raise error
 		}
-		//vlen := len(fieldval)
-		// vtype := reflect.TypeOf(fieldval)
-		// if vtype.Kind() == reflect.Int {
-		// 	rule.Values[rule.Field_count] = (uint32)(fieldval.(int))
-		// } else if vtype.Kind() == reflect.String {
-		// 	if fieldval.(string) == "unset" {
-		// 		rule.Values[rule.Field_count] = 4294967295
-		// 	} else {
-		// 		log.Println("No support for string values yet !")
-		// 	}
-		// } else {
-		// 	log.Println("Error Setting Value:", fieldval, vtype.Kind())
-		// }
 
 	case AUDIT_GID, AUDIT_EGID, AUDIT_SGID, AUDIT_FSGID:
 		//IF DIGITS THEN
@@ -1334,6 +1352,27 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 
 			}
 		}
+	case AUDIT_FILETYPE:
+		if val, isString := fieldval.(string); isString {
+			if !(flags == AUDIT_FILTER_EXIT) && flags == AUDIT_FILTER_ENTRY {
+				log.Println("Error! Flags can only be EXIT in case of AUDIT_FILETYPE")
+				//raise some error
+			}
+			var fileval int
+			err := AuditNameToFtype(val, &fileval)
+			if err != nil {
+				log.Println("Filetype Not Found !!")
+				//raise error
+			}
+			rule.Values[rule.Field_count] = uint32(fileval)
+			if (int)(rule.Values[rule.Field_count]) < 0 {
+				fmt.Println("Error in AUDIT_FILETYPE")
+				//Raise some error
+			}
+		} else {
+			log.Println("Only strings as file types Supported!!")
+			//raise error
+		}
 
 	case AUDIT_ARG0, AUDIT_ARG1, AUDIT_ARG2, AUDIT_ARG3:
 		if val, isInt := fieldval.(float64); isInt {
@@ -1396,19 +1435,3 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 	rule.Field_count++
 	return nil
 }
-
-/*
-		case AUDIT_FILETYPE:
-
-			if !(flags == AUDIT_FILTER_EXIT) && flags == AUDIT_FILTER_ENTRY {
-				log.Println("Error in AUDIT_FILETYPE")
-			}
-			rule.Values[rule.Field_count] = AuditNameToFtype(fieldval)
-			if (int)(rule.Values[rule.Field_count]) < 0 {
-				fmt.Println("Error in AUDIT_FILETYPE")
-			}
-			break
-
-}
-
-*/
