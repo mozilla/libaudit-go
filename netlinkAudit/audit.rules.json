@@ -22,7 +22,7 @@
 			"action" : ["always", "exit"],
 			"fields" : [
  				{"name":"arch", "op":"eq", "value":32},
- 				{"name":"uid", "op":"eq", "value":1}
+ 				{"name":"key","op":"eq","value":"rmd"}
  			],
 			"name" : "rmdir"
 		},

@@ -9,12 +9,11 @@ import (
 	"log"
 	"os"
 	// "reflect"
+	"strconv"
+	"strings"
 	"sync/atomic"
 	"syscall"
 	"unsafe"
-	//"unicode"
-	"strconv"
-	"strings"
 	//"regexp"
 	// "runtime"
 )
@@ -97,8 +96,8 @@ type AuditRuleData struct {
 	Fields      [AUDIT_MAX_FIELDS]uint32
 	Values      [AUDIT_MAX_FIELDS]uint32
 	Fieldflags  [AUDIT_MAX_FIELDS]uint32
-	Buflen      uint32  /* total length of string fields */
-	Buf         [0]byte //[0]string /* string fields buffer */
+	Buflen      uint32 /* total length of string fields */
+	Buf         []byte //[0]byte /* string fields buffer */
 }
 
 type NetlinkSocket struct {
@@ -120,7 +119,7 @@ type CMap struct {
 //for fieldtab
 type FMap struct {
 	Name    string
-	Fieldid int
+	Fieldid float64
 }
 
 // for config
@@ -139,6 +138,21 @@ func nativeEndian() binary.ByteOrder {
 		return binary.BigEndian
 	}
 	return binary.LittleEndian
+}
+
+func (rule *AuditRuleData) ToWireFormat() []byte {
+
+	newbuff := make([]byte, int(unsafe.Sizeof(*rule))+int(rule.Buflen))
+	*(*uint32)(unsafe.Pointer(&newbuff[0:4][0])) = rule.Flags
+	*(*uint32)(unsafe.Pointer(&newbuff[4:8][0])) = rule.Action
+	*(*uint32)(unsafe.Pointer(&newbuff[8:12][0])) = rule.Field_count
+	*(*[AUDIT_BITMASK_SIZE]uint32)(unsafe.Pointer(&newbuff[12:268][0])) = rule.Mask
+	*(*[AUDIT_MAX_FIELDS]uint32)(unsafe.Pointer(&newbuff[268:524][0])) = rule.Fields
+	*(*[AUDIT_MAX_FIELDS]uint32)(unsafe.Pointer(&newbuff[524:780][0])) = rule.Values
+	*(*[AUDIT_MAX_FIELDS]uint32)(unsafe.Pointer(&newbuff[780:1036][0])) = rule.Fieldflags
+	*(*uint32)(unsafe.Pointer(&newbuff[1036:1040][0])) = rule.Buflen
+	copy(newbuff[1040:1040+rule.Buflen], rule.Buf[:])
+	return newbuff
 }
 
 //re := regexp.MustCompile( "[^0-9]" )
@@ -359,10 +373,12 @@ done:
 			if m.Header.Type == AUDIT_GET {
 				//Convert the data part written to AuditStatus struct
 				b := m.Data[:]
+				// h := (*AuditStatus)(unsafe.Pointer(&b[0]))
 				buf := bytes.NewBuffer(b)
 				var dumm AuditStatus
 				err = binary.Read(buf, nativeEndian(), &dumm)
 				ParsedResult = dumm
+				// log.Println(dumm, h)
 				break done
 			}
 		}
@@ -455,16 +471,22 @@ func AuditAddRuleData(s *NetlinkSocket, rule *AuditRuleData, flags int, action i
 
 	rule.Flags = uint32(flags)
 	rule.Action = uint32(action)
+	// Using unsafe for conversion
+	newbuff := rule.ToWireFormat()
 
-	buff := new(bytes.Buffer)
-	err := binary.Write(buff, nativeEndian(), *rule)
-	if err != nil {
-		log.Println("binary.Write failed:", err)
-		return err
-	}
-	wb := newNetlinkAuditRequest(AUDIT_ADD_RULE, syscall.AF_NETLINK, int(buff.Len())+int(rule.Buflen))
-	wb.Data = append(wb.Data[:], buff.Bytes()[:]...)
-	if err := s.Send(wb); err != nil {
+	// buff := new(bytes.Buffer)
+	// err := binary.Write(buff, nativeEndian(), *rule)
+	// if err != nil {
+	// 	log.Println("binary.Write failed:", err)
+	// 	return err
+	// }
+	// wb := newNetlinkAuditRequest(AUDIT_ADD_RULE, syscall.AF_NETLINK, int(buff.Len())+int(rule.Buflen))
+	// wb.Data = append(wb.Data[:], buff.Bytes()[:]...)
+
+	newwb := newNetlinkAuditRequest(AUDIT_ADD_RULE, syscall.AF_NETLINK, len(newbuff) /*+int(rule.Buflen)*/) //Length of newbuff takes care of Rule.buf too
+	newwb.Data = append(newwb.Data[:], newbuff[:]...)
+	var err error
+	if err = s.Send(newwb); err != nil {
 		return err
 	}
 
@@ -664,8 +686,10 @@ done:
 			}
 			if m.Header.Type == AUDIT_LIST_RULES {
 				b := m.Data[:]
+				//Should revert to rule.ToWireFormat()
 				buf := bytes.NewBuffer(b)
 				var rules AuditRuleData
+				rules.Buf = make([]byte, 0)
 				err = binary.Read(buf, nativeEndian(), &rules)
 				// TODO : save all rules to an array so delete all rules function can use this
 				rulesRetrieved = rules
@@ -677,6 +701,7 @@ done:
 //Delete Rule Data Function
 func AuditDeleteRuleData(s *NetlinkSocket, rule *AuditRuleData, flags uint32, action uint32) error {
 	var sizePurpose AuditRuleData
+	sizePurpose.Buf = make([]byte, 0)
 	if flags == AUDIT_FILTER_ENTRY {
 		log.Println("Error in delete")
 		return nil
@@ -684,15 +709,19 @@ func AuditDeleteRuleData(s *NetlinkSocket, rule *AuditRuleData, flags uint32, ac
 	rule.Flags = flags
 	rule.Action = action
 
-	buff := new(bytes.Buffer)
-	err := binary.Write(buff, nativeEndian(), *rule)
-	if err != nil {
-		log.Println("binary.Write failed:", err)
-		return err
-	}
-	wb := newNetlinkAuditRequest(AUDIT_DEL_RULE, syscall.AF_NETLINK, int(unsafe.Sizeof(sizePurpose))+int(rule.Buflen))
-	wb.Data = append(wb.Data[:], buff.Bytes()[:]...)
-	if err := s.Send(wb); err != nil {
+	newbuff := rule.ToWireFormat()
+	// buff := new(bytes.Buffer)
+	// err := binary.Write(buff, nativeEndian(), *rule)
+	// if err != nil {
+	// 	log.Println("binary.Write failed:", err)
+	// 	return err
+	// }
+	// wb := newNetlinkAuditRequest(AUDIT_DEL_RULE, syscall.AF_NETLINK, int(unsafe.Sizeof(sizePurpose))+int(rule.Buflen))
+	// wb.Data = append(wb.Data[:], buff.Bytes()[:]...)
+
+	newwb := newNetlinkAuditRequest(AUDIT_DEL_RULE, syscall.AF_NETLINK, len(newbuff) /*+int(rule.Buflen)*/)
+	newwb.Data = append(newwb.Data[:], newbuff[:]...)
+	if err := s.Send(newwb); err != nil {
 		return err
 	}
 	return nil
@@ -739,14 +768,22 @@ done:
 			}
 			if m.Header.Type == AUDIT_LIST_RULES {
 				b := m.Data[:]
-				buf := bytes.NewBuffer(b)
-				var rules AuditRuleData
-				err = binary.Read(buf, nativeEndian(), &rules)
+				rules := (*AuditRuleData)(unsafe.Pointer(&b[0]))
+				//Sizeof rules is 1064 > 1056
+				//Error handling here ?
+				// log.Println(len(b), h)
+				// buf := bytes.NewBuffer(b)
+				// var rules AuditRuleData
+				// rules.Buf = make([]byte, 0)
+				// err = binary.Read(buf, nativeEndian(), &rules)
+				// if err != nil {
+				// 	log.Println("Binary Read Failed !!", err)
+				// 	return err
+				// }
+				err = AuditDeleteRuleData(s, rules, rules.Flags, rules.Action)
 				if err != nil {
-					log.Println("Binary Read Failed !!")
 					return err
 				}
-				AuditDeleteRuleData(s, &rules, rules.Flags, rules.Action)
 			}
 		}
 	}
@@ -840,14 +877,19 @@ func SetRules(s *NetlinkSocket) error {
 					if conf.Xmap[l].Name == srule["name"] {
 						// set rules
 						log.Println("setting syscall rule", conf.Xmap[l].Name)
-						var foo AuditRuleData
-						AuditRuleSyscallData(&foo, conf.Xmap[l].Id)
+						// var foo AuditRuleData
+						// foo.Buf = make([]byte, 0)
+						var dd AuditRuleData
+						dd.Buf = make([]byte, 0)
+
+						AuditRuleSyscallData(&dd, conf.Xmap[l].Id)
 						actions := srule["action"].([]interface{})
 						log.Println(actions)
 
 						//NOW APPLY ACTIONS ON SYSCALLS by separating the filters i.e exit from action i.e. always
 						action := 0
 						filter := 0
+						//This part supposes that actions and filters are written as always,exit or never,exit not viceversa
 						if actions[0] == "never" {
 							action = AUDIT_NEVER
 						} else if actions[0] == "possible" {
@@ -856,11 +898,12 @@ func SetRules(s *NetlinkSocket) error {
 							action = AUDIT_ALWAYS
 
 						}
-						log.Println(action)
+						// log.Println(action)
 						if actions[1] == "task" {
 							filter = AUDIT_FILTER_TASK
 						} else if actions[1] == "entry" {
-							filter = AUDIT_FILTER_ENTRY
+							log.Println("Support for Entry Filter is Deprecated!! Switching back to Exit filter")
+							filter = AUDIT_FILTER_EXIT
 						} else if actions[1] == "exit" {
 							filter = AUDIT_FILTER_EXIT
 						} else if actions[1] == "user" {
@@ -869,8 +912,7 @@ func SetRules(s *NetlinkSocket) error {
 							filter = AUDIT_FILTER_EXCLUDE
 							//exclude = 1;
 						}
-						log.Println(filter)
-
+						// log.Println(filter)
 						for _, field := range srule["fields"].([]interface{}) {
 							fieldval := field.(map[string]interface{})["value"]
 							op := field.(map[string]interface{})["op"]
@@ -887,7 +929,6 @@ func SetRules(s *NetlinkSocket) error {
 								opval = AUDIT_BIT_TEST
 							} else if op == "eq" {
 								opval = AUDIT_EQUAL
-								log.Print("Equal!!\n")
 							} else if op == "gt" {
 								opval = AUDIT_GREATER_THAN
 							} else if op == "lt" {
@@ -895,18 +936,19 @@ func SetRules(s *NetlinkSocket) error {
 							} else if op == "and" {
 								opval = AUDIT_BIT_MASK
 							}
-							log.Print(opval)
+							// log.Print(opval)
 							//Pass filter to this function
-							var dd AuditRuleData
-							AuditRuleFieldPairData(&dd, fieldval, opval, fieldname.(string), fieldmap, filter&AUDIT_BIT_MASK)
+							AuditRuleFieldPairData(&dd, fieldval, opval, fieldname.(string), fieldmap, filter) // &AUDIT_BIT_MASK
 							//SEND flags in above function as " filter & AUDIT_BIT_MASK
 						}
-						foo.Fields[foo.Field_count] = AUDIT_ARCH
-						foo.Fieldflags[foo.Field_count] = AUDIT_EQUAL
-						foo.Values[foo.Field_count] = AUDIT_ARCH_X86_64
-						foo.Field_count++
+						// foo.Fields[foo.Field_count] = AUDIT_ARCH
+						// foo.Fieldflags[foo.Field_count] = AUDIT_EQUAL
+						// foo.Values[foo.Field_count] = AUDIT_ARCH_X86_64
+						// foo.Field_count++
 
-						AuditAddRuleData(s, &foo, AUDIT_FILTER_EXIT, AUDIT_ALWAYS)
+						// AuditAddRuleData(s, &foo, AUDIT_FILTER_EXIT, AUDIT_ALWAYS)
+						AuditAddRuleData(s, &dd, filter, action)
+
 					}
 				}
 			}
@@ -915,15 +957,53 @@ func SetRules(s *NetlinkSocket) error {
 	return nil
 }
 
+func AuditNameToFtype(name string, value *int) error {
+	// var res int
+	// if FtypeS2i(name, res) != 0{
+	// 	return res
+	// }
+	// return 0
+
+	content, err := ioutil.ReadFile("netlinkAudit/ftypetab.json")
+
+	if err != nil {
+		log.Print("Error:", err)
+		return err
+	}
+
+	var filemap interface{}
+	err = json.Unmarshal(content, &filemap)
+
+	if err != nil {
+		log.Print("Error:", err)
+		return err
+	}
+
+	m := filemap.(map[string]interface{})
+
+	for k, v := range m {
+		if k == name {
+			*value = int(v.(float64))
+			return nil
+		}
+	}
+
+	return syscall.EINVAL //SOME ERROR
+}
+
 /*
-func S2i(strings string, s_table uint, i_table int, n int, s []string, value int) int{
+
+func S2i(strings []string, s_table []uint, i_table []int, n int //LENGTH if table// , s string, value int) int{
 	var left, right, mid, r int
+	//APPLIED BINARY SEARCH
 	left = 0
-	right = n - 1
+	right = n - 1 //can be simply len(s) - 1
 	for left <= right { // invariant: left <= x <= right
 		mid = (left + right) / 2
 		// FIXME? avoid recomparing a common prefix
-		r = (s == strings + s_table[mid])
+		r = (s == strings + s_table[mid]) //if strings[mid] == s
+
+
 		if r == 0 {
 			value = i_table[mid]
 			return 1
@@ -937,15 +1017,6 @@ func S2i(strings string, s_table uint, i_table int, n int, s []string, value int
 	return 0
 }
 
-
-func AuditNameToFtype(name string) int{
-	var res int
-	if FtypeS2i(name, res) != 0{
-		return res
-	}
-	return 0
-}
-
 func FtypeS2i( s string, value int) int{
 	var len, i int
 	i = 0
@@ -955,6 +1026,7 @@ func FtypeS2i( s string, value int) int{
 	for i < len {
 		c = s[i]
 		boolean := GtIsupper(c)
+		//Convert to lowerCase
 		if boolean{
 			copy[i] = c - 'A' + 'a'
 		}else {
@@ -963,7 +1035,8 @@ func FtypeS2i( s string, value int) int{
 		i = i+1
 	}
 	copy[i] = 0
-	return S2i(ftype_strings, ftype_s2i_s, ftype_s2i_i, 7, copy, value)
+	//NULL APPEND string
+	return S2i(FTypeStrings, FtypeS2iS, FtypeS2iI, 7, copy, value)
 }
 */
 /*
@@ -1092,7 +1165,7 @@ func AuditDetermineMachine(arch *string){
 func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uint32, fieldname string, fieldmap Field, flags int) error {
 
 	if rule.Field_count >= (AUDIT_MAX_FIELDS - 1) {
-		log.Println(rule.Field_count)
+		log.Println("Max Fields Exceeded !!")
 		//return err
 	}
 	var _audit_permadded bool
@@ -1102,7 +1175,7 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 	var fieldid uint32
 	for f := range fieldmap.Fieldmap {
 		if fieldmap.Fieldmap[f].Name == fieldname {
-			log.Println("Found :", fieldname)
+			log.Println("Found :", fieldmap.Fieldmap[f])
 			fieldid = (uint32)(fieldmap.Fieldmap[f].Fieldid)
 		}
 	}
@@ -1115,6 +1188,7 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 	//ALSO : Save flags in a variable i.e always,exit SEE static int lookup_filter(const char *str, int *filter)
 	//and static int lookup_action(const char *str, int *act) in auditctl.c
 	//filters are like entry,exit,task, and action in always or never
+	log.Println("Going for", fieldname)
 	switch fieldid {
 	case AUDIT_UID, AUDIT_EUID, AUDIT_SUID, AUDIT_FSUID, AUDIT_LOGINUID, AUDIT_OBJ_UID, AUDIT_OBJ_GID:
 		if val, isInt := fieldval.(float64); isInt {
@@ -1135,31 +1209,20 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 			} else {
 				rule.Values[rule.Field_count] = (uint32)(val)
 			}
-			log.Println("Yeah Done")
 		} else if val, isString := fieldval.(string); isString {
 			if fieldval.(string) == "unset" {
 				rule.Values[rule.Field_count] = 4294967295
 			} else {
 				log.Println("No support for string values yet !", val)
+
+				//Insert audit_name_to_uid(string,int * val)
+
 				//raise error
 			}
 		} else {
 			log.Println("Error Setting Value:", fieldval)
 			//raise error
 		}
-		//vlen := len(fieldval)
-		// vtype := reflect.TypeOf(fieldval)
-		// if vtype.Kind() == reflect.Int {
-		// 	rule.Values[rule.Field_count] = (uint32)(fieldval.(int))
-		// } else if vtype.Kind() == reflect.String {
-		// 	if fieldval.(string) == "unset" {
-		// 		rule.Values[rule.Field_count] = 4294967295
-		// 	} else {
-		// 		log.Println("No support for string values yet !")
-		// 	}
-		// } else {
-		// 	log.Println("Error Setting Value:", fieldval, vtype.Kind())
-		// }
 
 	case AUDIT_GID, AUDIT_EGID, AUDIT_SGID, AUDIT_FSGID:
 		//IF DIGITS THEN
@@ -1168,12 +1231,14 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 			log.Println("Yeah Done")
 		} else if val, isString := fieldval.(string); isString {
 			log.Println("No support for string values yet !", val)
+
+			//audit_name_to_gid(string, sint*val)
+
 			//raise error
 		} else {
 			log.Println("Error Setting Value:", fieldval)
 			//raise error
 		}
-	//IF NOT DIGITS THEN DO WE NEED audit_name_to_uid for audit-go ?
 
 	case AUDIT_EXIT:
 
@@ -1206,7 +1271,7 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 			//raise error
 		}
 
-		//error handling part need to be done
+		//String handling part need to be done
 		//else {
 		//	rule->values[rule->field_count] = //SEE HERE
 		//			audit_name_to_errno(v);
@@ -1252,42 +1317,33 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 		//IF And only if a syscall is added or a permisission is added then this field should be set
 		//TODO : Get our own to determine the above conditions
 		//MORE Debugging Required
-		// var sizePurpose AuditRuleData
 		if fieldid == AUDIT_FILTERKEY && !(_audit_syscalladded || _audit_permadded) {
-			log.Println("Error")
+			log.Println("Error!! Syscall should be added")
 			//raise error
 		}
 		if val, isString := fieldval.(string); isString {
-			vlen := len(val)
+			valbyte := []byte(val)
+			vlen := len(valbyte)
 			if fieldid == AUDIT_FILTERKEY && vlen > AUDIT_MAX_KEY_LEN {
 				log.Println("Error! Length of FilterValue is > AUDIT_MAX_KEY_LEN")
 				//raise error
 			} else if vlen > PATH_MAX {
-				log.Println("Error 11")
+				log.Println("Error! Length of key is too large !!")
 				//raise error
 			}
-			// rule.Values[rule.Field_count] = (uint32)(vlen)
-			// offset := rule.Buflen
-			// rule.Buflen = rule.Buflen + (uint32)(vlen)
-			// err := (uint32)(unsafe.Sizeof(rule)) + rule.Buflen
-			// if err == 0 {
-			// 	log.Println("Cannot append the rule Buf")
-			// } else {
-			// 	rule.Buf[offset] = val
-			// 	//append(rule.Buf[offset],val)
-			// }
-			//*RULEP IS THE RULEDATA STRUCT POINTER
-			//*rulep = realloc(rule, unsafe.SizeOf(rule) + rule.buflen);
-			//unsafe.Sizeof(sizePurpose))+int(rule.Buflen)
-			// v := &rule.Buf[offset]
-			//strncpy(&rule.buf[offset], v, vlen);
-
+			rule.Values[rule.Field_count] = (uint32)(vlen)
+			rule.Buflen = rule.Buflen + (uint32)(vlen)
+			// log.Println(unsafe.Sizeof(*rule), vlen)
+			//Now append the key value with the rule buffer space
+			//May need to reallocate memory to rule.Buf i.e. the 0 size byte array, append will take care of that
+			rule.Buf = append(rule.Buf, valbyte[:]...)
+			// log.Println(int(unsafe.Sizeof(*rule)), *rule)
 		}
+
 	case AUDIT_ARCH:
 		//AUDIT_ARCH_X86_64 is made specifically for Mozilla Heka purpose, please make changes as per required
 		if _, isInt := fieldval.(float64); isInt {
 			rule.Values[rule.Field_count] = AUDIT_ARCH_X86_64
-			log.Println("Yeah Done")
 		} else if val, isString := fieldval.(string); isString {
 			log.Println("No support for string values yet !", val)
 			//raise error
@@ -1334,6 +1390,27 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 
 			}
 		}
+	case AUDIT_FILETYPE:
+		if val, isString := fieldval.(string); isString {
+			if !(flags == AUDIT_FILTER_EXIT) && flags == AUDIT_FILTER_ENTRY {
+				log.Println("Error! Flags can only be EXIT in case of AUDIT_FILETYPE")
+				//raise some error
+			}
+			var fileval int
+			err := AuditNameToFtype(val, &fileval)
+			if err != nil {
+				log.Println("Filetype Not Found !!")
+				//raise error
+			}
+			rule.Values[rule.Field_count] = uint32(fileval)
+			if (int)(rule.Values[rule.Field_count]) < 0 {
+				fmt.Println("Error in AUDIT_FILETYPE")
+				//Raise some error
+			}
+		} else {
+			log.Println("Only strings as file types Supported!!")
+			//raise error
+		}
 
 	case AUDIT_ARG0, AUDIT_ARG1, AUDIT_ARG2, AUDIT_ARG3:
 		if val, isInt := fieldval.(float64); isInt {
@@ -1352,7 +1429,6 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 			} else {
 				rule.Values[rule.Field_count] = (uint32)(val)
 			}
-			log.Println("Yeah Done")
 		} else if val, isString := fieldval.(string); isString {
 			log.Println("No support for string values yet !", val)
 			////raise error
@@ -1391,24 +1467,7 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 			log.Println("Error Setting Value:", fieldval)
 			//raise error
 		}
-
 	}
 	rule.Field_count++
 	return nil
 }
-
-/*
-		case AUDIT_FILETYPE:
-
-			if !(flags == AUDIT_FILTER_EXIT) && flags == AUDIT_FILTER_ENTRY {
-				log.Println("Error in AUDIT_FILETYPE")
-			}
-			rule.Values[rule.Field_count] = AuditNameToFtype(fieldval)
-			if (int)(rule.Values[rule.Field_count]) < 0 {
-				fmt.Println("Error in AUDIT_FILETYPE")
-			}
-			break
-
-}
-
-*/
