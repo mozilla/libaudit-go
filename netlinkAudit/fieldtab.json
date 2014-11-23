@@ -49,7 +49,7 @@
 		},
 		{
 			"name": "arch",
-			"fields"  : 11
+			"fieldid"  : 11
 		},
 		{
 			"name": "msgtype",
