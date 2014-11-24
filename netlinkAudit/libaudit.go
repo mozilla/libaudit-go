@@ -615,6 +615,7 @@ func Getreply(s *NetlinkSocket, done <-chan bool, msgchan chan string, errchan c
 		}
 		for _, m := range msgs {
 			//Decide on various message Types
+			//Add more message Types
 			if m.Header.Type == syscall.NLMSG_DONE {
 				log.Println("Done")
 			} else if m.Header.Type == syscall.NLMSG_ERROR {
@@ -630,16 +631,15 @@ func Getreply(s *NetlinkSocket, done <-chan bool, msgchan chan string, errchan c
 			} else if m.Header.Type == AUDIT_FIRST_USER_MSG {
 				log.Println("AUDIT_FIRST_USER_MSG")
 			} else if m.Header.Type == AUDIT_SYSCALL {
-				msgchan <- string(m.Data[:])
+				msgchan <- ("type=SYSCALL " + "msg=" + string(m.Data[:]))
 			} else if m.Header.Type == AUDIT_CWD {
-				msgchan <- string(m.Data[:])
+				msgchan <- ("type=CWD " + "msg=" + string(m.Data[:]))
 			} else if m.Header.Type == AUDIT_PATH {
-				msgchan <- string(m.Data[:])
+				msgchan <- ("type=PATH " + "msg=" + string(m.Data[:]))
 			} else if m.Header.Type == AUDIT_EOE {
-				//			msgchan <- string(m.Data[:])
-				log.Println("Event Ends ", string(m.Data[:]))
+				// log.Println("Event Ends ", string(m.Data[:]))
 			} else if m.Header.Type == AUDIT_CONFIG_CHANGE {
-				msgchan <- string(m.Data[:])
+				msgchan <- ("type=CONFIG_CHANGE " + "msg=" + string(m.Data[:]))
 			} else {
 				log.Println("Unknown: ", m.Header.Type)
 			}
@@ -703,7 +703,7 @@ func AuditDeleteRuleData(s *NetlinkSocket, rule *AuditRuleData, flags uint32, ac
 	var sizePurpose AuditRuleData
 	sizePurpose.Buf = make([]byte, 0)
 	if flags == AUDIT_FILTER_ENTRY {
-		log.Println("Error in delete")
+		log.Println("Entry Filters Deprecated!!")
 		return nil
 	}
 	rule.Flags = flags
@@ -877,8 +877,6 @@ func SetRules(s *NetlinkSocket) error {
 					if conf.Xmap[l].Name == srule["name"] {
 						// set rules
 						log.Println("setting syscall rule", conf.Xmap[l].Name)
-						// var foo AuditRuleData
-						// foo.Buf = make([]byte, 0)
 						var dd AuditRuleData
 						dd.Buf = make([]byte, 0)
 
@@ -896,9 +894,10 @@ func SetRules(s *NetlinkSocket) error {
 							action = AUDIT_POSSIBLE
 						} else if actions[0] == "always" {
 							action = AUDIT_ALWAYS
-
+						} else {
+							action = -1
 						}
-						// log.Println(action)
+
 						if actions[1] == "task" {
 							filter = AUDIT_FILTER_TASK
 						} else if actions[1] == "entry" {
@@ -911,8 +910,10 @@ func SetRules(s *NetlinkSocket) error {
 						} else if actions[1] == "exclude" {
 							filter = AUDIT_FILTER_EXCLUDE
 							//exclude = 1;
+						} else {
+							filter = AUDIT_FILTER_UNSET
 						}
-						// log.Println(filter)
+
 						for _, field := range srule["fields"].([]interface{}) {
 							fieldval := field.(map[string]interface{})["value"]
 							op := field.(map[string]interface{})["op"]
@@ -936,10 +937,8 @@ func SetRules(s *NetlinkSocket) error {
 							} else if op == "and" {
 								opval = AUDIT_BIT_MASK
 							}
-							// log.Print(opval)
 							//Pass filter to this function
 							AuditRuleFieldPairData(&dd, fieldval, opval, fieldname.(string), fieldmap, filter) // &AUDIT_BIT_MASK
-							//SEND flags in above function as " filter & AUDIT_BIT_MASK
 						}
 						// foo.Fields[foo.Field_count] = AUDIT_ARCH
 						// foo.Fieldflags[foo.Field_count] = AUDIT_EQUAL
@@ -947,7 +946,12 @@ func SetRules(s *NetlinkSocket) error {
 						// foo.Field_count++
 
 						// AuditAddRuleData(s, &foo, AUDIT_FILTER_EXIT, AUDIT_ALWAYS)
-						AuditAddRuleData(s, &dd, filter, action)
+						if filter != AUDIT_FILTER_UNSET {
+							AuditAddRuleData(s, &dd, filter, action)
+						} else {
+							log.Println("Filter Not Set!!")
+							//raise error
+						}
 
 					}
 				}
