@@ -8,60 +8,17 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	// "reflect"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"syscall"
 	"unsafe"
-	//"regexp"
-	// "runtime"
 )
 
 var ParsedResult AuditStatus
 var nextSeqNr uint32
 var rulesRetrieved AuditRuleData
-var MachineStrings = []string{"armeb", "armv5tejl", "armv7l", "i386", "i486", "i586", "i686", "ia64", "ppc", "ppc64", "s390", "s390x", "x86_64"}
 
-var MachineS2iS = []int{0, 6, 16, 23, 28, 33, 38, 43, 48, 52, 58, 63, 69}
-var MachineS2iI = []int{8, 8, 8, 0, 0, 0, 0, 2, 4, 3, 6, 5, 1}
-
-var ErrStrings = []string{"E2BIG", "EACCES", "EADDRINUSE", "EADDRNOTAVAIL", "EADV", "EAFNOSUPPORT", "EAGAIN", "EALREADY", "EBADE", "EBADF",
-	"EBADFD", "EBADMSG", "EBADR", "EBADRQC", "EBADSLT", "EBFONT", "EBUSY", "ECANCELED", "ECHILD", "ECHRNG",
-	"ECOMM", "ECONNABORTED", "ECONNREFUSED", "ECONNRESET", "EDEADLK", "EDEADLOCK", "EDESTADDRREQ", "EDOM", "EDOTDOT", "EDQUOT",
-	"EEXIST", "EFAULT", "EFBIG", "EHOSTDOWN", "EHOSTUNREACH", "EIDRM", "EILSEQ", "EINPROGRESS", "EINTR", "EINVAL",
-	"EIO", "EISCONN", "EISDIR", "EISNAM", "EKEYEXPIRED", "EKEYREJECTED", "EKEYREVOKED", "EL2HLT", "EL2NSYNC", "EL3HLT",
-	"EL3RST", "ELIBACC", "ELIBBAD", "ELIBEXEC", "ELIBMAX", "ELIBSCN", "ELNRNG", "ELOOP", "EMEDIUMTYPE", "EMFILE",
-	"EMLINK", "EMSGSIZE", "EMULTIHOP", "ENAMETOOLONG", "ENAVAIL", "ENETDOWN", "ENETRESET", "ENETUNREACH", "ENFILE", "ENOANO",
-	"ENOBUFS", "ENOCSI", "ENODATA", "ENODEV", "ENOENT", "ENOEXEC", "ENOKEY", "ENOLCK", "ENOLINK", "ENOMEDIUM",
-	"ENOMEM", "ENOMSG", "ENONET", "ENOPKG", "ENOPROTOOPT", "ENOSPC", "ENOSR", "ENOSTR", "ENOSYS", "ENOTBLK",
-	"ENOTCONN", "ENOTDIR", "ENOTEMPTY", "ENOTNAM", "ENOTRECOVERABLE", "ENOTSOCK", "ENOTTY", "ENOTUNIQ", "ENXIO", "EOPNOTSUPP",
-	"EOVERFLOW", "EOWNERDEAD", "EPERM", "EPFNOSUPPORT", "EPIPE", "EPROTO", "EPROTONOSUPPORT", "EPROTOTYPE", "ERANGE", "EREMCHG",
-	"EREMOTE", "EREMOTEIO", "ERESTART", "EROFS", "ESHUTDOWN", "ESOCKTNOSUPPORT", "ESPIPE", "ESRCH", "ESRMNT", "ESTALE",
-	"ESTRPIPE", "ETIME", "ETIMEDOUT", "ETOOMANYREFS", "ETXTBSY", "EUCLEAN", "EUNATCH", "EUSERS", "EWOULDBLOCK", "EXDEV",
-	"EXFULL"}
-
-var ErrS2iS = []int{0, 6, 13, 24, 38, 43, 56, 63, 72, 78, 84, 91, 99, 105, 113, 121, 128, 134, 144, 151, 158, 164, 177, 190, 201, 209, 219, 232, 237, 245, 252, 259, 266, 272, 282, 295, 301, 308, 320, 326, 333, 337, 345, 352, 359, 371, 384, 396, 403, 412, 419, 426, 434, 442, 451, 459, 467, 474, 480, 492, 499, 506, 515, 525, 538, 546, 555, 565, 577, 584,
-	591, 599, 606, 614, 621, 628, 636, 643, 650, 658, 668, 675, 682, 689, 696, 708, 715, 721, 728, 735, 743, 752, 760, 770, 778, 794, 803, 810, 819, 825, 836, 846, 857, 863, 876, 882, 889, 905, 916, 923,
-	931, 939, 949, 958, 964, 974, 990, 997, 1003, 1010, 1017, 1026, 1032, 1042, 1055, 1063, 1071, 1079, 1086, 1098, 1104}
-
-var ErrS2iI = []int{7, 13, 98, 99, 68, 97, 11, 114, 52, 9, 77, 74, 53, 56, 57, 59, 16, 125, 10, 44, 70, 103, 111, 104, 35, 35, 89, 33, 73, 122, 17, 14, 27, 112, 113, 43, 84, 115, 4, 22,
-	5, 106, 21, 120, 127, 129, 128, 51, 45, 46, 47, 79, 80, 83, 82, 81, 48, 40, 124, 24, 31, 90, 72, 36, 119, 100, 102, 101, 23, 55, 105, 50, 61, 19, 2, 8, 126, 37, 67, 123, 12, 42, 64, 65, 92, 28, 63, 60, 38, 15,
-	107, 20, 39, 118, 131, 88, 25, 76, 6, 95, 75, 130, 1, 96, 32, 71, 93, 91, 34, 78, 66, 121, 85, 30, 108, 94, 29, 3, 69, 116, 86, 62, 110, 109, 26, 117, 49, 87, 11, 18, 54}
-
-/*
-func GtIsupper(x string) bool{
-	var decision bool
-	decision = (x) >= "A" && (x) <= "Z"
-	return decision
-}
-
-
-var FtypeStrings = []string{"block","character","dir","fifo","file","link","socket"}
-var FtypeS2iS = []uint{ 0,6,16,20,25,30,35}
-var FtypeS2iI = []int{ 24576,8192,16384,4096,32768,40960,49152}
-var audit_elf uint = 0
-*/
 type AuditStatus struct {
 	Mask          uint32 /* Bit mask for valid entries */
 	Enabled       uint32 /* 1 = enabled, 0 = disabled */
@@ -155,7 +112,6 @@ func (rule *AuditRuleData) ToWireFormat() []byte {
 	return newbuff
 }
 
-//re := regexp.MustCompile( "[^0-9]" )
 //The recvfrom in go takes only a byte [] to put the data recieved from the kernel that removes the need
 //for having a separate audit_reply Struct for recieving data from kernel.
 func (rr *NetlinkAuditRequest) ToWireFormat() []byte {
@@ -790,6 +746,9 @@ done:
 	return nil
 }
 
+var _audit_permadded bool
+var _audit_syscalladded bool
+
 // function that sets each rule after reading configuration file
 func SetRules(s *NetlinkSocket) error {
 
@@ -880,7 +839,12 @@ func SetRules(s *NetlinkSocket) error {
 						var dd AuditRuleData
 						dd.Buf = make([]byte, 0)
 
-						AuditRuleSyscallData(&dd, conf.Xmap[l].Id)
+						err = AuditRuleSyscallData(&dd, conf.Xmap[l].Id)
+						if err == nil {
+							_audit_syscalladded = true
+						} else {
+							return err
+						}
 						actions := srule["action"].([]interface{})
 						log.Println(actions)
 
@@ -940,12 +904,13 @@ func SetRules(s *NetlinkSocket) error {
 							//Pass filter to this function
 							AuditRuleFieldPairData(&dd, fieldval, opval, fieldname.(string), fieldmap, filter) // &AUDIT_BIT_MASK
 						}
+
 						// foo.Fields[foo.Field_count] = AUDIT_ARCH
 						// foo.Fieldflags[foo.Field_count] = AUDIT_EQUAL
 						// foo.Values[foo.Field_count] = AUDIT_ARCH_X86_64
 						// foo.Field_count++
-
 						// AuditAddRuleData(s, &foo, AUDIT_FILTER_EXIT, AUDIT_ALWAYS)
+
 						if filter != AUDIT_FILTER_UNSET {
 							AuditAddRuleData(s, &dd, filter, action)
 						} else {
@@ -962,11 +927,6 @@ func SetRules(s *NetlinkSocket) error {
 }
 
 func AuditNameToFtype(name string, value *int) error {
-	// var res int
-	// if FtypeS2i(name, res) != 0{
-	// 	return res
-	// }
-	// return 0
 
 	content, err := ioutil.ReadFile("netlinkAudit/ftypetab.json")
 
@@ -995,187 +955,13 @@ func AuditNameToFtype(name string, value *int) error {
 	return syscall.EINVAL //SOME ERROR
 }
 
-/*
-
-func S2i(strings []string, s_table []uint, i_table []int, n int //LENGTH if table// , s string, value int) int{
-	var left, right, mid, r int
-	//APPLIED BINARY SEARCH
-	left = 0
-	right = n - 1 //can be simply len(s) - 1
-	for left <= right { // invariant: left <= x <= right
-		mid = (left + right) / 2
-		// FIXME? avoid recomparing a common prefix
-		r = (s == strings + s_table[mid]) //if strings[mid] == s
-
-
-		if r == 0 {
-			value = i_table[mid]
-			return 1
-		}
-		if r < 0{
-			right = mid - 1
-		}else{
-			left = mid + 1
-		}
-	}
-	return 0
-}
-
-func FtypeS2i( s string, value int) int{
-	var len, i int
-	i = 0
-	len = len(s)
-	var c string
-	var copy [len + 1]string
-	for i < len {
-		c = s[i]
-		boolean := GtIsupper(c)
-		//Convert to lowerCase
-		if boolean{
-			copy[i] = c - 'A' + 'a'
-		}else {
-			copy[i] = c
-		}
-		i = i+1
-	}
-	copy[i] = 0
-	//NULL APPEND string
-	return S2i(FTypeStrings, FtypeS2iS, FtypeS2iI, 7, copy, value)
-}
-*/
-/*
-func MachineS2i( s string, value int) {
-	var len, i int
-	len = len(s)
- char copy[len + 1]
-	for i = 0; i < len; i++ {
-		var c = s[i]
-		if GT_ISUPPER(c){
-		copy[i] = c - 'A' + 'a'
-		}
-		else{
-			copy[i] = c
-		}
-		//copy[i] = GT_ISUPPER(c) ? : c;
-	}
-	//copy[i] = 0;
-	return s2i__(machine_strings, machine_s2i_s, machine_s2i_i, 13, copy, value);
-
-}
-
-func AuditNameToMachine( machine string) int{
-	var res int
-	if MachineS2i(machine, res) != 0)
-		return res;
-	fmt.Println("Error in AuditNameToMachine")
-	return 0
-}
-
-func AuditDetectMachine() {
-	        struct uts UtsName;
-	        if (len(uts) > 0)
-	//              strcpy(uts.machine, "x86_64");
-	                return AuditNameToMachine(uts.Machine);
-	        fmt.Println("Error with machine setting");
-}
-
-func AuditDetermineMachine(arch *string){
-// What do we want? i686, x86_64, ia64 or b64, b32
-	var machine int
-	var bits uint
-	bits = 0
-
-	if arch == "b64" {
-		bits = __AUDIT_ARCH_64BIT;
-		machine = AuditDetectMachine();
-	} else if arch == "b32" {
-		bits = ^__AUDIT_ARCH_64BIT;
-		machine = AuditDetectMachine();
-	} else {
-		machine = audit_name_to_machine(arch);
-		if (machine < 0) {
-			// See if its numeric
-			unsigned int ival;
-			errno = 0;
-			ival = strtoul(arch, NULL, 16);
-			if (errno)
-				return -4;
-			machine = audit_elf_to_machine(ival);
-		}
-	}
-
-	if (machine < 0)
-		return -4;
-
-	// Here's where we fixup the machine. For example, they give
-	// x86_64 & want 32 bits we translate that to i686.
-	if (bits == ~__AUDIT_ARCH_64BIT && machine == MACH_86_64)
-		machine = MACH_X86;
-	else if (bits == ~__AUDIT_ARCH_64BIT && machine == MACH_PPC64)
-		machine = MACH_PPC;
-	else if (bits == ~__AUDIT_ARCH_64BIT && machine == MACH_S390X)
-		machine = MACH_S390;
-	else if (bits == ~__AUDIT_ARCH_64BIT && machine == MACH_AARCH64)
-		machine = MACH_ARM;
-
-	 //Check for errors - return -6
-	 //We don't allow 32 bit machines to specify 64 bit.
-	switch (machine)
-	{
-		case MACH_X86:
-			if (bits == __AUDIT_ARCH_64BIT)
-				return -6;
-			break;
-		case MACH_IA64:
-			if (bits == ~__AUDIT_ARCH_64BIT)
-				return -6;
-			break;
-		case MACH_PPC:
-			if (bits == __AUDIT_ARCH_64BIT)
-				return -6;
-			break;
-		case MACH_S390:
-			if (bits == __AUDIT_ARCH_64BIT)
-				return -6;
-			break;
-#ifdef WITH_ARM
-		case MACH_ARM:
-			if (bits == __AUDIT_ARCH_64BIT)
-				return -6;
-			break;
-#endif
-#ifdef WITH_AARCH64
-		case MACH_AARCH64:
-			if (bits != __AUDIT_ARCH_64BIT)
-				return -6;
-			break;
-#endif
-		case MACH_PPC64LE:
-			if (bits != __AUDIT_ARCH_64BIT)
-				return -6;
-			break;
-
-		case MACH_86_64:
-		case MACH_PPC64:
-		case MACH_S390X:
-			break;
-		default:
-			return -6;
-	}
-	return machine;
-}
-*/
-
 func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uint32, fieldname string, fieldmap Field, flags int) error {
 
 	if rule.Field_count >= (AUDIT_MAX_FIELDS - 1) {
 		log.Println("Max Fields Exceeded !!")
 		//return err
 	}
-	var _audit_permadded bool
-	var _audit_syscalladded bool
 
-	// check against  the field["actions"] here and set fieldid
 	var fieldid uint32
 	for f := range fieldmap.Fieldmap {
 		if fieldmap.Fieldmap[f].Name == fieldname {
@@ -1184,14 +970,9 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 		}
 	}
 
-	//set field and op
 	rule.Fields[rule.Field_count] = fieldid
 	rule.Fieldflags[rule.Field_count] = opval
 
-	//Now loop over the field value and set foo.Values[foo.Field_count] accordingly
-	//ALSO : Save flags in a variable i.e always,exit SEE static int lookup_filter(const char *str, int *filter)
-	//and static int lookup_action(const char *str, int *act) in auditctl.c
-	//filters are like entry,exit,task, and action in always or never
 	log.Println("Going for", fieldname)
 	switch fieldid {
 	case AUDIT_UID, AUDIT_EUID, AUDIT_SUID, AUDIT_FSUID, AUDIT_LOGINUID, AUDIT_OBJ_UID, AUDIT_OBJ_GID:
@@ -1304,7 +1085,7 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 		}
 
 	//Strings
-	case AUDIT_OBJ_USER, AUDIT_OBJ_ROLE, AUDIT_OBJ_TYPE, AUDIT_OBJ_LEV_LOW, AUDIT_OBJ_LEV_HIGH, AUDIT_WATCH, AUDIT_DIR: //DETERMINE WHY they are doing this
+	case AUDIT_OBJ_USER, AUDIT_OBJ_ROLE, AUDIT_OBJ_TYPE, AUDIT_OBJ_LEV_LOW, AUDIT_OBJ_LEV_HIGH, AUDIT_WATCH, AUDIT_DIR:
 		/* Watch & object filtering is invalid on anything
 		 * but exit */
 
@@ -1345,15 +1126,20 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 		}
 
 	case AUDIT_ARCH:
-		//AUDIT_ARCH_X86_64 is made specifically for Mozilla Heka purpose, please make changes as per required
-		if _, isInt := fieldval.(float64); isInt {
-			rule.Values[rule.Field_count] = AUDIT_ARCH_X86_64
-		} else if val, isString := fieldval.(string); isString {
-			log.Println("No support for string values yet !", val)
+		if _audit_syscalladded == false {
+			log.Println("Syscall should be added!!")
 			//raise error
 		} else {
-			log.Println("Error Setting Value:", fieldval)
-			//raise error
+			//AUDIT_ARCH_X86_64 is made specifically for Mozilla Heka purpose, please make changes as per required
+			if _, isInt := fieldval.(float64); isInt {
+				rule.Values[rule.Field_count] = AUDIT_ARCH_X86_64
+			} else if val, isString := fieldval.(string); isString {
+				log.Println("No support for string values yet !", val)
+				//raise error
+			} else {
+				log.Println("Error Setting Value:", fieldval)
+				//raise error
+			}
 		}
 
 	case AUDIT_PERM:
@@ -1391,7 +1177,7 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 					}
 				}
 				rule.Values[rule.Field_count] = permval
-
+				_audit_permadded = true
 			}
 		}
 	case AUDIT_FILETYPE:
@@ -1475,3 +1261,26 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 	rule.Field_count++
 	return nil
 }
+
+/*
+var ErrStrings = []string{"E2BIG", "EACCES", "EADDRINUSE", "EADDRNOTAVAIL", "EADV", "EAFNOSUPPORT", "EAGAIN", "EALREADY", "EBADE", "EBADF",
+	"EBADFD", "EBADMSG", "EBADR", "EBADRQC", "EBADSLT", "EBFONT", "EBUSY", "ECANCELED", "ECHILD", "ECHRNG",
+	"ECOMM", "ECONNABORTED", "ECONNREFUSED", "ECONNRESET", "EDEADLK", "EDEADLOCK", "EDESTADDRREQ", "EDOM", "EDOTDOT", "EDQUOT",
+	"EEXIST", "EFAULT", "EFBIG", "EHOSTDOWN", "EHOSTUNREACH", "EIDRM", "EILSEQ", "EINPROGRESS", "EINTR", "EINVAL",
+	"EIO", "EISCONN", "EISDIR", "EISNAM", "EKEYEXPIRED", "EKEYREJECTED", "EKEYREVOKED", "EL2HLT", "EL2NSYNC", "EL3HLT",
+	"EL3RST", "ELIBACC", "ELIBBAD", "ELIBEXEC", "ELIBMAX", "ELIBSCN", "ELNRNG", "ELOOP", "EMEDIUMTYPE", "EMFILE",
+	"EMLINK", "EMSGSIZE", "EMULTIHOP", "ENAMETOOLONG", "ENAVAIL", "ENETDOWN", "ENETRESET", "ENETUNREACH", "ENFILE", "ENOANO",
+	"ENOBUFS", "ENOCSI", "ENODATA", "ENODEV", "ENOENT", "ENOEXEC", "ENOKEY", "ENOLCK", "ENOLINK", "ENOMEDIUM",
+	"ENOMEM", "ENOMSG", "ENONET", "ENOPKG", "ENOPROTOOPT", "ENOSPC", "ENOSR", "ENOSTR", "ENOSYS", "ENOTBLK",
+	"ENOTCONN", "ENOTDIR", "ENOTEMPTY", "ENOTNAM", "ENOTRECOVERABLE", "ENOTSOCK", "ENOTTY", "ENOTUNIQ", "ENXIO", "EOPNOTSUPP",
+	"EOVERFLOW", "EOWNERDEAD", "EPERM", "EPFNOSUPPORT", "EPIPE", "EPROTO", "EPROTONOSUPPORT", "EPROTOTYPE", "ERANGE", "EREMCHG",
+	"EREMOTE", "EREMOTEIO", "ERESTART", "EROFS", "ESHUTDOWN", "ESOCKTNOSUPPORT", "ESPIPE", "ESRCH", "ESRMNT", "ESTALE",
+	"ESTRPIPE", "ETIME", "ETIMEDOUT", "ETOOMANYREFS", "ETXTBSY", "EUCLEAN", "EUNATCH", "EUSERS", "EWOULDBLOCK", "EXDEV",
+	"EXFULL"}
+
+var ErrS2iI = []int{7, 13, 98, 99, 68, 97, 11, 114, 52, 9, 77, 74, 53, 56, 57, 59, 16, 125, 10, 44, 70, 103, 111, 104, 35, 35, 89, 33, 73, 122, 17, 14, 27, 112, 113, 43, 84, 115, 4, 22,
+	5, 106, 21, 120, 127, 129, 128, 51, 45, 46, 47, 79, 80, 83, 82, 81, 48, 40, 124, 24, 31, 90, 72, 36, 119, 100, 102, 101, 23, 55, 105, 50, 61, 19, 2, 8, 126, 37, 67, 123, 12, 42, 64, 65, 92, 28, 63, 60, 38, 15,
+	107, 20, 39, 118, 131, 88, 25, 76, 6, 95, 75, 130, 1, 96, 32, 71, 93, 91, 34, 78, 66, 121, 85, 30, 108, 94, 29, 3, 69, 116, 86, 62, 110, 109, 26, 117, 49, 87, 11, 18, 54}
+
+var audit_elf uint = 0
+*/
