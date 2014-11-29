@@ -30,21 +30,6 @@ type AuditStatus struct {
 	Backlog       uint32 /* messages waiting in queue */
 }
 
-type UtsName struct {
-	/* Name of the implementation of the operating system.  */
-	Sysname [_UTSNAME_LENGTH]string
-
-	/* Name of this node on the network.  */
-	Nodename [_UTSNAME_NODENAME_LENGTH]string
-
-	/* Current release level of this implementation.  */
-	Release [_UTSNAME_LENGTH]string
-	/* Current version level of this release.  */
-	Version [_UTSNAME_LENGTH]string
-
-	/* Name of the hardware type the system is running on.  */
-	Machine [_UTSNAME_LENGTH]string
-}
 type AuditRuleData struct {
 	Flags       uint32 /* AUDIT_PER_{TASK,CALL}, AUDIT_PREPEND */
 	Action      uint32 /* AUDIT_NEVER, AUDIT_POSSIBLE, AUDIT_ALWAYS */
@@ -417,7 +402,55 @@ func AuditWatchRuleData(s *NetlinkSocket, rule *AuditRuleData, path []byte) erro
 	return nil
 }
 */
+func AuditSetRateLimit(s *NetlinkSocket, limit int) error {
+	var foo AuditStatus
+	foo.Mask = AUDIT_STATUS_RATE_LIMIT
+	foo.Rate_limit = (uint32)(limit)
+	buff := new(bytes.Buffer)
+	err := binary.Write(buff, nativeEndian(), foo)
+	if err != nil {
+		log.Println("binary.Write failed:", err)
+		return err
+	}
 
+	wb := newNetlinkAuditRequest(AUDIT_SET, syscall.AF_NETLINK, int(unsafe.Sizeof(foo)))
+	wb.Data = append(wb.Data[:], buff.Bytes()[:]...)
+	if err := s.Send(wb); err != nil {
+		return err
+	}
+
+	err = AuditGetReply(s, syscall.Getpagesize(), 0, wb.Header.Seq)
+	if err != nil {
+		return err
+	}
+	return nil
+
+}
+
+func AuditSetBacklogLimit(s *NetlinkSocket, limit int) error {
+	var foo AuditStatus
+	foo.Mask = AUDIT_STATUS_BACKLOG_LIMIT
+	foo.Backlog_limit = (uint32)(limit)
+	buff := new(bytes.Buffer)
+	err := binary.Write(buff, nativeEndian(), foo)
+	if err != nil {
+		log.Println("binary.Write failed:", err)
+		return err
+	}
+
+	wb := newNetlinkAuditRequest(AUDIT_SET, syscall.AF_NETLINK, int(unsafe.Sizeof(foo)))
+	wb.Data = append(wb.Data[:], buff.Bytes()[:]...)
+	if err := s.Send(wb); err != nil {
+		return err
+	}
+
+	err = AuditGetReply(s, syscall.Getpagesize(), 0, wb.Header.Seq)
+	if err != nil {
+		return err
+	}
+	return nil
+
+}
 func AuditAddRuleData(s *NetlinkSocket, rule *AuditRuleData, flags int, action int) error {
 
 	if flags == AUDIT_FILTER_ENTRY {
@@ -709,7 +742,7 @@ done:
 			switch v := lsa.(type) {
 			case *syscall.SockaddrNetlink:
 				if m.Header.Seq != uint32(wb.Header.Seq) || m.Header.Pid != v.Pid {
-					log.Println("ERROR:", syscall.EINVAL)
+					log.Println("ERROR: MISMATCH")
 					return syscall.EINVAL
 				}
 			}
