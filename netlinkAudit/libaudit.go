@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -296,10 +297,13 @@ done:
 			}
 			switch v := lsa.(type) {
 			case *syscall.SockaddrNetlink:
-
-				if m.Header.Seq != uint32(wb.Header.Seq) || m.Header.Pid != v.Pid {
-					return syscall.EINVAL
+				if m.Header.Seq != uint32(wb.Header.Seq) {
+					return fmt.Errorf("Wrong Seq nr %d, expected %d", m.Header.Seq, wb.Header.Seq)
 				}
+				if m.Header.Pid != v.Pid {
+					return fmt.Errorf("Wrong pid %d, expected %d", m.Header.Pid, v.Pid)
+				}
+
 			default:
 				return syscall.EINVAL
 			}
@@ -314,12 +318,15 @@ done:
 			if m.Header.Type == AUDIT_GET {
 				//Convert the data part written to AuditStatus struct
 				b := m.Data[:]
-				// h := (*AuditStatus)(unsafe.Pointer(&b[0]))
+				// h := (*AuditStatus)(unsafe.Pointer(&b[0])) Unsafe Method avoided
 				buf := bytes.NewBuffer(b)
 				var dumm AuditStatus
 				err = binary.Read(buf, nativeEndian(), &dumm)
+				if err != nil {
+					log.Println("binary.Read failed:", err)
+					return err
+				}
 				ParsedResult = dumm
-				// log.Println(dumm, h)
 				break done
 			}
 		}
@@ -367,8 +374,7 @@ func AuditRuleSyscallData(rule *AuditRuleData, scall int) error {
 	bit := auditBit(scall)
 
 	if word >= AUDIT_BITMASK_SIZE-1 {
-		log.Println("Word Size greater than AUDIT_BITMASK_SIZE")
-		return syscall.EINVAL
+		return fmt.Errorf("Word Size greater than AUDIT_BITMASK_SIZE")
 	}
 	rule.Mask[word] |= bit
 	return nil
@@ -451,11 +457,14 @@ func AuditSetBacklogLimit(s *NetlinkSocket, limit int) error {
 	return nil
 
 }
+
+var errEntryDep = errors.New("Use of entry filter is deprecated")
+
 func AuditAddRuleData(s *NetlinkSocket, rule *AuditRuleData, flags int, action int) error {
 
 	if flags == AUDIT_FILTER_ENTRY {
 		log.Println("Use of entry filter is deprecated")
-		return nil
+		return errEntryDep
 	}
 
 	rule.Flags = uint32(flags)
@@ -480,7 +489,7 @@ func AuditAddRuleData(s *NetlinkSocket, rule *AuditRuleData, flags int, action i
 	}
 
 	if err != nil {
-		log.Println("Error sending add rule data request ()")
+		log.Println("Error sending add rule data request")
 		return err
 	}
 	return nil
@@ -496,6 +505,7 @@ func isDone(msgchan chan string, errchan chan error, done <-chan bool) bool {
 	return d
 }
 
+//For Debugging Purposes
 func GetreplyWithoutSync(s *NetlinkSocket) {
 	f, err := os.OpenFile("log", os.O_CREATE|os.O_RDWR|os.O_APPEND, 0660)
 	if err != nil {
@@ -637,12 +647,14 @@ func Getreply(s *NetlinkSocket, done <-chan bool, msgchan chan string, errchan c
 
 }
 
+/*
 // List all rules
 // TODO: this funcion needs a lot of work to print actual rules
-func ListAllRules(s *NetlinkSocket) {
+func ListAllRules(s *NetlinkSocket) error {
 	wb := newNetlinkAuditRequest(AUDIT_LIST_RULES, syscall.AF_NETLINK, 0)
 	if err := s.Send(wb); err != nil {
 		log.Print("Error:", err)
+		return err
 	}
 
 done:
@@ -650,17 +662,22 @@ done:
 		msgs, err := s.Receive(MAX_AUDIT_MESSAGE_LENGTH, syscall.MSG_DONTWAIT)
 		if err != nil {
 			log.Println("ERROR while receiving rules:", err)
+			return err
 		}
 
 		for _, m := range msgs {
 			lsa, er := syscall.Getsockname(s.fd)
 			if er != nil {
 				log.Println("ERROR:", er)
+				return err
 			}
 			switch v := lsa.(type) {
 			case *syscall.SockaddrNetlink:
-				if m.Header.Seq != uint32(wb.Header.Seq) || m.Header.Pid != v.Pid {
-					log.Println("ERROR:", syscall.EINVAL)
+				if m.Header.Seq != uint32(wb.Header.Seq) {
+					return fmt.Errorf("Wrong Seq nr %d, expected %d", m.Header.Seq, wb.Header.Seq)
+				}
+				if m.Header.Pid != v.Pid {
+					return fmt.Errorf("Wrong pid %d, expected %d", m.Header.Pid, v.Pid)
 				}
 			default:
 				log.Println("ERROR:", syscall.EINVAL)
@@ -680,20 +697,24 @@ done:
 				var rules AuditRuleData
 				rules.Buf = make([]byte, 0)
 				err = binary.Read(buf, nativeEndian(), &rules)
+				if err != nil {
+					log.Println("binary.Read failed:", err)
+					return err
+				}
 				// TODO : save all rules to an array so delete all rules function can use this
 				rulesRetrieved = rules
 			}
 		}
 	}
 }
-
+*/
 //Delete Rule Data Function
 func AuditDeleteRuleData(s *NetlinkSocket, rule *AuditRuleData, flags uint32, action uint32) error {
 	var sizePurpose AuditRuleData
 	sizePurpose.Buf = make([]byte, 0)
 	if flags == AUDIT_FILTER_ENTRY {
 		log.Println("Entry Filters Deprecated!!")
-		return nil
+		return errEntryDep
 	}
 	rule.Flags = flags
 	rule.Action = action
@@ -741,9 +762,11 @@ done:
 			}
 			switch v := lsa.(type) {
 			case *syscall.SockaddrNetlink:
-				if m.Header.Seq != uint32(wb.Header.Seq) || m.Header.Pid != v.Pid {
-					log.Println("ERROR: MISMATCH")
-					return syscall.EINVAL
+				if m.Header.Seq != uint32(wb.Header.Seq) {
+					return fmt.Errorf("Wrong Seq nr %d, expected %d", m.Header.Seq, wb.Header.Seq)
+				}
+				if m.Header.Pid != v.Pid {
+					return fmt.Errorf("Wrong pid %d, expected %d", m.Header.Pid, v.Pid)
 				}
 			}
 
@@ -935,7 +958,10 @@ func SetRules(s *NetlinkSocket) error {
 								opval = AUDIT_BIT_MASK
 							}
 							//Pass filter to this function
-							AuditRuleFieldPairData(&dd, fieldval, opval, fieldname.(string), fieldmap, filter) // &AUDIT_BIT_MASK
+							err = AuditRuleFieldPairData(&dd, fieldval, opval, fieldname.(string), fieldmap, filter) // &AUDIT_BIT_MASK
+							if err != nil {
+								return err
+							}
 						}
 
 						// foo.Fields[foo.Field_count] = AUDIT_ARCH
@@ -947,8 +973,7 @@ func SetRules(s *NetlinkSocket) error {
 						if filter != AUDIT_FILTER_UNSET {
 							AuditAddRuleData(s, &dd, filter, action)
 						} else {
-							log.Println("Filter Not Set!!")
-							//raise error
+							return fmt.Errorf("Filters Not Set")
 						}
 
 					}
@@ -985,14 +1010,23 @@ func AuditNameToFtype(name string, value *int) error {
 		}
 	}
 
-	return syscall.EINVAL //SOME ERROR
+	return fmt.Errorf("Filetype not found") //SOME ERROR
 }
+
+var (
+	errMaxField = errors.New("MAX Fields for AuditRuleData exceeded")
+	errNoStr    = errors.New("No support for string values")
+	errUnset    = errors.New("Unable to set value")
+	errNoExit   = errors.New("Filter can only be used with AUDIT_EXIT")
+	errNoSys    = errors.New("No syscall added")
+	errMaxLen   = errors.New("MAX length Exceeded")
+)
 
 func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uint32, fieldname string, fieldmap Field, flags int) error {
 
 	if rule.Field_count >= (AUDIT_MAX_FIELDS - 1) {
 		log.Println("Max Fields Exceeded !!")
-		//return err
+		return errMaxField
 	}
 
 	var fieldid uint32
@@ -1019,7 +1053,7 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 
 				if err != nil {
 					log.Println("Conversion not possible")
-					//return and raise error
+					return err
 				} else {
 					rule.Values[rule.Field_count] = (uint32)(a)
 				}
@@ -1032,36 +1066,32 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 				rule.Values[rule.Field_count] = 4294967295
 			} else {
 				log.Println("No support for string values yet !", val)
-
+				return errNoStr
 				//Insert audit_name_to_uid(string,int * val)
-
-				//raise error
 			}
 		} else {
 			log.Println("Error Setting Value:", fieldval)
-			//raise error
+			return errUnset
 		}
 
 	case AUDIT_GID, AUDIT_EGID, AUDIT_SGID, AUDIT_FSGID:
 		//IF DIGITS THEN
 		if val, isInt := fieldval.(float64); isInt {
 			rule.Values[rule.Field_count] = (uint32)(val)
-			log.Println("Yeah Done")
 		} else if val, isString := fieldval.(string); isString {
 			log.Println("No support for string values yet !", val)
-
+			return errNoStr
 			//audit_name_to_gid(string, sint*val)
-
-			//raise error
 		} else {
 			log.Println("Error Setting Value:", fieldval)
+			return errUnset
 			//raise error
 		}
 
 	case AUDIT_EXIT:
 
 		if flags != AUDIT_FILTER_EXIT {
-			log.Println("AUDIT_EXIT can only be used with filter AUDIT_FILTER_EXIT")
+			return errNoExit
 		}
 		if val, isInt := fieldval.(float64); isInt {
 			if val < 0 {
@@ -1071,8 +1101,7 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 				a, err := strconv.Atoi(fieldvalUid)
 
 				if err != nil {
-					log.Println("Conversion not possible")
-					//return and raise error
+					return err
 				} else {
 					rule.Values[rule.Field_count] = (uint32)(a)
 				}
@@ -1080,13 +1109,13 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 			} else {
 				rule.Values[rule.Field_count] = (uint32)(val)
 			}
-			log.Println("Yeah Done")
+
 		} else if val, isString := fieldval.(string); isString {
 			log.Println("No support for string values yet !", val)
-			//raise error
+			return errNoStr
 		} else {
 			log.Println("Error Setting Value:", fieldval)
-			//raise error
+			return errUnset
 		}
 
 		//String handling part need to be done
@@ -1101,19 +1130,16 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 	case AUDIT_MSGTYPE:
 
 		if flags != AUDIT_FILTER_EXCLUDE && flags != AUDIT_FILTER_USER {
-			log.Println("Something went wrong")
-			//raise error
-
+			return fmt.Errorf("AUDIT_MSGTYPE can only be used with AUDIT_FILTER_EXCLUDE")
 		}
 		if val, isInt := fieldval.(float64); isInt {
 			rule.Values[rule.Field_count] = (uint32)(val)
-			log.Println("Yeah Done")
 		} else if val, isString := fieldval.(string); isString {
 			log.Println("No support for string values yet !", val)
-			//raise error
+			return errNoStr
 		} else {
 			log.Println("Error Setting Value:", fieldval)
-			//raise error
+			return errUnset
 
 		}
 
@@ -1123,8 +1149,7 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 		 * but exit */
 
 		if flags != AUDIT_FILTER_EXIT {
-			log.Println("Error! Filter can only be AUDIT_FILTER_EXIT")
-			//raise error
+			return errNoExit
 		}
 		if fieldid == AUDIT_WATCH || fieldid == AUDIT_DIR {
 			_audit_permadded = true
@@ -1136,18 +1161,15 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 		//TODO : Get our own to determine the above conditions
 		//MORE Debugging Required
 		if fieldid == AUDIT_FILTERKEY && !(_audit_syscalladded || _audit_permadded) {
-			log.Println("Error!! Syscall should be added")
-			//raise error
+			return errNoSys
 		}
 		if val, isString := fieldval.(string); isString {
 			valbyte := []byte(val)
 			vlen := len(valbyte)
 			if fieldid == AUDIT_FILTERKEY && vlen > AUDIT_MAX_KEY_LEN {
-				log.Println("Error! Length of FilterValue is > AUDIT_MAX_KEY_LEN")
-				//raise error
+				return errMaxLen
 			} else if vlen > PATH_MAX {
-				log.Println("Error! Length of key is too large !!")
-				//raise error
+				return errMaxLen
 			}
 			rule.Values[rule.Field_count] = (uint32)(vlen)
 			rule.Buflen = rule.Buflen + (uint32)(vlen)
@@ -1160,29 +1182,24 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 
 	case AUDIT_ARCH:
 		if _audit_syscalladded == false {
-			log.Println("Syscall should be added!!")
-			//raise error
+			return errNoSys
 		} else {
 			//AUDIT_ARCH_X86_64 is made specifically for Mozilla Heka purpose, please make changes as per required
 			if _, isInt := fieldval.(float64); isInt {
 				rule.Values[rule.Field_count] = AUDIT_ARCH_X86_64
-			} else if val, isString := fieldval.(string); isString {
-				log.Println("No support for string values yet !", val)
-				//raise error
+			} else if _, isString := fieldval.(string); isString {
+				return errNoStr
 			} else {
-				log.Println("Error Setting Value:", fieldval)
-				//raise error
+				return errUnset
 			}
 		}
 
 	case AUDIT_PERM:
 		//DECIDE ON VARIOUS ERROR TYPES
 		if flags != AUDIT_FILTER_EXIT {
-			log.Println("Flag can only be AUDIT_FILTER_EXIT in case of PERM")
-			//raise error
+			return errNoExit
 		} else if opval != AUDIT_EQUAL {
-			log.Println("OP can only be AUDIT_EQUAL in case of PERM")
-			//raise error
+			return fmt.Errorf("Operator can only be AUDIT_EQUAL in case of AUDIT_PERM")
 		} else {
 			if val, isString := fieldval.(string); isString {
 
@@ -1190,8 +1207,7 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 				vallen = len(val)
 				var permval uint32
 				if vallen > 4 {
-					log.Println("PERM String too large!!")
-					//Return an error
+					return errMaxLen
 				}
 				lowerval := strings.ToLower(val)
 				for i = 0; i < vallen; i++ {
@@ -1205,8 +1221,7 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 					case 'a':
 						permval |= AUDIT_PERM_ATTR
 					default:
-						log.Println("Error in AUDIT_PERM ! NO CONSTANT FOUND")
-						//raise error
+						return fmt.Errorf(" %s is not found as permission", lowerval[i])
 					}
 				}
 				rule.Values[rule.Field_count] = permval
@@ -1216,23 +1231,19 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 	case AUDIT_FILETYPE:
 		if val, isString := fieldval.(string); isString {
 			if !(flags == AUDIT_FILTER_EXIT) && flags == AUDIT_FILTER_ENTRY {
-				log.Println("Error! Flags can only be EXIT in case of AUDIT_FILETYPE")
-				//raise some error
+				return fmt.Errorf("Flag can only be AUDIT_EXIT in case of AUDIT_FILETYPE")
 			}
 			var fileval int
 			err := AuditNameToFtype(val, &fileval)
 			if err != nil {
-				log.Println("Filetype Not Found !!")
-				//raise error
+				return err
 			}
 			rule.Values[rule.Field_count] = uint32(fileval)
 			if (int)(rule.Values[rule.Field_count]) < 0 {
-				fmt.Println("Error in AUDIT_FILETYPE")
-				//Raise some error
+				return syscall.EINVAL
 			}
 		} else {
-			log.Println("Only strings as file types Supported!!")
-			//raise error
+			return fmt.Errorf("Numbers as filetypes")
 		}
 
 	case AUDIT_ARG0, AUDIT_ARG1, AUDIT_ARG2, AUDIT_ARG3:
@@ -1244,38 +1255,33 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 				a, err := strconv.Atoi(fieldvalUid)
 
 				if err != nil {
-					log.Println("Conversion not possible")
-					//return and raise error
+					return err
 				} else {
 					rule.Values[rule.Field_count] = (uint32)(a)
 				}
 			} else {
 				rule.Values[rule.Field_count] = (uint32)(val)
 			}
-		} else if val, isString := fieldval.(string); isString {
-			log.Println("No support for string values yet !", val)
-			////raise error
+		} else if _, isString := fieldval.(string); isString {
+			return errNoStr
 		} else {
 			log.Println("Error Setting Value:", fieldval)
-			//raise error
+			return errUnset
 		}
 	case AUDIT_DEVMAJOR, AUDIT_INODE, AUDIT_SUCCESS:
 		if flags != AUDIT_FILTER_EXIT {
-			log.Println("Error! Flags can only be AUDIT_FILTER_EXIT !!")
-			//raise error
+			return errNoExit
 		}
 		fallthrough
 	default:
 		if fieldid == AUDIT_INODE {
 			if !(opval == AUDIT_NOT_EQUAL || opval == AUDIT_EQUAL) {
-				log.Println("Error! Opval can only be AUDIT_EQUAL or AUDIT_NOT_EQUAL for AUDIT_INODE")
-				//raise error
+				return fmt.Errorf("OP can only be AUDIT_NOT_EQUAL or AUDIT_EQUAL")
 			}
 		}
 
 		if fieldid == AUDIT_PPID && !(flags == AUDIT_FILTER_EXIT || flags == AUDIT_FILTER_ENTRY) {
-			log.Println("Error! Flags can only be EXIT or ENTRY in case of AUDIT_PPID")
-			//raise error
+			return fmt.Errorf("Flags can only be EXIT or ENTRY in case of AUDIT_PPID")
 		}
 
 		if val, isInt := fieldval.(float64); isInt {
@@ -1288,7 +1294,7 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 
 		} else {
 			log.Println("Error Setting Value:", fieldval)
-			//raise error
+			return errUnset
 		}
 	}
 	rule.Field_count++

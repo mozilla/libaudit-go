@@ -32,6 +32,11 @@ func main() {
 	if debug == true {
 		log.Println(netlinkAudit.ParsedResult)
 	}
+	if err == nil && netlinkAudit.ParsedResult.Enabled == 1 {
+		log.Println("Enabled Audit!!")
+	} else {
+		log.Fatalln("Audit Not Enabled! Exiting")
+	}
 	err = netlinkAudit.AuditSetRateLimit(s, 600)
 	if err != nil {
 		log.Fatalln("Error Setting Rate Limit!!", err)
@@ -40,13 +45,6 @@ func main() {
 	if err != nil {
 		log.Fatalln("Error Setting Backlog Limit!!", err)
 	}
-
-	if err == nil && netlinkAudit.ParsedResult.Enabled == 1 {
-		log.Println("Enabled Audit!!")
-	} else {
-		log.Fatalln("Audit Not Enabled! Exiting")
-	}
-
 	err = netlinkAudit.AuditSetPid(s, uint32(syscall.Getpid()))
 
 	if err == nil {
