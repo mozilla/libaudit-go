@@ -32,24 +32,29 @@ func main() {
 	if debug == true {
 		log.Println(netlinkAudit.ParsedResult)
 	}
-
 	if err == nil && netlinkAudit.ParsedResult.Enabled == 1 {
 		log.Println("Enabled Audit!!")
 	} else {
 		log.Fatalln("Audit Not Enabled! Exiting")
 	}
-
+	err = netlinkAudit.AuditSetRateLimit(s, 600)
+	if err != nil {
+		log.Fatalln("Error Setting Rate Limit!!", err)
+	}
+	err = netlinkAudit.AuditSetBacklogLimit(s, 420)
+	if err != nil {
+		log.Fatalln("Error Setting Backlog Limit!!", err)
+	}
 	err = netlinkAudit.AuditSetPid(s, uint32(syscall.Getpid()))
 
 	if err == nil {
 		log.Println("Set pid successful!!")
 	}
-
 	err = netlinkAudit.SetRules(s)
+	// err = netlinkAudit.DeleteAllRules(s)
 	if err != nil {
 		log.Fatalln("Setting Rules Unsuccessful! Exiting")
 	}
-	//netlinkAudit.GetreplyWithoutSync(s)
 	done := make(chan bool, 1)
 	msg := make(chan string)
 	errchan := make(chan error)
@@ -62,7 +67,7 @@ func main() {
 		for {
 			select {
 			case ev := <-msg:
-				log.Println("Message :" + ev + "\n")
+				log.Println(ev + "\n")
 				_, err := f.WriteString(ev + "\n")
 				if err != nil {
 					log.Println("Writing Error!!")
