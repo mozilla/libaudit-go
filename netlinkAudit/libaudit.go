@@ -864,7 +864,7 @@ func SetRules(s *NetlinkSocket) error {
 				srule := vi[sruleNo].(map[string]interface{})
 
 				// Load x86 map and fieldtab.json
-				content2, err := ioutil.ReadFile("netlinkAudit/audit_x86.json")
+				content2, err := ioutil.ReadFile("netlinkAudit/audit_x86_64.json")
 				if err != nil {
 					log.Print("Error:", err)
 					return err
