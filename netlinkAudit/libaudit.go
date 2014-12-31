@@ -805,6 +805,29 @@ done:
 var _audit_permadded bool
 var _audit_syscalladded bool
 
+// Load x86 map and fieldtab.json
+func loadSysMap_FieldTab(conf *Config, fieldmap *Field) error {
+	content2, err := ioutil.ReadFile("netlinkAudit/audit_x86_64.json")
+	if err != nil {
+		return err
+	}
+	content3, err := ioutil.ReadFile("netlinkAudit/fieldtab.json")
+	if err != nil {
+		return err
+	}
+
+	err = json.Unmarshal([]byte(content2), &conf)
+	if err != nil {
+		return err
+	}
+	err = json.Unmarshal([]byte(content3), &fieldmap)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // function that sets each rule after reading configuration file
 func SetRules(s *NetlinkSocket) error {
 
@@ -836,6 +859,15 @@ func SetRules(s *NetlinkSocket) error {
 			return err
 		}
 	}
+	var conf Config
+	var fieldmap Field
+
+	// Load x86 map and fieldtab.json
+	err = loadSysMap_FieldTab(&conf, &fieldmap)
+	if err != nil {
+		log.Println("Error :", err)
+		return err
+	}
 
 	for k, v := range m {
 		switch k {
@@ -862,31 +894,6 @@ func SetRules(s *NetlinkSocket) error {
 			vi := v.([]interface{})
 			for sruleNo := range vi {
 				srule := vi[sruleNo].(map[string]interface{})
-
-				// Load x86 map and fieldtab.json
-				content2, err := ioutil.ReadFile("netlinkAudit/audit_x86_64.json")
-				if err != nil {
-					log.Print("Error:", err)
-					return err
-				}
-				content3, err := ioutil.ReadFile("netlinkAudit/fieldtab.json")
-				if err != nil {
-					log.Print("Error:", err)
-					return err
-				}
-
-				var conf Config
-				var fieldmap Field
-				err = json.Unmarshal([]byte(content2), &conf)
-				if err != nil {
-					log.Print("Error:", err)
-					return err
-				}
-				err = json.Unmarshal([]byte(content3), &fieldmap)
-				if err != nil {
-					log.Print("Error:", err)
-					return err
-				}
 
 				for l := range conf.Xmap {
 					if conf.Xmap[l].Name == srule["name"] {
@@ -929,7 +936,6 @@ func SetRules(s *NetlinkSocket) error {
 							filter = AUDIT_FILTER_USER
 						} else if actions[1] == "exclude" {
 							filter = AUDIT_FILTER_EXCLUDE
-							//exclude = 1;
 						} else {
 							filter = AUDIT_FILTER_UNSET
 						}
