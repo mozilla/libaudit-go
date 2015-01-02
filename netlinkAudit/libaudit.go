@@ -70,7 +70,6 @@ type Config struct {
 	Xmap []CMap
 }
 
-//for fieldtab
 type Field struct {
 	Fieldmap []FMap
 }
@@ -98,7 +97,7 @@ func (rule *AuditRuleData) ToWireFormat() []byte {
 	return newbuff
 }
 
-//The recvfrom in go takes only a byte [] to put the data recieved from the kernel that removes the need
+//recvfrom in go takes only a byte [] to put the data recieved from the kernel that removes the need
 //for having a separate audit_reply Struct for recieving data from kernel.
 func (rr *NetlinkAuditRequest) ToWireFormat() []byte {
 	b := make([]byte, rr.Header.Len)
@@ -127,6 +126,7 @@ func nlmAlignOf(msglen int) int {
 	return (msglen + syscall.NLMSG_ALIGNTO - 1) & ^(syscall.NLMSG_ALIGNTO - 1)
 }
 
+// Parse a byte stream to an array of NetlinkMessage structs
 func ParseAuditNetlinkMessage(b []byte) ([]syscall.NetlinkMessage, error) {
 
 	var msgs []syscall.NetlinkMessage
@@ -143,19 +143,20 @@ func ParseAuditNetlinkMessage(b []byte) ([]syscall.NetlinkMessage, error) {
 	return msgs, nil
 }
 
+// Internal Function, uses unsafe pointer conversions for separating Netlink Header and the Data appended with it
 func netlinkMessageHeaderAndData(b []byte) (*syscall.NlMsghdr, []byte, int, error) {
 
 	h := (*syscall.NlMsghdr)(unsafe.Pointer(&b[0]))
 	if int(h.Len) < syscall.NLMSG_HDRLEN || int(h.Len) > len(b) {
 		foo := int32(nativeEndian().Uint32(b[0:4]))
-		log.Println("Headerlength with ", foo, b[0]) //!bug ! FIX THIS
+		log.Println("Headerlength with ", foo, b[0]) //bug!
 		log.Println("Error due to....HDRLEN:", syscall.NLMSG_HDRLEN, " Header Length:", h.Len, " Length of BYTE Array:", len(b))
 		return nil, nil, 0, syscall.EINVAL
 	}
 	return h, b[syscall.NLMSG_HDRLEN:], nlmAlignOf(int(h.Len)), nil
 }
 
-// This function makes a connection with kernel space and is to be used for all further socket communication
+//Connect with kernel space and is to be used for all further socket communication
 func GetNetlinkSocket() (*NetlinkSocket, error) {
 	fd, err := syscall.Socket(syscall.AF_NETLINK, syscall.SOCK_RAW, syscall.NETLINK_AUDIT)
 	if err != nil {
@@ -180,6 +181,7 @@ func (s *NetlinkSocket) Close() {
 	syscall.Close(s.fd)
 }
 
+// Wrapper for Sendto
 func (s *NetlinkSocket) Send(request *NetlinkAuditRequest) error {
 	if err := syscall.Sendto(s.fd, request.ToWireFormat(), 0, &s.lsa); err != nil {
 		return err
@@ -187,6 +189,7 @@ func (s *NetlinkSocket) Send(request *NetlinkAuditRequest) error {
 	return nil
 }
 
+// Wrapper for Recvfrom
 func (s *NetlinkSocket) Receive(bytesize int, block int) ([]syscall.NetlinkMessage, error) {
 	rb := make([]byte, bytesize)
 	nr, _, err := syscall.Recvfrom(s.fd, rb, 0|block)
@@ -202,7 +205,7 @@ func (s *NetlinkSocket) Receive(bytesize int, block int) ([]syscall.NetlinkMessa
 	return ParseAuditNetlinkMessage(rb)
 }
 
-//should it be changed to HandleAck ?
+//HandleAck ?
 func AuditGetReply(s *NetlinkSocket, bytesize, block int, seq uint32) error {
 done:
 	for {
@@ -250,6 +253,7 @@ done:
 	return nil
 }
 
+// Sends a message to kernel to turn on audit
 func AuditSetEnabled(s *NetlinkSocket) error {
 	var status AuditStatus
 	status.Enabled = 1
@@ -275,6 +279,7 @@ func AuditSetEnabled(s *NetlinkSocket) error {
 	return nil
 }
 
+// Sends a signal to kernel to check if Audit is enabled
 func AuditIsEnabled(s *NetlinkSocket) error {
 	wb := newNetlinkAuditRequest(AUDIT_GET, syscall.AF_NETLINK, 0)
 
@@ -334,6 +339,7 @@ done:
 	return nil
 }
 
+// Sends a message to kernel for setting of program pid
 func AuditSetPid(s *NetlinkSocket, pid uint32 /*,Wait mode WAIT_YES | WAIT_NO */) error {
 	var status AuditStatus
 	status.Mask = AUDIT_STATUS_PID
@@ -369,6 +375,7 @@ func auditBit(nr int) uint32 {
 	return (uint32)(audit_bit)
 }
 
+// Make changes in the rule struct according to system call number
 func AuditRuleSyscallData(rule *AuditRuleData, scall int) error {
 	word := auditWord(scall)
 	bit := auditBit(scall)
@@ -381,6 +388,7 @@ func AuditRuleSyscallData(rule *AuditRuleData, scall int) error {
 }
 
 /*
+Requires More work
 func AuditWatchRuleData(s *NetlinkSocket, rule *AuditRuleData, path []byte) error {
 	rule.Flags = uint32(AUDIT_FILTER_EXIT)
 	rule.Action = uint32(AUDIT_ALWAYS)
@@ -471,7 +479,7 @@ func AuditAddRuleData(s *NetlinkSocket, rule *AuditRuleData, flags int, action i
 	rule.Action = uint32(action)
 	// Using unsafe for conversion
 	newbuff := rule.ToWireFormat()
-
+	// Following method avoided as it require the 0 byte array to be fixed size array
 	// buff := new(bytes.Buffer)
 	// err := binary.Write(buff, nativeEndian(), *rule)
 	// if err != nil {
@@ -586,6 +594,7 @@ func GetreplyWithoutSync(s *NetlinkSocket) {
 	}
 }
 
+// Receives messages from Kernel and forwards to channels
 func Getreply(s *NetlinkSocket, done <-chan bool, msgchan chan string, errchan chan error) {
 	for {
 		rb := make([]byte, MAX_AUDIT_MESSAGE_LENGTH)
@@ -708,6 +717,7 @@ done:
 	}
 }
 */
+
 //Delete Rule Data Function
 func AuditDeleteRuleData(s *NetlinkSocket, rule *AuditRuleData, flags uint32, action uint32) error {
 	var sizePurpose AuditRuleData
@@ -828,7 +838,7 @@ func loadSysMap_FieldTab(conf *Config, fieldmap *Field) error {
 	return nil
 }
 
-// function that sets each rule after reading configuration file
+//sets each rule after reading configuration file
 func SetRules(s *NetlinkSocket) error {
 
 	//var rule AuditRuleData
@@ -872,6 +882,7 @@ func SetRules(s *NetlinkSocket) error {
 	for k, v := range m {
 		switch k {
 		case "custom_rule":
+			// Still Needed ?
 			vi := v.([]interface{})
 			for ruleNo := range vi {
 				rule := vi[ruleNo].(map[string]interface{})
@@ -909,7 +920,7 @@ func SetRules(s *NetlinkSocket) error {
 							return err
 						}
 						actions := srule["action"].([]interface{})
-						log.Println(actions)
+						//log.Println(actions)
 
 						//NOW APPLY ACTIONS ON SYSCALLS by separating the filters i.e exit from action i.e. always
 						action := 0
@@ -944,7 +955,7 @@ func SetRules(s *NetlinkSocket) error {
 							fieldval := field.(map[string]interface{})["value"]
 							op := field.(map[string]interface{})["op"]
 							fieldname := field.(map[string]interface{})["name"]
-							log.Println(fieldval, op, fieldname)
+							//log.Println(fieldval, op, fieldname)
 							var opval uint32
 							if op == "nt_eq" {
 								opval = AUDIT_NOT_EQUAL
@@ -963,7 +974,7 @@ func SetRules(s *NetlinkSocket) error {
 							} else if op == "and" {
 								opval = AUDIT_BIT_MASK
 							}
-							//Pass filter to this function
+							//Take appropriate action according to filters provided
 							err = AuditRuleFieldPairData(&dd, fieldval, opval, fieldname.(string), fieldmap, filter) // &AUDIT_BIT_MASK
 							if err != nil {
 								return err
@@ -1016,7 +1027,7 @@ func AuditNameToFtype(name string, value *int) error {
 		}
 	}
 
-	return fmt.Errorf("Filetype not found") //SOME ERROR
+	return fmt.Errorf("Filetype not found")
 }
 
 var (
@@ -1038,7 +1049,7 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 	var fieldid uint32
 	for f := range fieldmap.Fieldmap {
 		if fieldmap.Fieldmap[f].Name == fieldname {
-			log.Println("Found :", fieldmap.Fieldmap[f])
+			//log.Println("Found :", fieldmap.Fieldmap[f])
 			fieldid = (uint32)(fieldmap.Fieldmap[f].Fieldid)
 		}
 	}
@@ -1091,7 +1102,6 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 		} else {
 			log.Println("Error Setting Value:", fieldval)
 			return errUnset
-			//raise error
 		}
 
 	case AUDIT_EXIT:
@@ -1124,7 +1134,7 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 			return errUnset
 		}
 
-		//String handling part need to be done
+		//TODO: String handling part
 		//else {
 		//	rule->values[rule->field_count] = //SEE HERE
 		//			audit_name_to_errno(v);
@@ -1161,10 +1171,9 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 			_audit_permadded = true
 		}
 
-		fallthrough //IMP Point
+		fallthrough //IMP
 	case AUDIT_SUBJ_USER, AUDIT_SUBJ_ROLE, AUDIT_SUBJ_TYPE, AUDIT_SUBJ_SEN, AUDIT_SUBJ_CLR, AUDIT_FILTERKEY:
 		//IF And only if a syscall is added or a permisission is added then this field should be set
-		//TODO : Get our own to determine the above conditions
 		//MORE Debugging Required
 		if fieldid == AUDIT_FILTERKEY && !(_audit_syscalladded || _audit_permadded) {
 			return errNoSys
@@ -1308,6 +1317,7 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 }
 
 /*
+If further needed
 var ErrStrings = []string{"E2BIG", "EACCES", "EADDRINUSE", "EADDRNOTAVAIL", "EADV", "EAFNOSUPPORT", "EAGAIN", "EALREADY", "EBADE", "EBADF",
 	"EBADFD", "EBADMSG", "EBADR", "EBADRQC", "EBADSLT", "EBFONT", "EBUSY", "ECANCELED", "ECHILD", "ECHRNG",
 	"ECOMM", "ECONNABORTED", "ECONNREFUSED", "ECONNRESET", "EDEADLK", "EDEADLOCK", "EDESTADDRREQ", "EDOM", "EDOTDOT", "EDQUOT",
