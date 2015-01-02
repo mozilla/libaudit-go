@@ -1,0 +1,37 @@
+{
+	"delete" : true,
+ 	"buffer" : 8192,
+ 	"panic"  : 2,
+ 	"custom_rule": [
+ 		{
+ 			"action" : ["always", "exit"],
+ 			"fields" : [
+ 				{"name":"path", "op":"eq", "value":"/bin/ls"},
+ 				{"name":"perm", "op":"eq", "value":"x"}
+ 			]
+ 		}
+ 	],
+ 	"file_rule" : [
+ 		{ 
+ 			"path" : "/etc/passwd",
+ 			"permission" : "wa",
+ 			"key" : "passwd_changes"
+ 	}],
+ 	"syscall_rules" : [ 
+ 		{
+			"action" : ["always", "exit"],
+			"fields" : [
+ 				{"name":"arch", "op":"eq", "value":32},
+ 				{"name":"key","op":"eq","value":"rmd"}
+ 			],
+			"name" : "rmdir"
+		},
+		{
+			"action" : ["always", "exit"],
+			"fields" : [
+ 				{"name":"arch", "op":"eq", "value":32}
+ 			],
+			"name" : "mkdir"
+		}
+	]
+}

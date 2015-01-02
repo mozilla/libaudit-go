@@ -1,0 +1,268 @@
+{
+	"xmap" : [
+		{
+			"name": "read",
+			"id"  : 0,
+			"entryPoint": "sys_read"
+		},
+		{
+			"name": "write",
+			"id"  : 1,
+			"entryPoint": "sys_write"
+		},
+		{
+			"name": "open",
+			"id"  : 2,
+			"entryPoint": "sys_open"
+		},
+		{
+			"name": "close",
+			"id"  : 3,
+			"entryPoint": "sys_close"
+		},
+		{
+			"name": "stat",
+			"id"  : 4,
+			"entryPoint": "sys_newstat"
+		},
+		{
+			"name": "fstat",
+			"id"  : 5,
+			"entryPoint": "sys_newfstat"
+		},
+		{
+			"name": "lstat",
+			"id"  : 6,
+			"entryPoint": "sys_newlstat"
+		},
+		{
+			"name": "poll",
+			"id"  : 7,
+			"entryPoint": "sys_poll"
+		},
+		{
+			"name": "lseek",
+			"id"  : 8,
+			"entryPoint": "sys_lseek"
+		},
+		{
+			"name": "mmap",
+			"id"  : 9,
+			"entryPoint": "sys_mmap"
+		},
+		{
+			"name": "mprotect",
+			"id"  : 10,
+			"entryPoint": "sys_mprotect"
+		},
+		{
+			"name": "munmap",
+			"id"  : 11,
+			"entryPoint": "sys_munmap"
+		},
+		{
+			"name": "brk",
+			"id"  : 12,
+			"entryPoint": "sys_brk"
+		},
+		{
+			"name": "rt_sigaction",
+			"id"  : 13,
+			"entryPoint": "sys_rt_sigaction"
+		},
+		{
+			"name": "rt_sigprocmask",
+			"id"  : 14,
+			"entryPoint": "sys_rt_sigprocmask"
+		},
+		{
+			"name": "rt_sigreturn",
+			"id"  : 15,
+			"entryPoint": "sys_rt_sigreturn"
+		},
+		{
+			"name": "ioctl",
+			"id"  : 16,
+			"entryPoint": "sys_ioctl"
+		},
+		{
+			"name": "pwrite64",
+			"id"  : 18,
+			"entryPoint": "sys_pwrite64"
+		},
+		{
+			"name": "pread64",
+			"id"  : 17,
+			"entryPoint": "sys_pread64"
+		},
+		{
+			"name": "readv",
+			"id"  : 19,
+			"entryPoint": "sys_readv"
+		},
+		{
+			"name": "writev",
+			"id"  : 20,
+			"entryPoint": "sys_writev"
+		},
+		{
+			"name": "access",
+			"id"  : 21,
+			"entryPoint": "sys_access"
+		},
+		{
+			"name": "pipe",
+			"id"  : 22,
+			"entryPoint": "sys_pipe"
+		},
+		{
+			"name": "select",
+			"id"  : 23,
+			"entryPoint": "sys_select"
+		},
+		{
+			"name": "sched_yield",
+			"id"  : 24,
+			"entryPoint": "sys_sched_yield"
+		},
+		{
+			"name": "mremap",
+			"id"  : 25,
+			"entryPoint": "sys_mremap"
+		},
+		{
+			"name": "msync",
+			"id"  : 26,
+			"entryPoint": "sys_msync"
+		},
+		{
+			"name": "mincore",
+			"id"  : 27,
+			"entryPoint": "sys_mincore"
+		},{
+			"name": "madvise",
+			"id"  : 28,
+			"entryPoint": "sys_madvise"
+		},
+		{
+			"name": "shmget",
+			"id"  : 29,
+			"entryPoint": "sys_shmget"
+		},
+		{
+			"name": "shmmat",
+			"id"  : 30,
+			"entryPoint": "sys_shmat"
+		},
+		{
+			"name": "shmctl",
+			"id"  : 31,
+			"entryPoint": "sys_shmctl"
+		},
+		{
+			"name": "dup",
+			"id"  : 32,
+			"entryPoint": "sys_dup"
+		},
+		{
+			"name": "dup2",
+			"id"  : 33,
+			"entryPoint": "sys_dup2"
+		},
+		{
+			"name": "pause",
+			"id"  : 80,
+			"entryPoint": "sys_pause"
+		},
+		{
+			"name": "nanosleep",
+			"id"  : 32,
+			"entryPoint": "sys_nanosleep"
+		},
+		{
+			"name": "getitimer",
+			"id"  : 32,
+			"entryPoint": "sys_getitimer"
+		},
+		{
+			"name": "alarm",
+			"id"  : 32,
+			"entryPoint": "sys_alarm"
+		},
+		{
+			"name": "setitimer",
+			"id"  : 32,
+			"entryPoint": "sys_setitimer"
+		},
+		{
+			"name": "getpid",
+			"id"  : 32,
+			"entryPoint": "sys_getpid"
+		},
+		{
+			"name": "sendfile",
+			"id"  : 32,
+			"entryPoint": "sys_sendfile64"
+		},
+		{
+			"name": "socket",
+			"id"  : 32,
+			"entryPoint": "sys_socket"
+		},
+		{
+			"name": "connect",
+			"id"  : 32,
+			"entryPoint": "sys_connect"
+		},
+		{
+			"name": "accept",
+			"id"  : 32,
+			"entryPoint": "sys_accept"
+		},
+		{
+			"name": "sendto",
+			"id"  : 32,
+			"entryPoint": "sys_sendto"
+		},
+		{
+			"name": "recvfrom",
+			"id"  : 32,
+			"entryPoint": "sys_recvfrom"
+		},
+		{
+			"name": "sendmsg",
+			"id"  : 32,
+			"entryPoint": "sys_sendmsg"
+		},
+		{
+			"name": "recvmsg",
+			"id"  : 32,
+			"entryPoint": "sys_recvmsg"
+		},
+		{
+			"name": "shutdown",
+			"id"  : 32,
+			"entryPoint": "sys_shutdown"
+		},
+		{
+			"name": "fchdir",
+			"id"  : 81,
+			"entryPoint": "sys_fchdir"
+		},
+		{
+			"name": "rename",
+			"id"  : 82,
+			"entryPoint": "sys_rename"
+		},
+		{
+			"name": "mkdir",
+			"id"  : 83,
+			"entryPoint": "sys_mkdiir"
+		},
+		{
+			"name": "rmdir",
+			"id"  : 84,
+			"entryPoint": "sys_rmdir"
+		}
+	]
+}
