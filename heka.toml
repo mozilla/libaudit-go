@@ -1,0 +1,84 @@
+[hekad]
+maxprocs = 2
+
+[Audit]
+type = "LogstreamerInput"
+log_directory = "/tmp/"
+file_match = 'log'
+decoder = "audit_decoder"
+#Can be tested with standard audit logs too
+#log_directory = "/var/log/audit"
+#file_match = 'audit.log\.?(?P<Seq>\d*)'
+#priority = ["^Seq"]	
+
+ 
+[audit_decoder]
+type = "SandboxDecoder"
+script_type = "lua"
+filename = "lua_decoders/audit_decoder.lua"
+
+	[audit_decoder.config]
+	type="audit_log"
+	payload_keep = false
+
+[AuditUniqueCalls]
+type = "SandboxFilter"
+filename = "lua_filters/unique_items.lua"
+ticker_interval = 10
+preserve_data = true
+message_matcher = "Type == 'audit_log'"
+
+    [AuditUniqueCalls.config]
+    enable_delta = true
+    message_variable = "Fields[comm]"
+    title = "Estimated Activities"
+    preservation_version = 0
+    
+[AuditTypeFrequent]
+type = "SandboxFilter"
+filename = "lua_filters/frequent_items.lua"
+ticker_interval = 10
+preserve_data = true
+message_matcher = "Type == 'audit_log'"
+
+
+[AuditTypeFrequent.config]
+message_variable = "Fields[type]"
+max_items = 10000
+min_output_weight = 100
+reset_days = 1
+
+[RstEncoder]
+
+[LogOutput]
+message_matcher = "Type == 'audit_log'" #"TRUE"
+encoder = "ESJsonEncoder"
+
+[ESJsonEncoder]
+index = "%{Type}-%{2006.01.02}"
+es_index_from_timestamp = true
+type_name = "%{Type}"
+
+[FileOutput]
+message_matcher = "Type == 'audit_log'"
+encoder = "ESJsonEncoder"
+path = "/tmp/output"
+
+
+#[ElasticSearchOutput]
+#message_matcher = "Type == 'audit_log'"
+#server = "http://localhost:9200"
+#flush_interval = 5000
+#flush_count = 10
+#encoder = "ESJsonEncoder"
+
+#[CarbonOutput]
+#message_matcher = "Type == 'heka.statmetric'"
+#address = "127.0.0.1:2003"
+
+        
+[DashboardOutput]
+address = "127.0.0.1:4352"
+ticker_interval = 10
+working_directory = "dashboard"
+static_directory = "/usr/share/heka/dasher"
