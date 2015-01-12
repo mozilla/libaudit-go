@@ -1,6 +1,4 @@
-#Mozilla Winter Of Security 2014
-
-##Linux Audit Heka Plugin (GO)
+#Linux Audit Heka Plugin (GO)
 
 This project aims deliver the same functionality as Linux Audit (auditd, audispd) + audisp-cef/json but in native Go as a plugin to Heka. 
 
