@@ -8,5 +8,5 @@ This means it will listen for events from the kernel via the Netlink protocol, p
 
 Feedback
 -----------------
-Open an issue [https://github.com/owtf/js-lib-sniper/issues](https://github.com/owtf/js-lib-sniper/issues) to report a bug or request a new feature. Other comments and suggestions can be directly emailed to the authors.
+Open an issue [https://github.com/mozilla/audit-go/issues](https://github.com/mozilla/audit-go/issues) to report a bug or request a new feature. Other comments and suggestions can be directly emailed to the authors.
 
