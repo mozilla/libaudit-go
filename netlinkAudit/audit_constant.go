@@ -1,7 +1,7 @@
 package netlinkAudit
 
 const (
-	MAX_AUDIT_MESSAGE_LENGTH = 8960
+	MAX_AUDIT_MESSAGE_LENGTH = 8970
 	AUDIT_GET                = 1000
 	AUDIT_SET                = 1001 /* Set status (enable/disable/auditd) */
 	AUDIT_LIST               = 1002
