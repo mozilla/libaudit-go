@@ -159,6 +159,12 @@ func netlinkMessageHeaderAndData(b []byte) (*syscall.NlMsghdr, []byte, int, erro
 
 //Connect with kernel space and is to be used for all further socket communication
 func GetNetlinkSocket() (*NetlinkSocket, error) {
+
+	// Check for root user
+	if os.Getuid() != 0 {
+		log.Fatalln("Not Root User! Exiting!")
+	}
+
 	fd, err := syscall.Socket(syscall.AF_NETLINK, syscall.SOCK_RAW, syscall.NETLINK_AUDIT)
 	if err != nil {
 		return nil, err
@@ -649,7 +655,7 @@ func Getreply(s *NetlinkSocket, done <-chan bool, msgchan chan string, errchan c
 				// log.Println("Event Ends ", string(m.Data[:]))
 			} else if m.Header.Type == AUDIT_CONFIG_CHANGE {
 				msgchan <- ("type=CONFIG_CHANGE " + "msg=" + string(m.Data[:]))
-			} else {
+			} else { 
 				log.Println("Unknown: ", m.Header.Type)
 			}
 		}
