@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -817,11 +818,13 @@ var _audit_syscalladded bool
 
 // Load x86 map and fieldtab.json
 func loadSysMap_FieldTab(conf *Config, fieldmap *Field) error {
-	content2, err := ioutil.ReadFile("netlinkAudit/audit_x86_64.json")
+	path, _ := filepath.Abs("libaudit-go/audit_x86_64.json")
+	content2, err := ioutil.ReadFile(path)
 	if err != nil {
 		return err
 	}
-	content3, err := ioutil.ReadFile("netlinkAudit/fieldtab.json")
+	path, _ = filepath.Abs("libaudit-go/fieldtab.json")
+	content3, err := ioutil.ReadFile(path)
 	if err != nil {
 		return err
 	}
@@ -839,20 +842,13 @@ func loadSysMap_FieldTab(conf *Config, fieldmap *Field) error {
 }
 
 //sets each rule after reading configuration file
-func SetRules(s *NetlinkSocket) error {
+func SetRules(s *NetlinkSocket, content []byte) error {
 
 	//var rule AuditRuleData
 	//AuditWatchRuleData(s, &rule, []byte("/etc/passwd"))
 
-	// Load all rules
-	content, err := ioutil.ReadFile("netlinkAudit/audit.rules.json")
-	if err != nil {
-		log.Print("Error:", err)
-		return err
-	}
-
 	var rules interface{}
-	err = json.Unmarshal(content, &rules)
+	err := json.Unmarshal(content, &rules)
 	if err != nil {
 		log.Print("Error:", err)
 		return err
@@ -1003,7 +999,8 @@ func SetRules(s *NetlinkSocket) error {
 
 func AuditNameToFtype(name string, value *int) error {
 
-	content, err := ioutil.ReadFile("netlinkAudit/ftypetab.json")
+	path, _ := filepath.Abs("libaudit-go/ftypetab.json")
+	content, err := ioutil.ReadFile(path)
 
 	if err != nil {
 		log.Print("Error:", err)
