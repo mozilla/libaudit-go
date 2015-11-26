@@ -66,12 +66,6 @@ type FMap struct {
 	Fieldid float64
 }
 
-// for msg type map
-type TMap struct {
-	Name  string
-	Alias string
-}
-
 // for config
 type Config struct {
 	Xmap []CMap
@@ -80,11 +74,6 @@ type Config struct {
 // for fields
 type Field struct {
 	Fieldmap []FMap
-}
-
-// for msg type map
-type msgType struct {
-	msg_type []TMap
 }
 
 func nativeEndian() binary.ByteOrder {
@@ -666,7 +655,7 @@ func Getreply(s *NetlinkSocket, done <-chan bool, msgchan chan string, errchan c
 				if Type.String() == "toConstant("+strconv.Itoa(int(m.Header.Type))+")" {
 					log.Println("Unknown: ", m.Header.Type)
 				} else {
-					msgchan <- ("type=" + Type.String() + " msg=" + string(m.Data[:]))
+					msgchan <- ("type=" + Type.String()[6:] + " msg=" + string(m.Data[:]))
 				}
 			}
 		}
