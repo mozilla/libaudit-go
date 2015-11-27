@@ -17,7 +17,6 @@ import (
 	"unsafe"
 )
 
-var ParsedResult AuditStatus
 var nextSeqNr uint32
 var rulesRetrieved AuditRuleData
 
@@ -288,64 +287,72 @@ func AuditSetEnabled(s *NetlinkSocket) error {
 	return nil
 }
 
-// Sends a signal to kernel to check if Audit is enabled
-func AuditIsEnabled(s *NetlinkSocket) error {
-	wb := newNetlinkAuditRequest(uint16(AUDIT_GET), syscall.AF_NETLINK, 0)
+/* 
+ * This function will return 0 if auditing is NOT enabled and
+ * 1 if enabled, and -1 and an error on error.
+ */
+func AuditIsEnabled(s *NetlinkSocket) (state int, err error) {
 
-	if err := s.Send(wb); err != nil {
-		return err
+	wb := newNetlinkAuditRequest(uint16(AUDIT_GET), syscall.AF_NETLINK, 0)
+	if err = s.Send(wb); err != nil {
+		return -1, err
 	}
 
 done:
 	for {
-		//Make the rb byte bigger because of large messages from Kernel doesn't fit in 4096
+		//TODO: Make the rb byte bigger because of large messages from Kernel doesn't fit in 4096
 		msgs, err := s.Receive(MAX_AUDIT_MESSAGE_LENGTH, syscall.MSG_DONTWAIT)
 		if err != nil {
-			return err
+			return -1, err
 		}
 
 		for _, m := range msgs {
 			lsa, er := syscall.Getsockname(s.fd)
 			if er != nil {
-				return nil
+				return -1, er
 			}
+
 			switch v := lsa.(type) {
-			case *syscall.SockaddrNetlink:
-				if m.Header.Seq != uint32(wb.Header.Seq) {
-					return fmt.Errorf("Wrong Seq nr %d, expected %d", m.Header.Seq, wb.Header.Seq)
-				}
-				if m.Header.Pid != v.Pid {
-					return fmt.Errorf("Wrong pid %d, expected %d", m.Header.Pid, v.Pid)
-				}
+				case *syscall.SockaddrNetlink:
+					if m.Header.Seq != uint32(wb.Header.Seq) {
+						return -1, errors.New("Wrong Seq no " +
+							        string(int(m.Header.Seq)) +
+							        ", expected " + string(int(wb.Header.Seq)))
+					}
+					if m.Header.Pid != v.Pid {
+						return -1, errors.New("Wrong Seq nr " +
+										string(int(m.Header.Pid)) +
+										", expected " + string(int(v.Pid)))
+					}
 
-			default:
-				return syscall.EINVAL
+				default:
+					return -1, syscall.EINVAL
 			}
+
 			if m.Header.Type == syscall.NLMSG_DONE {
-				log.Println("Done")
+				//log.Println("Done")
 				break done
-
 			}
+
 			if m.Header.Type == syscall.NLMSG_ERROR {
 				log.Println("NLMSG_ERROR Received..")
 			}
+
 			if m.Header.Type == uint16(AUDIT_GET) {
 				//Convert the data part written to AuditStatus struct
-				b := m.Data[:]
-				// h := (*AuditStatus)(unsafe.Pointer(&b[0])) Unsafe Method avoided
-				buf := bytes.NewBuffer(b)
+				buf := bytes.NewBuffer(m.Data[:])
 				var dumm AuditStatus
 				err = binary.Read(buf, nativeEndian(), &dumm)
 				if err != nil {
 					log.Println("binary.Read failed:", err)
-					return err
+					return -1, err
 				}
-				ParsedResult = dumm
+				state = int(dumm.Enabled)
 				break done
 			}
 		}
 	}
-	return nil
+	return state, nil
 }
 
 // Sends a message to kernel for setting of program pid
