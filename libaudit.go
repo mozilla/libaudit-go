@@ -17,20 +17,25 @@ import (
 	"unsafe"
 )
 
-var nextSeqNr uint32
+var sequenceNumber uint32
 var rulesRetrieved AuditRuleData
 
+
+// This is the struct for an "audit_status" message.
 type AuditStatus struct {
-	Mask          uint32 /* Bit mask for valid entries */
-	Enabled       uint32 /* 1 = enabled, 0 = disabled */
-	Failure       uint32 /* Failure-to-log action */
-	Pid           uint32 /* pid of auditd process */
-	Rate_limit    uint32 /* messages rate limit (per second) */
-	Backlog_limit uint32 /* waiting messages limit */
-	Lost          uint32 /* messages lost */
-	Backlog       uint32 /* messages waiting in queue */
+	Mask              uint32 /* Bit mask for valid entries */
+	Enabled           uint32 /* 1 = enabled, 0 = disabled */
+	Failure           uint32 /* Failure-to-log action */
+	Pid               uint32 /* pid of auditd process */
+	Rate_limit        uint32 /* messages rate limit (per second) */
+	Backlog_limit     uint32 /* waiting messages limit */
+	Lost              uint32 /* messages lost */
+	Backlog           uint32 /* messages waiting in queue */
+	Version           uint32 /* audit api version number */
+	BacklogWaitTime   uint32 /* message queue wait timeout */
 }
 
+// AuditRuleData is used while adding/deleting/listing audit rules
 type AuditRuleData struct {
 	Flags       uint32 /* AUDIT_PER_{TASK,CALL}, AUDIT_PREPEND */
 	Action      uint32 /* AUDIT_NEVER, AUDIT_POSSIBLE, AUDIT_ALWAYS */
@@ -43,9 +48,9 @@ type AuditRuleData struct {
 	Buf         []byte //[0]byte /* string fields buffer */
 }
 
-type NetlinkSocket struct {
+type NetlinkConnection struct {
 	fd  int
-	lsa syscall.SockaddrNetlink
+	address syscall.SockaddrNetlink
 }
 
 type NetlinkAuditRequest struct {
@@ -117,7 +122,7 @@ func newNetlinkAuditRequest(proto uint16, family, sizeofData int) *NetlinkAuditR
 	rr.Header.Len = uint32(syscall.NLMSG_HDRLEN + sizeofData)
 	rr.Header.Type = uint16(proto)
 	rr.Header.Flags = syscall.NLM_F_REQUEST | syscall.NLM_F_ACK
-	rr.Header.Seq = atomic.AddUint32(&nextSeqNr, 1) //Autoincrementing Sequence
+	rr.Header.Seq = atomic.AddUint32(&sequenceNumber , 1) //Autoincrementing Sequence
 	return rr
 	//	return rr.ToWireFormat()
 }
@@ -157,8 +162,8 @@ func netlinkMessageHeaderAndData(b []byte) (*syscall.NlMsghdr, []byte, int, erro
 	return h, b[syscall.NLMSG_HDRLEN:], nlmAlignOf(int(h.Len)), nil
 }
 
-//Connect with kernel space and is to be used for all further socket communication
-func GetNetlinkSocket() (*NetlinkSocket, error) {
+// Create a fresh connection and used it for all further communication
+func GetNetlinkSocket() (*NetlinkConnection, error) {
 
 	// Check for root user
 	if os.Getuid() != 0 {
@@ -169,14 +174,14 @@ func GetNetlinkSocket() (*NetlinkSocket, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &NetlinkSocket{
+	s := &NetlinkConnection{
 		fd: fd,
 	}
-	s.lsa.Family = syscall.AF_NETLINK
-	s.lsa.Groups = 0
-	s.lsa.Pid = 0 //Kernel space pid is always set to be 0
+	s.address.Family = syscall.AF_NETLINK
+	s.address.Groups = 0
+	s.address.Pid = 0 //Kernel space pid is always set to be 0
 
-	if err := syscall.Bind(fd, &s.lsa); err != nil {
+	if err := syscall.Bind(fd, &s.address); err != nil {
 		syscall.Close(fd)
 		return nil, err
 	}
@@ -184,20 +189,20 @@ func GetNetlinkSocket() (*NetlinkSocket, error) {
 }
 
 //To end the socket conncetion
-func (s *NetlinkSocket) Close() {
+func (s *NetlinkConnection) Close() {
 	syscall.Close(s.fd)
 }
 
 // Wrapper for Sendto
-func (s *NetlinkSocket) Send(request *NetlinkAuditRequest) error {
-	if err := syscall.Sendto(s.fd, request.ToWireFormat(), 0, &s.lsa); err != nil {
+func (s *NetlinkConnection) Send(request *NetlinkAuditRequest) error {
+	if err := syscall.Sendto(s.fd, request.ToWireFormat(), 0, &s.address); err != nil {
 		return err
 	}
 	return nil
 }
 
 // Wrapper for Recvfrom
-func (s *NetlinkSocket) Receive(bytesize int, block int) ([]syscall.NetlinkMessage, error) {
+func (s *NetlinkConnection) Receive(bytesize int, block int) ([]syscall.NetlinkMessage, error) {
 	rb := make([]byte, bytesize)
 	nr, _, err := syscall.Recvfrom(s.fd, rb, 0|block)
 	//nr, _, err := syscall.Recvfrom(s, rb, syscall.MSG_PEEK|syscall.MSG_DONTWAIT)
@@ -213,7 +218,7 @@ func (s *NetlinkSocket) Receive(bytesize int, block int) ([]syscall.NetlinkMessa
 }
 
 //HandleAck ?
-func AuditGetReply(s *NetlinkSocket, bytesize, block int, seq uint32) error {
+func AuditGetReply(s *NetlinkConnection, bytesize, block int, seq uint32) error {
 done:
 	for {
 		msgs, err := s.Receive(bytesize, block) //ParseAuditNetlinkMessage(rb)
@@ -221,11 +226,11 @@ done:
 			return err
 		}
 		for _, m := range msgs {
-			lsa, err := syscall.Getsockname(s.fd)
+			address, err := syscall.Getsockname(s.fd)
 			if err != nil {
 				return err
 			}
-			switch v := lsa.(type) {
+			switch v := address.(type) {
 			case *syscall.SockaddrNetlink:
 
 				if m.Header.Seq != seq {
@@ -262,7 +267,7 @@ done:
 }
 
 // Sends a message to kernel to turn on audit
-func AuditSetEnabled(s *NetlinkSocket) error {
+func AuditSetEnabled(s *NetlinkConnection) error {
 	var status AuditStatus
 	status.Enabled = 1
 	status.Mask = AUDIT_STATUS_ENABLED
@@ -291,7 +296,7 @@ func AuditSetEnabled(s *NetlinkSocket) error {
  * This function will return 0 if auditing is NOT enabled and
  * 1 if enabled, and -1 and an error on error.
  */
-func AuditIsEnabled(s *NetlinkSocket) (state int, err error) {
+func AuditIsEnabled(s *NetlinkConnection) (state int, err error) {
 
 	wb := newNetlinkAuditRequest(uint16(AUDIT_GET), syscall.AF_NETLINK, 0)
 	if err = s.Send(wb); err != nil {
@@ -307,12 +312,12 @@ done:
 		}
 
 		for _, m := range msgs {
-			lsa, er := syscall.Getsockname(s.fd)
+			address, er := syscall.Getsockname(s.fd)
 			if er != nil {
 				return -1, er
 			}
 
-			switch v := lsa.(type) {
+			switch v := address.(type) {
 				case *syscall.SockaddrNetlink:
 					if m.Header.Seq != uint32(wb.Header.Seq) {
 						return -1, errors.New("Wrong Seq no " +
@@ -356,7 +361,7 @@ done:
 }
 
 // Sends a message to kernel for setting of program pid
-func AuditSetPid(s *NetlinkSocket, pid uint32 /*,Wait mode WAIT_YES | WAIT_NO */) error {
+func AuditSetPid(s *NetlinkConnection, pid uint32 /*,Wait mode WAIT_YES | WAIT_NO */) error {
 	var status AuditStatus
 	status.Mask = AUDIT_STATUS_PID
 	status.Pid = pid
@@ -405,7 +410,7 @@ func AuditRuleSyscallData(rule *AuditRuleData, scall int) error {
 
 /*
 Requires More work
-func AuditWatchRuleData(s *NetlinkSocket, rule *AuditRuleData, path []byte) error {
+func AuditWatchRuleData(s *NetlinkConnection, rule *AuditRuleData, path []byte) error {
 	rule.Flags = uint32(AUDIT_FILTER_EXIT)
 	rule.Action = uint32(AUDIT_ALWAYS)
 	// set mask
@@ -432,7 +437,7 @@ func AuditWatchRuleData(s *NetlinkSocket, rule *AuditRuleData, path []byte) erro
 	return nil
 }
 */
-func AuditSetRateLimit(s *NetlinkSocket, limit int) error {
+func AuditSetRateLimit(s *NetlinkConnection, limit int) error {
 	var foo AuditStatus
 	foo.Mask = AUDIT_STATUS_RATE_LIMIT
 	foo.Rate_limit = (uint32)(limit)
@@ -457,7 +462,7 @@ func AuditSetRateLimit(s *NetlinkSocket, limit int) error {
 
 }
 
-func AuditSetBacklogLimit(s *NetlinkSocket, limit int) error {
+func AuditSetBacklogLimit(s *NetlinkConnection, limit int) error {
 	var foo AuditStatus
 	foo.Mask = AUDIT_STATUS_BACKLOG_LIMIT
 	foo.Backlog_limit = (uint32)(limit)
@@ -484,7 +489,7 @@ func AuditSetBacklogLimit(s *NetlinkSocket, limit int) error {
 
 var errEntryDep = errors.New("Use of entry filter is deprecated")
 
-func AuditAddRuleData(s *NetlinkSocket, rule *AuditRuleData, flags int, action int) error {
+func AuditAddRuleData(s *NetlinkConnection, rule *AuditRuleData, flags int, action int) error {
 
 	if flags == AUDIT_FILTER_ENTRY {
 		log.Println("Use of entry filter is deprecated")
@@ -530,7 +535,7 @@ func isDone(msgchan chan string, errchan chan error, done <-chan bool) bool {
 }
 
 //For Debugging Purposes
-func GetreplyWithoutSync(s *NetlinkSocket) {
+func GetreplyWithoutSync(s *NetlinkConnection) {
 	f, err := os.OpenFile("log", os.O_CREATE|os.O_RDWR|os.O_APPEND, 0660)
 	if err != nil {
 		log.Println("Error Creating File!!")
@@ -612,7 +617,7 @@ func GetreplyWithoutSync(s *NetlinkSocket) {
 
 
 // Receives messages from Kernel and forwards to channels
-func Getreply(s *NetlinkSocket, done <-chan bool, msgchan chan string, errchan chan error) {
+func Getreply(s *NetlinkConnection, done <-chan bool, msgchan chan string, errchan chan error) {
 	for {
 		rb := make([]byte, MAX_AUDIT_MESSAGE_LENGTH)
 		nr, _, err := syscall.Recvfrom(s.fd, rb, 0)
@@ -673,7 +678,7 @@ func Getreply(s *NetlinkSocket, done <-chan bool, msgchan chan string, errchan c
 /*
 // List all rules
 // TODO: this funcion needs a lot of work to print actual rules
-func ListAllRules(s *NetlinkSocket) error {
+func ListAllRules(s *NetlinkConnection) error {
 	wb := newNetlinkAuditRequest(AUDIT_LIST_RULES, syscall.AF_NETLINK, 0)
 	if err := s.Send(wb); err != nil {
 		log.Print("Error:", err)
@@ -689,12 +694,12 @@ done:
 		}
 
 		for _, m := range msgs {
-			lsa, er := syscall.Getsockname(s.fd)
+			address, er := syscall.Getsockname(s.fd)
 			if er != nil {
 				log.Println("ERROR:", er)
 				return err
 			}
-			switch v := lsa.(type) {
+			switch v := address.(type) {
 			case *syscall.SockaddrNetlink:
 				if m.Header.Seq != uint32(wb.Header.Seq) {
 					return fmt.Errorf("Wrong Seq nr %d, expected %d", m.Header.Seq, wb.Header.Seq)
@@ -733,7 +738,7 @@ done:
 */
 
 //Delete Rule Data Function
-func AuditDeleteRuleData(s *NetlinkSocket, rule *AuditRuleData, flags uint32, action uint32) error {
+func AuditDeleteRuleData(s *NetlinkConnection, rule *AuditRuleData, flags uint32, action uint32) error {
 	var sizePurpose AuditRuleData
 	sizePurpose.Buf = make([]byte, 0)
 	if flags == AUDIT_FILTER_ENTRY {
@@ -762,7 +767,7 @@ func AuditDeleteRuleData(s *NetlinkSocket, rule *AuditRuleData, flags uint32, ac
 }
 
 // This function Deletes all rules
-func DeleteAllRules(s *NetlinkSocket) error {
+func DeleteAllRules(s *NetlinkConnection) error {
 	wb := newNetlinkAuditRequest(uint16(AUDIT_LIST_RULES), syscall.AF_NETLINK, 0)
 	if err := s.Send(wb); err != nil {
 		log.Print("Error:", err)
@@ -779,12 +784,12 @@ done:
 		}
 
 		for _, m := range msgs {
-			lsa, er := syscall.Getsockname(s.fd)
+			address, er := syscall.Getsockname(s.fd)
 			if er != nil {
 				log.Println("ERROR:", er)
 				return er
 			}
-			switch v := lsa.(type) {
+			switch v := address.(type) {
 			case *syscall.SockaddrNetlink:
 				if m.Header.Seq != uint32(wb.Header.Seq) {
 					return fmt.Errorf("Wrong Seq nr %d, expected %d", m.Header.Seq, wb.Header.Seq)
@@ -855,7 +860,7 @@ func loadSysMap_FieldTab(conf *Config, fieldmap *Field) error {
 }
 
 //sets each rule after reading configuration file
-func SetRules(s *NetlinkSocket, content []byte) error {
+func SetRules(s *NetlinkConnection, content []byte) error {
 
 	//var rule AuditRuleData
 	//AuditWatchRuleData(s, &rule, []byte("/etc/passwd"))
