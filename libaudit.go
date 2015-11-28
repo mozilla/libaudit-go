@@ -15,6 +15,8 @@ import (
 
 var sequenceNumber uint32
 
+type NetlinkMessage syscall.NetlinkMessage
+
 // This is the struct for an "audit_status" message.
 type AuditStatus struct {
 	Mask              uint32 /* Bit mask for valid entries */
@@ -34,11 +36,6 @@ type NetlinkConnection struct {
 	address syscall.SockaddrNetlink
 }
 
-type NetlinkAuditRequest struct {
-	Header syscall.NlMsghdr
-	Data   []byte
-}
-
 func nativeEndian() binary.ByteOrder {
 	var x uint32 = 0x01020304
 	if *(*byte)(unsafe.Pointer(&x)) == 0x01 {
@@ -49,7 +46,7 @@ func nativeEndian() binary.ByteOrder {
 
 //recvfrom in go takes only a byte [] to put the data recieved from the kernel that removes the need
 //for having a separate audit_reply Struct for recieving data from kernel.
-func (rr *NetlinkAuditRequest) ToWireFormat() []byte {
+func (rr *NetlinkMessage) ToWireFormat() []byte {
 	b := make([]byte, rr.Header.Len)
 	*(*uint32)(unsafe.Pointer(&b[0:4][0])) = rr.Header.Len
 	*(*uint16)(unsafe.Pointer(&b[4:6][0])) = rr.Header.Type
@@ -60,33 +57,22 @@ func (rr *NetlinkAuditRequest) ToWireFormat() []byte {
 	return b
 }
 
-func newNetlinkAuditRequest(proto uint16, family, sizeofData int) *NetlinkAuditRequest {
-	rr := &NetlinkAuditRequest{}
-
-	rr.Header.Len = uint32(syscall.NLMSG_HDRLEN + sizeofData)
-	rr.Header.Type = uint16(proto)
-	rr.Header.Flags = syscall.NLM_F_REQUEST | syscall.NLM_F_ACK
-	rr.Header.Seq = atomic.AddUint32(&sequenceNumber , 1) //Autoincrementing Sequence
-	return rr
-	//	return rr.ToWireFormat()
-}
-
 // Round the length of a netlink message up to align it properly.
 func nlmAlignOf(msglen int) int {
 	return (msglen + syscall.NLMSG_ALIGNTO - 1) & ^(syscall.NLMSG_ALIGNTO - 1)
 }
 
 // Parse a byte stream to an array of NetlinkMessage structs
-func ParseAuditNetlinkMessage(b []byte) ([]syscall.NetlinkMessage, error) {
+func parseAuditNetlinkMessage(b []byte) ([]NetlinkMessage, error) {
 
-	var msgs []syscall.NetlinkMessage
+	var msgs []NetlinkMessage
 	h, dbuf, dlen, err := netlinkMessageHeaderAndData(b)
 	if err != nil {
 		log.Println("Error in parsing")
 		return nil, err
 	}
 
-	m := syscall.NetlinkMessage{Header: *h, Data: dbuf[:int(h.Len) /* -syscall.NLMSG_HDRLEN*/]}
+	m := NetlinkMessage{Header: *h, Data: dbuf[:int(h.Len) /* -syscall.NLMSG_HDRLEN*/]}
 	msgs = append(msgs, m)
 	b = b[dlen:]
 
@@ -106,8 +92,19 @@ func netlinkMessageHeaderAndData(b []byte) (*syscall.NlMsghdr, []byte, int, erro
 	return h, b[syscall.NLMSG_HDRLEN:], nlmAlignOf(int(h.Len)), nil
 }
 
+func newNetlinkAuditRequest(proto uint16, family, sizeofData int) *NetlinkMessage {
+	rr := &NetlinkMessage{}
+
+	rr.Header.Len = uint32(syscall.NLMSG_HDRLEN + sizeofData)
+	rr.Header.Type = uint16(proto)
+	rr.Header.Flags = syscall.NLM_F_REQUEST | syscall.NLM_F_ACK
+	rr.Header.Seq = atomic.AddUint32(&sequenceNumber , 1) //Autoincrementing Sequence
+	return rr
+	//	return rr.ToWireFormat()
+}
+
 // Create a fresh connection and used it for all further communication
-func GetNetlinkSocket() (*NetlinkConnection, error) {
+func NewNetlinkConnection() (*NetlinkConnection, error) {
 
 	// Check for root user
 	if os.Getuid() != 0 {
@@ -138,7 +135,7 @@ func (s *NetlinkConnection) Close() {
 }
 
 // Wrapper for Sendto
-func (s *NetlinkConnection) Send(request *NetlinkAuditRequest) error {
+func (s *NetlinkConnection) Send(request *NetlinkMessage) error {
 	if err := syscall.Sendto(s.fd, request.ToWireFormat(), 0, &s.address); err != nil {
 		return err
 	}
@@ -146,7 +143,7 @@ func (s *NetlinkConnection) Send(request *NetlinkAuditRequest) error {
 }
 
 // Wrapper for Recvfrom
-func (s *NetlinkConnection) Receive(bytesize int, block int) ([]syscall.NetlinkMessage, error) {
+func (s *NetlinkConnection) Receive(bytesize int, block int) ([]NetlinkMessage, error) {
 	rb := make([]byte, bytesize)
 	nr, _, err := syscall.Recvfrom(s.fd, rb, 0|block)
 	//nr, _, err := syscall.Recvfrom(s, rb, syscall.MSG_PEEK|syscall.MSG_DONTWAIT)
@@ -158,14 +155,14 @@ func (s *NetlinkConnection) Receive(bytesize int, block int) ([]syscall.NetlinkM
 		return nil, syscall.EINVAL
 	}
 	rb = rb[:nr]
-	return ParseAuditNetlinkMessage(rb)
+	return parseAuditNetlinkMessage(rb)
 }
 
 //HandleAck ?
 func AuditGetReply(s *NetlinkConnection, bytesize, block int, seq uint32) error {
 done:
 	for {
-		msgs, err := s.Receive(bytesize, block) //ParseAuditNetlinkMessage(rb)
+		msgs, err := s.Receive(bytesize, block) //parseAuditNetlinkMessage(rb)
 		if err != nil {
 			return err
 		}
@@ -415,7 +412,7 @@ func GetreplyWithoutSync(s *NetlinkConnection) {
 		}
 
 		rb = rb[:nr]
-		msgs, err := ParseAuditNetlinkMessage(rb)
+		msgs, err := parseAuditNetlinkMessage(rb)
 
 		if err != nil {
 			log.Println("Not Parsed Successfuly !!")
@@ -496,7 +493,7 @@ func Getreply(s *NetlinkConnection, done <-chan bool, msgchan chan string, errch
 		}
 
 		rb = rb[:nr]
-		msgs, err := ParseAuditNetlinkMessage(rb)
+		msgs, err := parseAuditNetlinkMessage(rb)
 
 		if err != nil {
 			log.Println("Not Parsed Successfuly !!")
