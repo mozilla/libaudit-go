@@ -651,8 +651,8 @@ func Getreply(s *NetlinkSocket, done <-chan bool, msgchan chan string, errchan c
 			} else if m.Header.Type == uint16(AUDIT_FIRST_USER_MSG) {
 				log.Println("AUDIT_FIRST_USER_MSG")
 			} else {
-				Type := toConstant(m.Header.Type)
-				if Type.String() == "toConstant("+strconv.Itoa(int(m.Header.Type))+")" {
+				Type := auditConstant(m.Header.Type)
+				if Type.String() == "auditConstant("+strconv.Itoa(int(m.Header.Type))+")" {
 					log.Println("Unknown: ", m.Header.Type)
 				} else {
 					msgchan <- ("type=" + Type.String()[6:] + " msg=" + string(m.Data[:]))
