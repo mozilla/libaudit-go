@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"io/ioutil"
+	"log"
+	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -65,11 +67,8 @@ func (rule *AuditRuleData) ToWireFormat() []byte {
 	return newbuff
 }
 
-
 //Delete Rule Data Function
 func AuditDeleteRuleData(s *NetlinkConnection, rule *AuditRuleData, flags uint32, action uint32) error {
-	var sizePurpose AuditRuleData
-	sizePurpose.Buf = make([]byte, 0)
 	if flags == AUDIT_FILTER_ENTRY {
 		log.Println("Entry Filters Deprecated!!")
 		return errEntryDep
@@ -134,24 +133,32 @@ done:
 
 			}
 			if m.Header.Type == syscall.NLMSG_ERROR {
-				log.Println("NLMSG_ERROR\n")
+				error := int32(nativeEndian().Uint32(m.Data[0:4]))
+				if error == 0 {
+					log.Println("Acknowledged!!")
+				} else {
+					log.Println("NLMSG_ERROR Received..")
+				}
 			}
 			if m.Header.Type == uint16(AUDIT_LIST_RULES) {
 				b := m.Data[:]
-				rules := (*AuditRuleData)(unsafe.Pointer(&b[0]))
-				//Sizeof rules is 1064 > 1056
-				//Error handling here ?
-				// log.Println(len(b), h)
+				//Avoid conversion to AuditRuleData, we just need to pass the recvd rule
+				//as a Buffer in a newly packed rule to delete it
+				// rules := (*AuditRuleData)(unsafe.Pointer(&b[0]))
+
+				// Alternative Conversion is avoided because of fixed size byte limitation
 				// buf := bytes.NewBuffer(b)
-				// var rules AuditRuleData
+				// var rulesx AuditRuleData
 				// rules.Buf = make([]byte, 0)
-				// err = binary.Read(buf, nativeEndian(), &rules)
+				// err = binary.Read(buf, nativeEndian(), &rulesx)
 				// if err != nil {
 				// 	log.Println("Binary Read Failed !!", err)
 				// 	return err
 				// }
-				err = AuditDeleteRuleData(s, rules, rules.Flags, rules.Action)
-				if err != nil {
+
+				newwb := newNetlinkAuditRequest(uint16(AUDIT_DEL_RULE), syscall.AF_NETLINK, len(b) /*+int(rule.Buflen)*/)
+				newwb.Data = append(newwb.Data[:], b[:]...)
+				if err := s.Send(newwb); err != nil {
 					return err
 				}
 			}
@@ -159,37 +166,6 @@ done:
 	}
 	return nil
 }
-
-
-/*
-Requires More work
-func AuditWatchRuleData(s *NetlinkConnection, rule *AuditRuleData, path []byte) error {
-	rule.Flags = uint32(AUDIT_FILTER_EXIT)
-	rule.Action = uint32(AUDIT_ALWAYS)
-	// set mask
-	rule.Field_count = uint32(2)
-	rule.Fields[0] = uint32(105)
-	rule.Values[0] = uint32(len(path))
-	rule.Fieldflags[0] = uint32(AUDIT_EQUAL)
-	rule.Buflen = uint32(len(path))
-	rule.Buf = append(rule.Buf[:], path[:]...)
-
-	buff := new(bytes.Buffer)
-	err := binary.Write(buff, nativeEndian(), *rule)
-	if err != nil {
-		log.Println("binary.Write failed:", err)
-		return err
-	}
-
-	wb := newNetlinkAuditRequest(AUDIT_ADD_RULE, syscall.AF_NETLINK, int(buff.Len())+int(rule.Buflen))
-	wb.Data = append(wb.Data[:], buff.Bytes()[:]...)
-	if err := s.Send(wb); err != nil {
-		return err
-	}
-
-	return nil
-}
-*/
 
 /*
 // List all rules
@@ -253,7 +229,6 @@ done:
 }
 */
 
-
 var _audit_permadded bool
 var _audit_syscalladded bool
 
@@ -281,7 +256,6 @@ func loadSysMap_FieldTab(conf *Config, fieldmap *Field) error {
 
 	return nil
 }
-
 
 func auditWord(nr int) uint32 {
 	audit_word := (uint32)((nr) / 32)
@@ -621,7 +595,6 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 	return nil
 }
 
-
 var errEntryDep = errors.New("Use of entry filter is deprecated")
 
 func AuditAddRuleData(s *NetlinkConnection, rule *AuditRuleData, flags int, action int) error {
@@ -658,7 +631,6 @@ func AuditAddRuleData(s *NetlinkConnection, rule *AuditRuleData, flags int, acti
 	}
 	return nil
 }
-
 
 //sets each rule after reading configuration file
 func SetRules(s *NetlinkConnection, content []byte) error {
@@ -715,6 +687,38 @@ func SetRules(s *NetlinkConnection, content []byte) error {
 						}
 					}
 				}
+			}
+		case "file_rules":
+			vi := v.([]interface{})
+			for ruleNo := range vi {
+				rule := vi[ruleNo].(map[string]interface{})
+				path := rule["path"]
+				if path == "" {
+					log.Fatalln("Watch option needs a path!")
+				}
+				// TODO: Add key addition support
+				// key := rule["key"]
+				perms := rule["permission"]
+				log.Println("Setting File Permissions", path, perms)
+				var dd AuditRuleData
+				dd.Buf = make([]byte, 0)
+				add := AUDIT_FILTER_EXIT
+				action := AUDIT_ALWAYS
+				_audit_syscalladded = true
+
+				err := AuditSetupAndAddWatchDir(&dd, path.(string))
+				if err != nil {
+					log.Fatalln(err)
+				}
+				err = AuditSetupAndUpdatePerms(&dd, perms.(string))
+				if err != nil {
+					log.Fatalln(err)
+				}
+				err = AuditAddRuleData(s, &dd, add, action)
+				if err != nil {
+					log.Fatalln(err)
+				}
+
 			}
 		case "syscall_rules":
 			vi := v.([]interface{})
@@ -813,5 +817,167 @@ func SetRules(s *NetlinkConnection, content []byte) error {
 			}
 		}
 	}
+	return nil
+}
+
+var errPathTooBig = errors.New("The path passed for the watch is too big")
+var errPathStart = errors.New("The path must start with '/'")
+var errBaseTooBig = errors.New("The base name of the path is too big")
+
+func check_path(path_name string) error {
+	if len(path_name) >= PATH_MAX {
+		return errPathTooBig
+	}
+	if path_name[0] != '/' {
+		return errPathStart
+	}
+
+	base := path.Base(path_name)
+
+	if len(base) > syscall.NAME_MAX {
+		return errBaseTooBig
+	}
+
+	if strings.ContainsAny(base, "..") {
+		log.Println("Warning - relative path notation is not supported!")
+	}
+
+	if strings.ContainsAny(base, "*") || strings.ContainsAny(base, "?") {
+		log.Println("Warning - wildcard notation is not supported!")
+	}
+
+	return nil
+}
+
+func AuditSetupAndAddWatchDir(rule *AuditRuleData, path_name string) error {
+	type_name := uint16(AUDIT_WATCH)
+
+	err := check_path(path_name)
+	if err != nil {
+		return err
+	}
+
+	// Trim trailing '/' should they exist
+	strings.TrimRight(path_name, "/")
+
+	if fileInfo, err := os.Stat(path_name); err != nil {
+		if os.IsNotExist(err) {
+			return errors.New("File does Not exist!")
+		} else {
+			return err
+		}
+		if fileInfo.IsDir() {
+			type_name = uint16(AUDIT_DIR)
+		}
+	}
+
+	err = AuditAddWatchDir(type_name, rule, path_name)
+	if err != nil {
+		return err
+	}
+	return nil
+
+}
+
+func AuditAddWatchDir(type_name uint16, rule *AuditRuleData, path_name string) error {
+
+	// Check if Rule is Empty
+	// if rule && rule.Field_count {
+	// 	return errors.New("Rule is Not Empty!")
+	// }
+
+	if type_name != uint16(AUDIT_DIR) && type_name != uint16(AUDIT_WATCH) {
+		return errors.New("Invalid Type Used!")
+	}
+
+	rule.Flags = uint32(AUDIT_FILTER_EXIT)
+	rule.Action = uint32(AUDIT_ALWAYS)
+	// set mask
+	// TODO : Setup audit_rule_syscallbyname_data(rule, "all")
+	for i:=0 ; i < AUDIT_BITMASK_SIZE-1; i++ {
+		rule.Mask[i] = 0xFFFFFFFF
+	}
+
+
+	rule.Field_count = uint32(2)
+	rule.Fields[0] = uint32(type_name)
+
+	rule.Fieldflags[0] = uint32(AUDIT_EQUAL)
+	valbyte := []byte(path_name)
+	vlen := len(valbyte)
+	// if fieldid == AUDIT_FILTERKEY && vlen > AUDIT_MAX_KEY_LEN {
+	// 	return errMaxLen
+	// } else if vlen > PATH_MAX {
+	// 	return errMaxLen
+	// }
+	rule.Values[0] = (uint32)(vlen)
+	rule.Buflen = (uint32)(vlen)
+	//Now append the key value with the rule buffer space
+	//May need to reallocate memory to rule.Buf i.e. the 0 size byte array, append will take care of that
+	rule.Buf = append(rule.Buf, valbyte[:]...)
+
+	rule.Fields[1] = uint32(AUDIT_PERM)
+	rule.Fieldflags[1] = uint32(AUDIT_EQUAL)
+	rule.Values[1] = uint32(AUDIT_PERM_READ | AUDIT_PERM_WRITE | AUDIT_PERM_EXEC | AUDIT_PERM_ATTR)
+
+	return nil
+}
+
+func AuditSetupAndUpdatePerms(rule *AuditRuleData, perms string) error {
+	if len(perms) > 4 {
+		return errors.New("Permissions wrong!!")
+	}
+	perms = strings.ToLower(perms)
+	perm_value := 0
+	for _, val := range perms {
+
+		switch val {
+		case 'r':
+			perm_value |= AUDIT_PERM_READ
+		case 'w':
+			perm_value |= AUDIT_PERM_WRITE
+		case 'x':
+			perm_value |= AUDIT_PERM_EXEC
+		case 'a':
+			perm_value |= AUDIT_PERM_ATTR
+		default:
+			return errors.New("Permission isn't supported")
+		}
+	}
+
+	err := AuditUpdateWatchPerms(rule, perm_value)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func AuditUpdateWatchPerms(rule *AuditRuleData, perms int) error {
+	done := false
+
+	if rule.Field_count < 1 {
+		return errors.New("No rules provided")
+	}
+
+	// First see if we have an entry we are updating
+	for i, _ := range rule.Fields {
+		if rule.Fields[i] == uint32(AUDIT_PERM) {
+			rule.Values[i] = uint32(perms)
+			done = true
+		}
+	}
+
+	if !done {
+		// If not check to see if we have room to add a field
+		if rule.Field_count >= AUDIT_MAX_FIELDS-1 {
+			return errors.New("No More rules can be added")
+		}
+
+		rule.Fields[rule.Field_count] = uint32(AUDIT_PERM)
+		rule.Values[rule.Field_count] = uint32(perms)
+		rule.Fieldflags[rule.Field_count] = uint32(AUDIT_EQUAL)
+		rule.Field_count++
+	}
+
 	return nil
 }
