@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strconv"
-	"sync"
 	"sync/atomic"
 	"syscall"
 	"unsafe"
@@ -36,8 +34,6 @@ type NetlinkConnection struct {
 	fd      int
 	address syscall.SockaddrNetlink
 }
-
-type EventCallback func(string, chan error, ...interface{})
 
 func nativeEndian() binary.ByteOrder {
 	var x uint32 = 0x01020304
@@ -377,48 +373,6 @@ func AuditSetBacklogLimit(s *NetlinkConnection, limit int) error {
 	}
 	return nil
 
-}
-
-func isDone(msgchan chan string, errchan chan error, done <-chan bool) bool {
-	var d bool
-	select {
-	case d = <-done:
-		close(msgchan)
-		close(errchan)
-	default:
-	}
-	return d
-}
-
-func GetAuditEvents(s *NetlinkConnection, cb EventCallback, ec chan error, args ...interface{}) {
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		for {
-			select {
-			default:
-				msgs, _ := s.Receive(syscall.NLMSG_HDRLEN + MAX_AUDIT_MESSAGE_LENGTH, 0)
-				for _, msg := range msgs {
-					m := ""
-					if msg.Header.Type == syscall.NLMSG_ERROR {
-						err := int32(nativeEndian().Uint32(msg.Data[0:4]))
-						if err == 0 {
-							//Acknowledgement from kernel
-						}
-					} else {
-						Type := auditConstant(msg.Header.Type)
-						if Type.String() == "auditConstant("+strconv.Itoa(int(msg.Header.Type))+")" {
-							ec <- errors.New("Unknown Type: " + string(msg.Header.Type))
-						} else {
-							m = "type=" + Type.String()[6:] + " msg=" + string(msg.Data[:]) + "\n"
-						}
-					}
-					cb(m, ec, args...)
-				}
-			}
-		}
-	}()
-	wg.Wait()
 }
 
 /*
