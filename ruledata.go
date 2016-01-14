@@ -30,24 +30,24 @@ type AuditRuleData struct {
 	Buf         []byte //[0]byte /* string fields buffer */
 }
 
-// for config
+// For config
 type CMap struct {
 	Name string
 	Id   int
 }
 
-// for config
+// For config
 type Config struct {
 	Xmap []CMap
 }
 
-// for fieldtab
+// For fieldtab
 type FMap struct {
 	Name    string
 	Fieldid float64
 }
 
-// for fields
+// For fields
 type Field struct {
 	Fieldmap []FMap
 }
@@ -104,7 +104,7 @@ func DeleteAllRules(s *NetlinkConnection) error {
 
 done:
 	for {
-		//Make the rb byte bigger because of large messages from Kernel doesn't fit in 4096
+		// Make the rb byte bigger because of large messages from Kernel doesn't fit in 4096
 		msgs, err := s.Receive(MAX_AUDIT_MESSAGE_LENGTH, syscall.MSG_DONTWAIT)
 		if err != nil {
 			log.Println("ERROR while receiving rules:", err)

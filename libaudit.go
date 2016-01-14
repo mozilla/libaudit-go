@@ -37,7 +37,7 @@ type NetlinkConnection struct {
 	address syscall.SockaddrNetlink
 }
 
-type EventCallback func( string, chan error)
+type EventCallback func( string, chan error,  ...interface{})
 
 func nativeEndian() binary.ByteOrder {
 	var x uint32 = 0x01020304
@@ -47,8 +47,8 @@ func nativeEndian() binary.ByteOrder {
 	return binary.LittleEndian
 }
 
-//recvfrom in go takes only a byte [] to put the data recieved from the kernel that removes the need
-//for having a separate audit_reply Struct for recieving data from kernel.
+// Recvfrom in go takes only a byte [] to put the data recieved from the kernel that removes the need
+// for having a separate audit_reply Struct for recieving data from kernel.
 func (rr *NetlinkMessage) ToWireFormat() []byte {
 	b := make([]byte, rr.Header.Len)
 	*(*uint32)(unsafe.Pointer(&b[0:4][0])) = rr.Header.Len
@@ -56,7 +56,7 @@ func (rr *NetlinkMessage) ToWireFormat() []byte {
 	*(*uint16)(unsafe.Pointer(&b[6:8][0])) = rr.Header.Flags
 	*(*uint32)(unsafe.Pointer(&b[8:12][0])) = rr.Header.Seq
 	*(*uint32)(unsafe.Pointer(&b[12:16][0])) = rr.Header.Pid
-	b = append(b[:16], rr.Data[:]...) //Important b[:16]
+	b = append(b[:16], rr.Data[:]...)
 	return b
 }
 
@@ -103,7 +103,6 @@ func newNetlinkAuditRequest(proto uint16, family, sizeofData int) *NetlinkMessag
 	rr.Header.Flags = syscall.NLM_F_REQUEST | syscall.NLM_F_ACK
 	rr.Header.Seq = atomic.AddUint32(&sequenceNumber , 1) //Autoincrementing Sequence
 	return rr
-	//	return rr.ToWireFormat()
 }
 
 // Create a fresh connection and used it for all further communication
@@ -132,7 +131,7 @@ func NewNetlinkConnection() (*NetlinkConnection, error) {
 	return s, nil
 }
 
-//To end the socket conncetion
+// To end the socket conncetion
 func (s *NetlinkConnection) Close() {
 	syscall.Close(s.fd)
 }
@@ -149,7 +148,6 @@ func (s *NetlinkConnection) Send(request *NetlinkMessage) error {
 func (s *NetlinkConnection) Receive(bytesize int, block int) ([]NetlinkMessage, error) {
 	rb := make([]byte, bytesize)
 	nr, _, err := syscall.Recvfrom(s.fd, rb, 0|block)
-	//nr, _, err := syscall.Recvfrom(s, rb, syscall.MSG_PEEK|syscall.MSG_DONTWAIT)
 
 	if err != nil {
 		return nil, err
@@ -193,16 +191,16 @@ done:
 			if m.Header.Type == syscall.NLMSG_ERROR {
 				error := int32(nativeEndian().Uint32(m.Data[0:4]))
 				if error == 0 {
-					log.Println("Acknowledged!!")
+					//log.Println("Acknowledged!!")
 					break done
 				} else {
-					log.Println("NLMSG_ERROR Received..")
+					//log.Println("NLMSG_ERROR Received..")
 				}
 				break done
 			}
 
 			if m.Header.Type == uint16(AUDIT_GET) {
-				log.Println("AUDIT_GET")
+				//log.Println("AUDIT_GET")
 				break done
 			}
 		}
@@ -284,7 +282,7 @@ done:
 			}
 
 			if m.Header.Type == syscall.NLMSG_ERROR {
-				log.Println("NLMSG_ERROR Received..")
+				//log.Println("NLMSG_ERROR Received..")
 			}
 
 			if m.Header.Type == uint16(AUDIT_GET) {
@@ -394,7 +392,7 @@ func isDone(msgchan chan string, errchan chan error, done <-chan bool) bool {
 	return d
 }
 
-func Get_audit_events(s *NetlinkConnection, cb EventCallback, ec chan error) {
+func Get_audit_events(s *NetlinkConnection, cb EventCallback, ec chan error, args ...interface{}) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -417,7 +415,7 @@ func Get_audit_events(s *NetlinkConnection, cb EventCallback, ec chan error) {
 							m = "type=" + Type.String()[6:] + " msg=" + string(msg.Data[:])
 						}
 					}
-					cb(m, ec)
+					cb(m, ec, args...)
 				}
 			}
 		}
