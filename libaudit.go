@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"sync/atomic"
+	"sync"
 	"syscall"
 	"unsafe"
 )
@@ -35,6 +36,8 @@ type NetlinkConnection struct {
 	fd  int
 	address syscall.SockaddrNetlink
 }
+
+type EventCallback func( string, chan error)
 
 func nativeEndian() binary.ByteOrder {
 	var x uint32 = 0x01020304
@@ -391,147 +394,36 @@ func isDone(msgchan chan string, errchan chan error, done <-chan bool) bool {
 	return d
 }
 
-//For Debugging Purposes
-func GetreplyWithoutSync(s *NetlinkConnection) {
-	f, err := os.OpenFile("log", os.O_CREATE|os.O_RDWR|os.O_APPEND, 0660)
-	if err != nil {
-		log.Println("Error Creating File!!")
-		return
-	}
-	defer f.Close()
-	for {
-		rb := make([]byte, MAX_AUDIT_MESSAGE_LENGTH)
-		nr, _, err := syscall.Recvfrom(s.fd, rb, 0)
-		if err != nil {
-			log.Println("Error While Recieving !!")
-			continue
-		}
-		if nr < syscall.NLMSG_HDRLEN {
-			log.Println("Message Too Short!!")
-			continue
-		}
-
-		rb = rb[:nr]
-		msgs, err := parseAuditNetlinkMessage(rb)
-
-		if err != nil {
-			log.Println("Not Parsed Successfuly !!")
-			continue
-		}
-		for _, m := range msgs {
-			//Decide on various message Types
-			if m.Header.Type == syscall.NLMSG_DONE {
-				log.Println("Done")
-			} else if m.Header.Type == syscall.NLMSG_ERROR {
-				err := int32(nativeEndian().Uint32(m.Data[0:4]))
-				if err == 0 {
-					//Acknowledgement from kernel
-					log.Println("Ack")
-				} else {
-					log.Println("NLMSG_ERROR...")
-				}
-			} else if m.Header.Type == uint16(AUDIT_GET) {
-				log.Println("AUDIT_GET")
-			} else if m.Header.Type == uint16(AUDIT_FIRST_USER_MSG) {
-				log.Println("AUDIT_FIRST_USER_MSG")
-			} else if m.Header.Type == uint16(AUDIT_SYSCALL) {
-				log.Println("Syscall Event")
-				log.Println(string(m.Data[:]))
-				_, err := f.WriteString(string(m.Data[:]) + "\n")
-				if err != nil {
-					log.Println("Writing Error!!")
-				}
-			} else if m.Header.Type == uint16(AUDIT_CWD) {
-				log.Println("CWD Event")
-				log.Println(string(m.Data[:]))
-				_, err := f.WriteString(string(m.Data[:]) + "\n")
-				if err != nil {
-					log.Println("Writing Error!!")
-				}
-
-			} else if m.Header.Type == uint16(AUDIT_PATH) {
-				log.Println("Path Event")
-				log.Println(string(m.Data[:]))
-				_, err := f.WriteString(string(m.Data[:]) + "\n")
-				if err != nil {
-					log.Println("Writing Error!!")
-				}
-
-			} else if m.Header.Type == uint16(AUDIT_EOE) {
-				log.Println("Event Ends ", string(m.Data[:]))
-			} else if m.Header.Type == uint16(AUDIT_CONFIG_CHANGE) {
-				log.Println("Config Change ", string(m.Data[:]))
-				_, err := f.WriteString(string(m.Data[:]) + "\n")
-				if err != nil {
-					log.Println("Writing Error!!")
-				}
-			} else {
-				log.Println("Unknown: ", m.Header.Type)
-			}
-		}
-	}
-}
-
-
-// Receives messages from Kernel and forwards to channels
-func Getreply(s *NetlinkConnection, done <-chan bool, msgchan chan string, errchan chan error) {
-	for {
-		rb := make([]byte, MAX_AUDIT_MESSAGE_LENGTH)
-		nr, _, err := syscall.Recvfrom(s.fd, rb, 0)
-		if isDone(msgchan, errchan, done) {
-			return
-		}
-		if err != nil {
-			log.Println("Error While Recieving !!")
-			errchan <- err
-			continue
-		}
-		if nr < syscall.NLMSG_HDRLEN {
-			log.Println("Message Too Short!!")
-			errchan <- syscall.EINVAL
-			continue
-		}
-
-		rb = rb[:nr]
-		msgs, err := parseAuditNetlinkMessage(rb)
-
-		if err != nil {
-			log.Println("Not Parsed Successfuly !!")
-			errchan <- err
-			continue
-		}
-
-		for _, m := range msgs {
-			//Decide on various message Types
-			if m.Header.Type == syscall.NLMSG_DONE {
-				log.Println("Done")
-			} else if m.Header.Type == syscall.NLMSG_ERROR {
-				err := int32(nativeEndian().Uint32(m.Data[0:4]))
-				if err == 0 {
-					//Acknowledgement from kernel
-					log.Println("Ack")
-				} else {
-					log.Println("NLMSG_ERROR")
-				}
-			} else if m.Header.Type == uint16(AUDIT_EOE) {
-				// log.Println("Event Ends ", string(m.Data[:]))
-			} else if m.Header.Type == uint16(AUDIT_GET) {
-				log.Println("AUDIT_GET")
-			} else if m.Header.Type == uint16(AUDIT_FIRST_USER_MSG) {
-				log.Println("AUDIT_FIRST_USER_MSG")
-			} else {
-				Type := auditConstant(m.Header.Type)
-				if Type.String() == "auditConstant("+strconv.Itoa(int(m.Header.Type))+")" {
-					log.Println("Unknown: ", m.Header.Type)
-				} else {
-					msgchan <- ("type=" + Type.String()[6:] + " msg=" + string(m.Data[:]))
+func Get_audit_events(s *NetlinkConnection, cb EventCallback, ec chan error) {
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		for {
+			select {
+			default:
+				msgs, _ := s.Receive(syscall.Getpagesize(), 0)
+				for _,msg := range msgs {
+					m := ""
+					if msg.Header.Type == syscall.NLMSG_ERROR {
+						err := int32(nativeEndian().Uint32(msg.Data[0:4]))
+						if err == 0 {
+							//Acknowledgement from kernel
+						} 
+					} else {
+						Type := auditConstant(msg.Header.Type)
+						if Type.String() == "auditConstant("+strconv.Itoa(int(msg.Header.Type))+")" {
+							ec <- errors.New("Unknown Type: "+ string(msg.Header.Type))
+						} else {
+							m = "type=" + Type.String()[6:] + " msg=" + string(msg.Data[:])
+						}
+					}
+					cb(m, ec)
 				}
 			}
 		}
-	}
-
+	}()
+	wg.Wait()
 }
-
 
 /*
 If further needed
