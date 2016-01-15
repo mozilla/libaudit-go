@@ -399,7 +399,7 @@ func Get_audit_events(s *NetlinkConnection, cb EventCallback, ec chan error, arg
 		for {
 			select {
 			default:
-				msgs, _ := s.Receive(syscall.Getpagesize(), 0)
+				msgs, _ := s.Receive(syscall.NLMSG_HDRLEN + MAX_AUDIT_MESSAGE_LENGTH, 0)
 				for _,msg := range msgs {
 					m := ""
 					if msg.Header.Type == syscall.NLMSG_ERROR {
