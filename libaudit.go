@@ -390,7 +390,7 @@ func isDone(msgchan chan string, errchan chan error, done <-chan bool) bool {
 	return d
 }
 
-func Get_audit_events(s *NetlinkConnection, cb EventCallback, ec chan error, args ...interface{}) {
+func GetAuditEvents(s *NetlinkConnection, cb EventCallback, ec chan error, args ...interface{}) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -410,7 +410,7 @@ func Get_audit_events(s *NetlinkConnection, cb EventCallback, ec chan error, arg
 						if Type.String() == "auditConstant("+strconv.Itoa(int(msg.Header.Type))+")" {
 							ec <- errors.New("Unknown Type: " + string(msg.Header.Type))
 						} else {
-							m = "type=" + Type.String()[6:] + " msg=" + string(msg.Data[:])
+							m = "type=" + Type.String()[6:] + " msg=" + string(msg.Data[:]) + "\n"
 						}
 					}
 					cb(m, ec, args...)
