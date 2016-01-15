@@ -11,7 +11,7 @@ See [main.go](https://github.com/mozilla/audit-go/blob/master/main.go#L26) for e
 ### General 
 
 
-#### NewNetlinkConnection 
+##### NewNetlinkConnection 
 Open a audit netlink socket connection
 Similar to audit_open, NewNetlinkConnection  creates a NETLINK_AUDIT socket for communication with the kernel part of the Linux Audit Subsystem.
 
@@ -22,17 +22,32 @@ It provide three methods
 * Receive
 
 Example : 
+```
+s, err := netlinkAudit.NewNetlinkConnection()
 
-    s, err := netlinkAudit.NewNetlinkConnection()
+if err != nil {
+    log.Println(err)
+    log.Fatalln("Error while availing socket! Exiting!")
+} 
 
-    if err != nil {
-        log.Println(err)
-	    log.Fatalln("Error while availing socket! Exiting!")
-    } 
+defer s.Close()
+```
+Definations of Send and Receive are :
 
-    defer s.Close()
+**Send**
 
-#### GetAuditEvents
+``` 
+func (s *NetlinkConnection) Send(request *NetlinkMessage) error 
+```
+
+**Receive**
+
+``` 
+func (s *NetlinkConnection) Receive(bytesize int, block int) ([]NetlinkMessage, error) 
+```
+
+
+##### GetAuditEvents
 
 Start a Audit event monitor
 
@@ -56,7 +71,7 @@ netlinkAudit.GetAuditEvents(s, EventCallback, errchan)
 
 
 
-#### AuditGetReply
+##### AuditGetReply
 
 Get the audit system's reply
 
@@ -72,7 +87,7 @@ Example :
 err = AuditGetReply(s, syscall.Getpagesize(), 0, wb.Header.Seq)
 ```
 
-#### AuditIsEnabled
+##### AuditIsEnabled
 
 This function will return 0 if auditing is NOT enabled and 1 if enabled, and -1 and an error on error.
 
@@ -86,10 +101,14 @@ Example :
 status, err := netlinkAudit.AuditIsEnabled(s)
 ```
 
+##### AuditRequestStatus
+
+Not yet implemented
+
 
 ### Audit Set
 
-#### AuditSetEnabled
+##### AuditSetEnabled
 
 Enable or disable auditing
 
@@ -105,7 +124,7 @@ status, err := netlinkAudit.AuditSetEnabled(s)
 
 
 
-#### AuditSetRateLimit
+##### AuditSetRateLimit
 
 Set audit rate limit
 
@@ -121,7 +140,7 @@ Example:
 err = netlinkAudit.AuditSetRateLimit(s, 600)
 ```
 
-#### AuditSetBacklogLimit
+##### AuditSetBacklogLimit
 
 Set the audit backlog limit
 
@@ -137,7 +156,7 @@ Example :
 err = netlinkAudit.AuditSetBacklogLimit(s, 420)
 ```
 
-#### AuditSetPid
+##### AuditSetPid
 
 Set audit daemon process ID
 
@@ -154,9 +173,14 @@ Example :
 err = netlinkAudit.AuditSetPid(s, uint32(syscall.Getpid()))
 ```
 
+##### AuditSetFailure
+
+Not yet implemented
+
+
 ### Audit Rules
 
-#### SetRules
+##### SetRules
 
 Set audit rules from a configuration file
 
@@ -182,7 +206,7 @@ err = netlinkAudit.SetRules(s, content)
 ```
 
 
-#### DeleteAllRules
+##### DeleteAllRules
 
 Delete all audit rules.
 
@@ -195,7 +219,7 @@ Example:
 err := DeleteAllRules(s)
 ```
 
-#### AuditDeleteRuleData
+##### AuditDeleteRuleData
 
 Delete audit rule
 
@@ -209,7 +233,7 @@ This funciton is used to delete rules that are currently loaded in the kernel. T
 TODO - Add an example
 ```
 
-#### AuditAddRuleData
+##### AuditAddRuleData
 
 Add new audit rule
 
@@ -221,6 +245,12 @@ Example:
 ```
 TODO - Add an example
 ```
+
+
+##### AuditListAllRules
+
+Not yet implemented
+
 
 
 
