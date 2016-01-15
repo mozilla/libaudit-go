@@ -4,6 +4,8 @@ Golang package (lib) for Linux Audit
 Libaudit-go is a go library that provide helper methods to talk to Linux Audit.
 Originally developed for [Audit GO Heka Pluigin](https://github.com/mozilla/audit-go) 
 
+See [main.go](https://github.com/mozilla/audit-go/blob/master/main.go#L26) for example implementation of these functions
+
 ## Supported Methods (API)
 
 ### General 
@@ -30,7 +32,7 @@ Example :
 
     defer s.Close()
 
-#### AuditGetEvents
+#### GetAuditEvents
 
 Start a Audit event monitor
 
@@ -49,7 +51,7 @@ func EventCallback(msg string, ce chan error, args ...interface{}) {
 }
 
 // Go rutine to monitor events and call callback for each event fired
-netlinkAudit.Get_audit_events(s, EventCallback, errchan)
+netlinkAudit.GetAuditEvents(s, EventCallback, errchan)
 ```
 
 
@@ -62,7 +64,7 @@ Get the audit system's reply
 func AuditGetReply(s *NetlinkConnection, bytesize, block int, seq uint32) error
 ```
 
-This function gets the next data packet sent on the audit netlink socket. This function is usually called after sending a command to the audit system. block is of type reply_t which is either: GET_REPLY_BLOCKING and GET_REPLY_NONBLOCKING.
+This function gets the next data packet sent on the audit netlink socket. This function is usually called after sending a command to the audit system. block is of type int which is either: ```GET_REPLY_BLOCKING``` and ```GET_REPLY_NONBLOCKING```.
 
 Example :
 
@@ -151,3 +153,75 @@ Example :
 ```
 err = netlinkAudit.AuditSetPid(s, uint32(syscall.Getpid()))
 ```
+
+### Audit Rules
+
+#### SetRules
+
+Set audit rules from a configuration file
+
+```
+func SetRules(s *NetlinkConnection, content []byte) error
+```
+
+This function accept the json rules file as byte array and register rules with audit.
+See [audit.rules.json](https://github.com/mozilla/audit-go/blob/master/audit.rules.json) for example
+
+Example:
+
+```golang
+// Load all rules
+content, err := ioutil.ReadFile("audit.rules.json")
+if err != nil {
+	log.Print("Error:", err)
+	os.Exit(0)
+}
+
+// Set audit rules
+err = netlinkAudit.SetRules(s, content)
+```
+
+
+#### DeleteAllRules
+
+Delete all audit rules.
+
+```
+func func DeleteAllRules(s *NetlinkConnection) error
+```
+Example:
+
+```
+err := DeleteAllRules(s)
+```
+
+#### AuditDeleteRuleData
+
+Delete audit rule
+
+```
+func AuditDeleteRuleData(s *NetlinkConnection, rule *AuditRuleData, flags uint32, action uint32) error
+```
+
+This funciton is used to delete rules that are currently loaded in the kernel. To delete a rule, you must set up the rules identical to the one being deleted. 
+
+```
+TODO - Add an example
+```
+
+#### AuditAddRuleData
+
+Add new audit rule
+
+```
+func AuditAddRuleData(s *NetlinkConnection, rule *AuditRuleData, flags int, action int) error
+```
+
+Example:
+```
+TODO - Add an example
+```
+
+
+
+
