@@ -8,8 +8,8 @@ import (
 	"log"
 	"os"
 	"strconv"
-	"sync/atomic"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"unsafe"
 )
@@ -20,24 +20,24 @@ type NetlinkMessage syscall.NetlinkMessage
 
 // This is the struct for an "audit_status" message.
 type AuditStatus struct {
-	Mask              uint32 /* Bit mask for valid entries */
-	Enabled           uint32 /* 1 = enabled, 0 = disabled */
-	Failure           uint32 /* Failure-to-log action */
-	Pid               uint32 /* pid of auditd process */
-	Rate_limit        uint32 /* messages rate limit (per second) */
-	Backlog_limit     uint32 /* waiting messages limit */
-	Lost              uint32 /* messages lost */
-	Backlog           uint32 /* messages waiting in queue */
-	Version           uint32 /* audit api version number */
-	BacklogWaitTime   uint32 /* message queue wait timeout */
+	Mask            uint32 /* Bit mask for valid entries */
+	Enabled         uint32 /* 1 = enabled, 0 = disabled */
+	Failure         uint32 /* Failure-to-log action */
+	Pid             uint32 /* pid of auditd process */
+	Rate_limit      uint32 /* messages rate limit (per second) */
+	Backlog_limit   uint32 /* waiting messages limit */
+	Lost            uint32 /* messages lost */
+	Backlog         uint32 /* messages waiting in queue */
+	Version         uint32 /* audit api version number */
+	BacklogWaitTime uint32 /* message queue wait timeout */
 }
 
 type NetlinkConnection struct {
-	fd  int
+	fd      int
 	address syscall.SockaddrNetlink
 }
 
-type EventCallback func( string, chan error,  ...interface{})
+type EventCallback func(string, chan error, ...interface{})
 
 func nativeEndian() binary.ByteOrder {
 	var x uint32 = 0x01020304
@@ -56,7 +56,7 @@ func (rr *NetlinkMessage) ToWireFormat() []byte {
 	*(*uint16)(unsafe.Pointer(&b[6:8][0])) = rr.Header.Flags
 	*(*uint32)(unsafe.Pointer(&b[8:12][0])) = rr.Header.Seq
 	*(*uint32)(unsafe.Pointer(&b[12:16][0])) = rr.Header.Pid
-	b = append(b[:16], rr.Data[:]...)
+	b = append(b[:16], rr.Data[:]...) //b[:16] is crucial for aligning the header and data properly.
 	return b
 }
 
@@ -101,7 +101,7 @@ func newNetlinkAuditRequest(proto uint16, family, sizeofData int) *NetlinkMessag
 	rr.Header.Len = uint32(syscall.NLMSG_HDRLEN + sizeofData)
 	rr.Header.Type = uint16(proto)
 	rr.Header.Flags = syscall.NLM_F_REQUEST | syscall.NLM_F_ACK
-	rr.Header.Seq = atomic.AddUint32(&sequenceNumber , 1) //Autoincrementing Sequence
+	rr.Header.Seq = atomic.AddUint32(&sequenceNumber, 1) //Autoincrementing Sequence
 	return rr
 }
 
@@ -234,7 +234,7 @@ func AuditSetEnabled(s *NetlinkConnection) error {
 	return nil
 }
 
-/* 
+/*
  * This function will return 0 if auditing is NOT enabled and
  * 1 if enabled, and -1 and an error on error.
  */
@@ -260,20 +260,20 @@ done:
 			}
 
 			switch v := address.(type) {
-				case *syscall.SockaddrNetlink:
-					if m.Header.Seq != uint32(wb.Header.Seq) {
-						return -1, errors.New("Wrong Seq no " +
-							        string(int(m.Header.Seq)) +
-							        ", expected " + string(int(wb.Header.Seq)))
-					}
-					if m.Header.Pid != v.Pid {
-						return -1, errors.New("Wrong Seq nr " +
-										string(int(m.Header.Pid)) +
-										", expected " + string(int(v.Pid)))
-					}
+			case *syscall.SockaddrNetlink:
+				if m.Header.Seq != uint32(wb.Header.Seq) {
+					return -1, errors.New("Wrong Seq no " +
+						string(int(m.Header.Seq)) +
+						", expected " + string(int(wb.Header.Seq)))
+				}
+				if m.Header.Pid != v.Pid {
+					return -1, errors.New("Wrong Seq nr " +
+						string(int(m.Header.Pid)) +
+						", expected " + string(int(v.Pid)))
+				}
 
-				default:
-					return -1, syscall.EINVAL
+			default:
+				return -1, syscall.EINVAL
 			}
 
 			if m.Header.Type == syscall.NLMSG_DONE {
@@ -304,7 +304,7 @@ done:
 
 // Sends a message to kernel for setting of program pid
 /*,Wait mode WAIT_YES | WAIT_NO */
-func AuditSetPid(s *NetlinkConnection, pid uint32 ) error {
+func AuditSetPid(s *NetlinkConnection, pid uint32) error {
 	var status AuditStatus
 	status.Mask = AUDIT_STATUS_PID
 	status.Pid = pid
@@ -328,7 +328,6 @@ func AuditSetPid(s *NetlinkConnection, pid uint32 ) error {
 	//Polling in GO Is it needed ?
 	return nil
 }
-
 
 func AuditSetRateLimit(s *NetlinkConnection, limit int) error {
 	var foo AuditStatus
@@ -380,7 +379,6 @@ func AuditSetBacklogLimit(s *NetlinkConnection, limit int) error {
 
 }
 
-
 func isDone(msgchan chan string, errchan chan error, done <-chan bool) bool {
 	var d bool
 	select {
@@ -400,17 +398,17 @@ func Get_audit_events(s *NetlinkConnection, cb EventCallback, ec chan error, arg
 			select {
 			default:
 				msgs, _ := s.Receive(syscall.NLMSG_HDRLEN + MAX_AUDIT_MESSAGE_LENGTH, 0)
-				for _,msg := range msgs {
+				for _, msg := range msgs {
 					m := ""
 					if msg.Header.Type == syscall.NLMSG_ERROR {
 						err := int32(nativeEndian().Uint32(msg.Data[0:4]))
 						if err == 0 {
 							//Acknowledgement from kernel
-						} 
+						}
 					} else {
 						Type := auditConstant(msg.Header.Type)
 						if Type.String() == "auditConstant("+strconv.Itoa(int(msg.Header.Type))+")" {
-							ec <- errors.New("Unknown Type: "+ string(msg.Header.Type))
+							ec <- errors.New("Unknown Type: " + string(msg.Header.Type))
 						} else {
 							m = "type=" + Type.String()[6:] + " msg=" + string(msg.Data[:])
 						}
