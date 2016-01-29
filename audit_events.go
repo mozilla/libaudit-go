@@ -7,7 +7,6 @@ import (
 	"errors"
 	"encoding/hex"
 	"strings"
-	"sync"
 )
 
 type EventCallback func(*AuditEvent, chan error, ...interface{})
@@ -19,13 +18,13 @@ type AuditEvent struct {
 	Timestamp			float64
 	Type 				string
 	Data 				map[string]string
+	Raw 				string
 }
 
 func ParseAuditKeyValue(str string) (map[string]string) {
 	audit_key_string := map[string]bool{
 		"name":true,
 	}
-
 	re_kv := regexp.MustCompile(`((?:\\.|[^= ]+)*)=("(?:\\.|[^"\\]+)*"|(?:\\.|[^ "\\]+)*)`)
 	re_quotedstring := regexp.MustCompile(`".+"`)
 
@@ -82,7 +81,8 @@ func NewAuditEvent(msg NetlinkMessage) (*AuditEvent, error) {
 		return nil, err
 	}
 
-	aetype :=  auditConstant(msg.Header.Type).String()
+	raw := string(msg.Data[:])
+	aetype :=  auditConstant(msg.Header.Type).String()[6:]
 	if aetype == "auditConstant("+strconv.Itoa(int(msg.Header.Type))+")" {
 		return nil, errors.New("Unknown Type: " + string(msg.Header.Type))
 	}
@@ -92,13 +92,12 @@ func NewAuditEvent(msg NetlinkMessage) (*AuditEvent, error) {
 		Timestamp:	timestamp,
 		Type:		aetype,
 		Data:		data,
+		Raw:		raw,
 	}
 	return ae,nil
 }
 
 func GetAuditEvents(s *NetlinkConnection, cb EventCallback, ec chan error, args ...interface{}) {
-	var wg sync.WaitGroup
-	wg.Add(1)
 	go func() {
 		for {
 			select {
@@ -108,7 +107,10 @@ func GetAuditEvents(s *NetlinkConnection, cb EventCallback, ec chan error, args 
 					if msg.Header.Type == syscall.NLMSG_ERROR {
 						err := int32(nativeEndian().Uint32(msg.Data[0:4]))
 						if err == 0 {
-							//Acknowledgement from kernel
+							//Note - NLMSG_ERROR can be Acknowledgement from kernel
+							//If the first 4 bytes of Data part are zero
+						} else {
+							ec <- errors.New("NLMSG ERROR Recienved")
 						}
 					} else {
 						nae, err := NewAuditEvent(msg)
@@ -121,13 +123,10 @@ func GetAuditEvents(s *NetlinkConnection, cb EventCallback, ec chan error, args 
 			}
 		}
 	}()
-	wg.Wait()
 }
 
 
 func GetRawAuditEvents(s *NetlinkConnection, cb RawEventCallback, ec chan error, args ...interface{}) {
-	var wg sync.WaitGroup
-	wg.Add(1)
 	go func() {
 		for {
 			select {
@@ -153,5 +152,4 @@ func GetRawAuditEvents(s *NetlinkConnection, cb RawEventCallback, ec chan error,
 			}
 		}
 	}()
-	wg.Wait()
 }
