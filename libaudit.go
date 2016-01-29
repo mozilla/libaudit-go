@@ -101,7 +101,7 @@ func newNetlinkAuditRequest(proto uint16, family, sizeofData int) *NetlinkMessag
 	return rr
 }
 
-// Create a fresh connection and used it for all further communication
+// Create a fresh connection and use it for all further communication
 func NewNetlinkConnection() (*NetlinkConnection, error) {
 
 	// Check for root user
@@ -204,7 +204,8 @@ done:
 	return nil
 }
 
-// Sends a message to kernel to turn on audit
+// Enable or Disable Audit
+// TODO - implement Disable 
 func AuditSetEnabled(s *NetlinkConnection) error {
 	var status AuditStatus
 	status.Enabled = 1
@@ -230,10 +231,8 @@ func AuditSetEnabled(s *NetlinkConnection) error {
 	return nil
 }
 
-/*
- * This function will return 0 if auditing is NOT enabled and
- * 1 if enabled, and -1 and an error on error.
- */
+// This function will return 0 if auditing is NOT enabled and
+// 1 if enabled, and -1 and an error on error.
 func AuditIsEnabled(s *NetlinkConnection) (state int, err error) {
 
 	wb := newNetlinkAuditRequest(uint16(AUDIT_GET), syscall.AF_NETLINK, 0)
@@ -299,7 +298,7 @@ done:
 }
 
 // Sends a message to kernel for setting of program pid
-/*,Wait mode WAIT_YES | WAIT_NO */
+// Wait mode WAIT_YES | WAIT_NO 
 func AuditSetPid(s *NetlinkConnection, pid uint32) error {
 	var status AuditStatus
 	status.Mask = AUDIT_STATUS_PID

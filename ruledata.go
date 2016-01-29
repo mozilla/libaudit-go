@@ -19,15 +19,15 @@ var rulesRetrieved AuditRuleData
 
 // AuditRuleData is used while adding/deleting/listing audit rules
 type AuditRuleData struct {
-	Flags       uint32 /* AUDIT_PER_{TASK,CALL}, AUDIT_PREPEND */
-	Action      uint32 /* AUDIT_NEVER, AUDIT_POSSIBLE, AUDIT_ALWAYS */
+	Flags       uint32 // AUDIT_PER_{TASK,CALL}, AUDIT_PREPEND
+	Action      uint32 // AUDIT_NEVER, AUDIT_POSSIBLE, AUDIT_ALWAYS
 	Field_count uint32
-	Mask        [AUDIT_BITMASK_SIZE]uint32 /* syscall(s) affected */
+	Mask        [AUDIT_BITMASK_SIZE]uint32 // syscall(s) affected
 	Fields      [AUDIT_MAX_FIELDS]uint32
 	Values      [AUDIT_MAX_FIELDS]uint32
 	Fieldflags  [AUDIT_MAX_FIELDS]uint32
-	Buflen      uint32 /* total length of string fields */
-	Buf         []byte //[0]byte /* string fields buffer */
+	Buflen      uint32 // total length of string fields
+	Buf         []byte // string fields buffer 
 }
 
 // For config
@@ -67,7 +67,7 @@ func (rule *AuditRuleData) ToWireFormat() []byte {
 	return newbuff
 }
 
-//Delete Rule Data Function
+// Delete Rule Data Function
 func AuditDeleteRuleData(s *NetlinkConnection, rule *AuditRuleData, flags uint32, action uint32) error {
 	if flags == AUDIT_FILTER_ENTRY {
 		log.Println("Entry Filters Deprecated!!")
@@ -452,8 +452,8 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 
 		fallthrough //IMP
 	case AUDIT_SUBJ_USER, AUDIT_SUBJ_ROLE, AUDIT_SUBJ_TYPE, AUDIT_SUBJ_SEN, AUDIT_SUBJ_CLR, AUDIT_FILTERKEY:
-		//IF And only if a syscall is added or a permisission is added then this field should be set
-		//MORE Debugging Required
+		//If And only if a syscall is added or a permisission is added then this field should be set
+		//TODO - More debugging required
 		if fieldid == AUDIT_FILTERKEY && !(_audit_syscalladded || _audit_permadded) {
 			return errNoSys
 		}
@@ -478,7 +478,7 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 		if _audit_syscalladded == false {
 			return errNoSys
 		} else {
-			//AUDIT_ARCH_X86_64 is made specifically for Mozilla Heka purpose, please make changes as per required
+			//AUDIT_ARCH_X86_64 is made specifically for Mozilla Heka purpose.
 			if _, isInt := fieldval.(float64); isInt {
 				rule.Values[rule.Field_count] = AUDIT_ARCH_X86_64
 			} else if _, isString := fieldval.(string); isString {
@@ -489,7 +489,7 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 		}
 
 	case AUDIT_PERM:
-		//DECIDE ON VARIOUS ERROR TYPES
+		//Decide on various error types
 		if flags != AUDIT_FILTER_EXIT {
 			return errNoExit
 		} else if opval != AUDIT_EQUAL {
@@ -632,7 +632,7 @@ func AuditAddRuleData(s *NetlinkConnection, rule *AuditRuleData, flags int, acti
 	return nil
 }
 
-//sets each rule after reading configuration file
+//Sets each rule after reading configuration file
 func SetRules(s *NetlinkConnection, content []byte) error {
 
 	//var rule AuditRuleData
@@ -648,7 +648,7 @@ func SetRules(s *NetlinkConnection, content []byte) error {
 	m := rules.(map[string]interface{})
 
 	if _, ok := m["delete"]; ok {
-		//First Delete All rules and then add rules
+		//First delete all rules and then add rules
 		log.Println("Deleting all rules")
 		err := DeleteAllRules(s)
 		if err != nil {
@@ -669,7 +669,7 @@ func SetRules(s *NetlinkConnection, content []byte) error {
 	for k, v := range m {
 		switch k {
 		case "custom_rule":
-			// Still Needed ?
+			//TODO-  Find out if this is still needed ?
 			vi := v.([]interface{})
 			for ruleNo := range vi {
 				rule := vi[ruleNo].(map[string]interface{})
@@ -741,7 +741,7 @@ func SetRules(s *NetlinkConnection, content []byte) error {
 						actions := srule["action"].([]interface{})
 						//log.Println(actions)
 
-						//NOW APPLY ACTIONS ON SYSCALLS by separating the filters i.e exit from action i.e. always
+						//Now apply action on syscall by separating the filters i.e exit from action i.e. always
 						action := 0
 						filter := 0
 						//This part supposes that actions and filters are written as always,exit or never,exit not viceversa
