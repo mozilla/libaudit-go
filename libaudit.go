@@ -155,7 +155,7 @@ func (s *NetlinkConnection) Receive(bytesize int, block int) ([]NetlinkMessage, 
 	return parseAuditNetlinkMessage(rb)
 }
 
-//HandleAck ?
+// Get the audit system's reply
 func AuditGetReply(s *NetlinkConnection, bytesize, block int, seq uint32) error {
 done:
 	for {
@@ -205,10 +205,10 @@ done:
 }
 
 // Enable or Disable Audit
-// TODO - implement Disable 
-func AuditSetEnabled(s *NetlinkConnection) error {
+// 1 for enable and 0 for disable
+func AuditSetEnabled(s *NetlinkConnection, enabled uint32) error {
 	var status AuditStatus
-	status.Enabled = 1
+	status.Enabled = enabled
 	status.Mask = AUDIT_STATUS_ENABLED
 	buff := new(bytes.Buffer)
 	err := binary.Write(buff, nativeEndian(), status)
@@ -223,7 +223,7 @@ func AuditSetEnabled(s *NetlinkConnection) error {
 		return err
 	}
 
-	// Receiving IN JUST ONE TRY
+	// Receive in just one try
 	err = AuditGetReply(s, syscall.Getpagesize(), 0, wb.Header.Seq)
 	if err != nil {
 		return err

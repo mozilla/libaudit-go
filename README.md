@@ -143,7 +143,7 @@ Not yet implemented
 
 ##### AuditSetEnabled
 
-Enable or disable auditing
+Enable or disable auditing, 1 to enable and 0 to disable.
 
 ```
 func AuditSetEnabled(s *NetlinkConnection) error
@@ -152,7 +152,7 @@ func AuditSetEnabled(s *NetlinkConnection) error
 Example : 
 
 ```
-status, err := netlinkAudit.AuditSetEnabled(s)
+err := netlinkAudit.AuditSetEnabled(s, 1)
 ```
 
 

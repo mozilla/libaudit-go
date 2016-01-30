@@ -321,7 +321,7 @@ var (
 func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uint32, fieldname string, fieldmap Field, flags int) error {
 
 	if rule.Field_count >= (AUDIT_MAX_FIELDS - 1) {
-		log.Println("Max Fields Exceeded !!")
+		log.Println("Max Fields Exceeded")
 		return errMaxField
 	}
 
@@ -361,7 +361,7 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 			if fieldval.(string) == "unset" {
 				rule.Values[rule.Field_count] = 4294967295
 			} else {
-				log.Println("No support for string values yet !", val)
+				log.Println("No support for string values yet", val)
 				return errNoStr
 				//Insert audit_name_to_uid(string,int * val)
 			}
@@ -375,7 +375,7 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 		if val, isInt := fieldval.(float64); isInt {
 			rule.Values[rule.Field_count] = (uint32)(val)
 		} else if val, isString := fieldval.(string); isString {
-			log.Println("No support for string values yet !", val)
+			log.Println("No support for string values yet", val)
 			return errNoStr
 			//audit_name_to_gid(string, sint*val)
 		} else {
@@ -406,7 +406,7 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 			}
 
 		} else if val, isString := fieldval.(string); isString {
-			log.Println("No support for string values yet !", val)
+			log.Println("No support for string values yet", val)
 			return errNoStr
 		} else {
 			log.Println("Error Setting Value:", fieldval)
@@ -430,7 +430,7 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 		if val, isInt := fieldval.(float64); isInt {
 			rule.Values[rule.Field_count] = (uint32)(val)
 		} else if val, isString := fieldval.(string); isString {
-			log.Println("No support for string values yet !", val)
+			log.Println("No support for string values yet", val)
 			return errNoStr
 		} else {
 			log.Println("Error Setting Value:", fieldval)
@@ -652,7 +652,7 @@ func SetRules(s *NetlinkConnection, content []byte) error {
 		log.Println("Deleting all rules")
 		err := DeleteAllRules(s)
 		if err != nil {
-			log.Println("Error Deleting Rules!")
+			log.Println("Error Deleting Rules")
 			return err
 		}
 	}
@@ -758,7 +758,7 @@ func SetRules(s *NetlinkConnection, content []byte) error {
 						if actions[1] == "task" {
 							filter = AUDIT_FILTER_TASK
 						} else if actions[1] == "entry" {
-							log.Println("Support for Entry Filter is Deprecated!! Switching back to Exit filter")
+							log.Println("Support for Entry Filter is Deprecated. Switching back to Exit filter")
 							filter = AUDIT_FILTER_EXIT
 						} else if actions[1] == "exit" {
 							filter = AUDIT_FILTER_EXIT
