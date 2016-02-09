@@ -54,7 +54,7 @@ type Field struct {
 
 func (rule *AuditRuleData) ToWireFormat() []byte {
 
-	newbuff := make([]byte, int(unsafe.Sizeof(*rule))+int(rule.Buflen))
+	newbuff := make([]byte, int(unsafe.Sizeof(*rule))-int(unsafe.Sizeof(rule.Buf))+int(rule.Buflen))
 	*(*uint32)(unsafe.Pointer(&newbuff[0:4][0])) = rule.Flags
 	*(*uint32)(unsafe.Pointer(&newbuff[4:8][0])) = rule.Action
 	*(*uint32)(unsafe.Pointer(&newbuff[8:12][0])) = rule.Field_count
@@ -146,16 +146,6 @@ done:
 				//as a Buffer in a newly packed rule to delete it
 				// rules := (*AuditRuleData)(unsafe.Pointer(&b[0]))
 
-				// Alternative Conversion is avoided because of fixed size byte limitation
-				// buf := bytes.NewBuffer(b)
-				// var rulesx AuditRuleData
-				// rules.Buf = make([]byte, 0)
-				// err = binary.Read(buf, nativeEndian(), &rulesx)
-				// if err != nil {
-				// 	log.Println("Binary Read Failed !!", err)
-				// 	return err
-				// }
-
 				newwb := newNetlinkAuditRequest(uint16(AUDIT_DEL_RULE), syscall.AF_NETLINK, len(b) /*+int(rule.Buflen)*/)
 				newwb.Data = append(newwb.Data[:], b[:]...)
 				if err := s.Send(newwb); err != nil {
@@ -166,68 +156,6 @@ done:
 	}
 	return nil
 }
-
-/*
-// List all rules
-// TODO: this funcion needs a lot of work to print actual rules
-func ListAllRules(s *NetlinkConnection) error {
-	wb := newNetlinkAuditRequest(AUDIT_LIST_RULES, syscall.AF_NETLINK, 0)
-	if err := s.Send(wb); err != nil {
-		log.Print("Error:", err)
-		return err
-	}
-
-done:
-	for {
-		msgs, err := s.Receive(MAX_AUDIT_MESSAGE_LENGTH, syscall.MSG_DONTWAIT)
-		if err != nil {
-			log.Println("ERROR while receiving rules:", err)
-			return err
-		}
-
-		for _, m := range msgs {
-			address, er := syscall.Getsockname(s.fd)
-			if er != nil {
-				log.Println("ERROR:", er)
-				return err
-			}
-			switch v := address.(type) {
-			case *syscall.SockaddrNetlink:
-				if m.Header.Seq != uint32(wb.Header.Seq) {
-					return fmt.Errorf("Wrong Seq nr %d, expected %d", m.Header.Seq, wb.Header.Seq)
-				}
-				if m.Header.Pid != v.Pid {
-					return fmt.Errorf("Wrong pid %d, expected %d", m.Header.Pid, v.Pid)
-				}
-			default:
-				log.Println("ERROR:", syscall.EINVAL)
-			}
-
-			if m.Header.Type == syscall.NLMSG_DONE {
-				log.Println("All rules deleted")
-				break done
-			}
-			if m.Header.Type == syscall.NLMSG_ERROR {
-				log.Println("NLMSG_ERROR")
-			}
-			if m.Header.Type == AUDIT_LIST_RULES {
-				b := m.Data[:]
-				//Should revert to rule.ToWireFormat()
-				buf := bytes.NewBuffer(b)
-				var rules AuditRuleData
-				rules.Buf = make([]byte, 0)
-				err = binary.Read(buf, nativeEndian(), &rules)
-				if err != nil {
-					log.Println("binary.Read failed:", err)
-					return err
-				}
-				// TODO : save all rules to an array so delete all rules function can use this
-				rulesRetrieved = rules
-			}
-		}
-	}
-}
-*/
 
 var _audit_permadded bool
 var _audit_syscalladded bool
@@ -739,7 +667,6 @@ func SetRules(s *NetlinkConnection, content []byte) error {
 							return err
 						}
 						actions := srule["action"].([]interface{})
-						//log.Println(actions)
 
 						//Now apply action on syscall by separating the filters i.e exit from action i.e. always
 						action := 0
@@ -981,3 +908,59 @@ func AuditUpdateWatchPerms(rule *AuditRuleData, perms int) error {
 
 	return nil
 }
+
+// List all rules
+// TODO: this funcion needs a lot of work to print actual rules
+func ListAllRules(s *NetlinkConnection) error {
+	wb := newNetlinkAuditRequest(uint16(AUDIT_LIST_RULES), syscall.AF_NETLINK, 0)
+	if err := s.Send(wb); err != nil {
+		log.Print("Error:", err)
+		return err
+	}
+
+done:
+	for {
+		msgs, err := s.Receive(MAX_AUDIT_MESSAGE_LENGTH, syscall.MSG_DONTWAIT)
+		if err != nil {
+			log.Println("ERROR while receiving rules:", err)
+			return err
+		}
+
+
+		for _, m := range msgs {
+			
+			address, er := syscall.Getsockname(s.fd)
+			if er != nil {
+				log.Println("ERROR:", er)
+				return err
+			}
+			switch v := address.(type) {
+			case *syscall.SockaddrNetlink:
+				if m.Header.Seq != wb.Header.Seq {
+					return errors.New("Wrong Seq nr, "+strconv.FormatUint(uint64(m.Header.Seq), 10)+
+						" expected "+strconv.FormatUint(uint64(wb.Header.Seq), 10))
+				}
+				if m.Header.Pid != v.Pid {
+					return errors.New("Wrong pid,"+strconv.FormatUint(uint64(m.Header.Pid), 10)+
+						" expected"+ strconv.FormatUint(uint64(v.Pid), 10))
+				}
+			default:
+				log.Println("ERROR:", syscall.EINVAL)
+			}
+
+			if m.Header.Type == syscall.NLMSG_DONE {
+				log.Println("All rules deleted")
+				break done
+			}
+			if m.Header.Type == syscall.NLMSG_ERROR {
+				log.Println("NLMSG_ERROR")
+			}
+			if m.Header.Type == uint16(AUDIT_LIST_RULES) {
+				p := (*AuditRuleData)(unsafe.Pointer(&m.Data[0]))
+				log.Println(p.Flags)
+			}
+		}
+	}
+	return nil
+}
+
