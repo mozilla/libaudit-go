@@ -55,21 +55,54 @@ Start a Audit event monitor
 func AuditGetEvents(s *NetlinkConnection, cb EventCallback, ec chan error, args ...interface{})
 ```
 
-This function start a audit event monitor and accept a callback that get called on each audit event received  from the Audit Subsysten.
+This function start a audit event monitor and accept a callback that is called on each audit event received from the Audit Subsysten.
 
 Example:
 
 ```golang
 
-func EventCallback(msg string, ce chan error, args ...interface{}) {
-	log.Println(msg)
+func EventCallback(msg *netlinkAudit.AuditEvent, ce chan error, args ...interface{}) {
+	// print the info map
+	log.Println(msg.Data)
+	// print the raw event
+	log.Println(msg.Raw)
 }
 
 // Go rutine to monitor events and call callback for each event fired
 netlinkAudit.GetAuditEvents(s, EventCallback, errchan)
 ```
 
+The callback accept AuditEvent type variable as an argument. AuditEvent is defined as
 
+```golang
+type AuditEvent struct {
+	Serial				int
+	Timestamp			float64
+	Type 				string
+	Data 				map[string]string
+	Raw 				string
+}
+```
+
+##### AuditGetRawEvents
+
+Start a Audit event monitor which emits raw events
+
+```golang
+func GetRawAuditEvents(s *NetlinkConnection, cb RawEventCallback, ec chan error, args ...interface{})
+```
+Same as GetAuditEvents but accept a string type in callback instead of AuditEvent type.
+
+Example -
+
+``` golang
+func RawEventCallback(msg string, ce chan error, args ...interface{}) {
+	log.Println(msg)
+}
+
+// Go rutine to monitor events and feed raw events to the callback
+netlinkAudit.GetRawAuditEvents(s, RawEventCallback, errchan)
+```
 
 ##### AuditGetReply
 
@@ -250,8 +283,4 @@ TODO - Add an example
 ##### AuditListAllRules
 
 Not yet implemented
-
-
-
-
 

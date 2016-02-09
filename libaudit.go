@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strconv"
-	"sync"
 	"sync/atomic"
 	"syscall"
 	"unsafe"
@@ -36,8 +34,6 @@ type NetlinkConnection struct {
 	fd      int
 	address syscall.SockaddrNetlink
 }
-
-type EventCallback func(string, chan error, ...interface{})
 
 func nativeEndian() binary.ByteOrder {
 	var x uint32 = 0x01020304
@@ -105,7 +101,7 @@ func newNetlinkAuditRequest(proto uint16, family, sizeofData int) *NetlinkMessag
 	return rr
 }
 
-// Create a fresh connection and used it for all further communication
+// Create a fresh connection and use it for all further communication
 func NewNetlinkConnection() (*NetlinkConnection, error) {
 
 	// Check for root user
@@ -208,7 +204,8 @@ done:
 	return nil
 }
 
-// Sends a message to kernel to turn on audit
+// Enable or Disable Audit
+// TODO - implement Disable 
 func AuditSetEnabled(s *NetlinkConnection) error {
 	var status AuditStatus
 	status.Enabled = 1
@@ -234,10 +231,8 @@ func AuditSetEnabled(s *NetlinkConnection) error {
 	return nil
 }
 
-/*
- * This function will return 0 if auditing is NOT enabled and
- * 1 if enabled, and -1 and an error on error.
- */
+// This function will return 0 if auditing is NOT enabled and
+// 1 if enabled, and -1 and an error on error.
 func AuditIsEnabled(s *NetlinkConnection) (state int, err error) {
 
 	wb := newNetlinkAuditRequest(uint16(AUDIT_GET), syscall.AF_NETLINK, 0)
@@ -303,7 +298,7 @@ done:
 }
 
 // Sends a message to kernel for setting of program pid
-/*,Wait mode WAIT_YES | WAIT_NO */
+// Wait mode WAIT_YES | WAIT_NO 
 func AuditSetPid(s *NetlinkConnection, pid uint32) error {
 	var status AuditStatus
 	status.Mask = AUDIT_STATUS_PID
@@ -377,48 +372,6 @@ func AuditSetBacklogLimit(s *NetlinkConnection, limit int) error {
 	}
 	return nil
 
-}
-
-func isDone(msgchan chan string, errchan chan error, done <-chan bool) bool {
-	var d bool
-	select {
-	case d = <-done:
-		close(msgchan)
-		close(errchan)
-	default:
-	}
-	return d
-}
-
-func GetAuditEvents(s *NetlinkConnection, cb EventCallback, ec chan error, args ...interface{}) {
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		for {
-			select {
-			default:
-				msgs, _ := s.Receive(syscall.NLMSG_HDRLEN + MAX_AUDIT_MESSAGE_LENGTH, 0)
-				for _, msg := range msgs {
-					m := ""
-					if msg.Header.Type == syscall.NLMSG_ERROR {
-						err := int32(nativeEndian().Uint32(msg.Data[0:4]))
-						if err == 0 {
-							//Acknowledgement from kernel
-						}
-					} else {
-						Type := auditConstant(msg.Header.Type)
-						if Type.String() == "auditConstant("+strconv.Itoa(int(msg.Header.Type))+")" {
-							ec <- errors.New("Unknown Type: " + string(msg.Header.Type))
-						} else {
-							m = "type=" + Type.String()[6:] + " msg=" + string(msg.Data[:]) + "\n"
-						}
-					}
-					cb(m, ec, args...)
-				}
-			}
-		}
-	}()
-	wg.Wait()
 }
 
 /*
