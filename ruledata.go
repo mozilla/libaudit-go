@@ -264,7 +264,6 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 	rule.Fields[rule.Field_count] = fieldid
 	rule.Fieldflags[rule.Field_count] = opval
 
-	log.Println("Going for", fieldname)
 	switch fieldid {
 	case AUDIT_UID, AUDIT_EUID, AUDIT_SUID, AUDIT_FSUID, AUDIT_LOGINUID, AUDIT_OBJ_UID, AUDIT_OBJ_GID:
 		if val, isInt := fieldval.(float64); isInt {
@@ -552,11 +551,6 @@ func AuditAddRuleData(s *NetlinkConnection, rule *AuditRuleData, flags int, acti
 	if err = s.Send(newwb); err != nil {
 		return err
 	}
-
-	if err != nil {
-		log.Println("Error sending add rule data request")
-		return err
-	}
 	return nil
 }
 
@@ -662,94 +656,112 @@ func SetRules(s *NetlinkConnection, content []byte) error {
 			vi := v.([]interface{})
 			for sruleNo := range vi {
 				srule := vi[sruleNo].(map[string]interface{})
+				var dd AuditRuleData
+				dd.Buf = make([]byte, 0)
 
-				for l := range conf.Xmap {
-					if conf.Xmap[l].Name == srule["name"] {
-						// set rules
-						log.Println("setting syscall rule", conf.Xmap[l].Name)
-						var dd AuditRuleData
-						dd.Buf = make([]byte, 0)
+				// Process syscalls
+				if srule["syscalls"] != nil {
+					for l := range conf.Xmap {
+						syscalls := srule["syscalls"].([]interface{})
+						for syscall := range syscalls {
+							if conf.Xmap[l].Name == syscalls[syscall] {
+								log.Println("setting syscall rule", conf.Xmap[l].Name)
+								err = AuditRuleSyscallData(&dd, conf.Xmap[l].Id)
+								if err == nil {
+									_audit_syscalladded = true
+								} else {
+									return err
+								}
+							}	
+						}
+					}
+				}
 
-						err = AuditRuleSyscallData(&dd, conf.Xmap[l].Id)
-						if err == nil {
-							_audit_syscalladded = true
-						} else {
+				// Process action
+				actions := srule["actions"].([]interface{})
+
+				//Apply action on syscall by separating the filters (exit) from actions (always)
+				action := 0
+				filter := 0
+				//This part assumes that actions and filters are written as always,exit or never,exit not viceversa
+				if actions[0] == "never" {
+					action = AUDIT_NEVER
+				} else if actions[0] == "possible" {
+					action = AUDIT_POSSIBLE
+				} else if actions[0] == "always" {
+					action = AUDIT_ALWAYS
+				} else {
+					action = -1
+				}
+
+				if actions[1] == "task" {
+					filter = AUDIT_FILTER_TASK
+				} else if actions[1] == "entry" {
+					log.Println("Support for Entry Filter is Deprecated. Switching back to Exit filter")
+					filter = AUDIT_FILTER_EXIT
+				} else if actions[1] == "exit" {
+					filter = AUDIT_FILTER_EXIT
+				} else if actions[1] == "user" {
+					filter = AUDIT_FILTER_USER
+				} else if actions[1] == "exclude" {
+					filter = AUDIT_FILTER_EXCLUDE
+				} else {
+					filter = AUDIT_FILTER_UNSET
+				}
+
+				// Process fields
+				if srule["fields"] == nil {
+					log.Println("WARNING - 32/64 bit syscall mismatch, you should specify an arch")
+				} else {
+					for _, field := range srule["fields"].([]interface{}) {
+						fieldval := field.(map[string]interface{})["value"]
+						op := field.(map[string]interface{})["op"]
+						fieldname := field.(map[string]interface{})["name"]
+						//log.Println(fieldval, op, fieldname)
+						var opval uint32
+						if op == "nt_eq" {
+							opval = AUDIT_NOT_EQUAL
+						} else if op == "gt_or_eq" {
+							opval = AUDIT_GREATER_THAN_OR_EQUAL
+						} else if op == "lt_or_eq" {
+							opval = AUDIT_LESS_THAN_OR_EQUAL
+						} else if op == "and_eq" {
+							opval = AUDIT_BIT_TEST
+						} else if op == "eq" {
+							opval = AUDIT_EQUAL
+						} else if op == "gt" {
+							opval = AUDIT_GREATER_THAN
+						} else if op == "lt" {
+							opval = AUDIT_LESS_THAN
+						} else if op == "and" {
+							opval = AUDIT_BIT_MASK
+						}
+						//Take appropriate action according to filters provided
+						err = AuditRuleFieldPairData(&dd, fieldval, opval, fieldname.(string), fieldmap, filter) // &AUDIT_BIT_MASK
+						if err != nil {
 							return err
 						}
-						actions := srule["action"].([]interface{})
-
-						//Apply action on syscall by separating the filters (exit) from actions (always)
-						action := 0
-						filter := 0
-						//This part assumes that actions and filters are written as always,exit or never,exit not viceversa
-						if actions[0] == "never" {
-							action = AUDIT_NEVER
-						} else if actions[0] == "possible" {
-							action = AUDIT_POSSIBLE
-						} else if actions[0] == "always" {
-							action = AUDIT_ALWAYS
-						} else {
-							action = -1
-						}
-
-						if actions[1] == "task" {
-							filter = AUDIT_FILTER_TASK
-						} else if actions[1] == "entry" {
-							log.Println("Support for Entry Filter is Deprecated. Switching back to Exit filter")
-							filter = AUDIT_FILTER_EXIT
-						} else if actions[1] == "exit" {
-							filter = AUDIT_FILTER_EXIT
-						} else if actions[1] == "user" {
-							filter = AUDIT_FILTER_USER
-						} else if actions[1] == "exclude" {
-							filter = AUDIT_FILTER_EXCLUDE
-						} else {
-							filter = AUDIT_FILTER_UNSET
-						}
-
-						for _, field := range srule["fields"].([]interface{}) {
-							fieldval := field.(map[string]interface{})["value"]
-							op := field.(map[string]interface{})["op"]
-							fieldname := field.(map[string]interface{})["name"]
-							//log.Println(fieldval, op, fieldname)
-							var opval uint32
-							if op == "nt_eq" {
-								opval = AUDIT_NOT_EQUAL
-							} else if op == "gt_or_eq" {
-								opval = AUDIT_GREATER_THAN_OR_EQUAL
-							} else if op == "lt_or_eq" {
-								opval = AUDIT_LESS_THAN_OR_EQUAL
-							} else if op == "and_eq" {
-								opval = AUDIT_BIT_TEST
-							} else if op == "eq" {
-								opval = AUDIT_EQUAL
-							} else if op == "gt" {
-								opval = AUDIT_GREATER_THAN
-							} else if op == "lt" {
-								opval = AUDIT_LESS_THAN
-							} else if op == "and" {
-								opval = AUDIT_BIT_MASK
-							}
-							//Take appropriate action according to filters provided
-							err = AuditRuleFieldPairData(&dd, fieldval, opval, fieldname.(string), fieldmap, filter) // &AUDIT_BIT_MASK
-							if err != nil {
-								return err
-							}
-						}
-
-						// foo.Fields[foo.Field_count] = AUDIT_ARCH
-						// foo.Fieldflags[foo.Field_count] = AUDIT_EQUAL
-						// foo.Values[foo.Field_count] = AUDIT_ARCH_X86_64
-						// foo.Field_count++
-						// AuditAddRuleData(s, &foo, AUDIT_FILTER_EXIT, AUDIT_ALWAYS)
-
-						if filter != AUDIT_FILTER_UNSET {
-							AuditAddRuleData(s, &dd, filter, action)
-						} else {
-							return fmt.Errorf("Filters Not Set")
-						}
-
 					}
+				}
+
+				key := srule["key"]
+				if key != nil {
+					err = AuditRuleFieldPairData(&dd, key, AUDIT_EQUAL, "key", fieldmap, AUDIT_FILTER_UNSET) // &AUDIT_BIT_MASK
+					if err != nil {
+						return err
+					}
+				}
+
+				// foo.Fields[foo.Field_count] = AUDIT_ARCH
+				// foo.Fieldflags[foo.Field_count] = AUDIT_EQUAL
+				// foo.Values[foo.Field_count] = AUDIT_ARCH_X86_64
+				// foo.Field_count++
+				// AuditAddRuleData(s, &foo, AUDIT_FILTER_EXIT, AUDIT_ALWAYS)
+
+				if filter != AUDIT_FILTER_UNSET {
+					AuditAddRuleData(s, &dd, filter, action)
+				} else {
+					return fmt.Errorf("Filters Not Set")
 				}
 			}
 		}
