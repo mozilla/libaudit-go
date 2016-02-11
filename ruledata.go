@@ -576,7 +576,7 @@ func SetRules(s *NetlinkConnection, content []byte) error {
 	m := rules.(map[string]interface{})
 
 	if _, ok := m["delete"]; ok {
-		//First delete all rules and then add rules
+		//Delete all rules
 		log.Println("Deleting all rules")
 		err := DeleteAllRules(s)
 		if err != nil {
@@ -622,12 +622,11 @@ func SetRules(s *NetlinkConnection, content []byte) error {
 				rule := vi[ruleNo].(map[string]interface{})
 				path := rule["path"]
 				if path == "" {
-					log.Fatalln("Watch option needs a path!")
+					log.Fatalln("Watch option needs a path")
 				}
-				// TODO: Add key addition support
-				// key := rule["key"]
+
 				perms := rule["permission"]
-				log.Println("Setting File Permissions", path, perms)
+				log.Println("Setting File Permissions", path)
 				var dd AuditRuleData
 				dd.Buf = make([]byte, 0)
 				add := AUDIT_FILTER_EXIT
@@ -638,10 +637,21 @@ func SetRules(s *NetlinkConnection, content []byte) error {
 				if err != nil {
 					log.Fatalln(err)
 				}
-				err = AuditSetupAndUpdatePerms(&dd, perms.(string))
-				if err != nil {
-					log.Fatalln(err)
+				if perms != nil {
+					err = AuditSetupAndUpdatePerms(&dd, perms.(string))
+					if err != nil {
+						log.Fatalln(err)
+					}
 				}
+
+				key := rule["key"]
+				if key != nil {
+					err = AuditRuleFieldPairData(&dd, key, AUDIT_EQUAL, "key", fieldmap, AUDIT_FILTER_UNSET) // &AUDIT_BIT_MASK
+					if err != nil {
+						return err
+					}
+				}
+
 				err = AuditAddRuleData(s, &dd, add, action)
 				if err != nil {
 					log.Fatalln(err)
@@ -668,10 +678,10 @@ func SetRules(s *NetlinkConnection, content []byte) error {
 						}
 						actions := srule["action"].([]interface{})
 
-						//Now apply action on syscall by separating the filters i.e exit from action i.e. always
+						//Apply action on syscall by separating the filters (exit) from actions (always)
 						action := 0
 						filter := 0
-						//This part supposes that actions and filters are written as always,exit or never,exit not viceversa
+						//This part assumes that actions and filters are written as always,exit or never,exit not viceversa
 						if actions[0] == "never" {
 							action = AUDIT_NEVER
 						} else if actions[0] == "possible" {
