@@ -128,16 +128,16 @@ done:
 			}
 
 			if m.Header.Type == syscall.NLMSG_DONE {
-				log.Println("Deleting Done!")
+				log.Println("Deleting Done")
 				break done
 
 			}
 			if m.Header.Type == syscall.NLMSG_ERROR {
 				error := int32(nativeEndian().Uint32(m.Data[0:4]))
 				if error == 0 {
-					log.Println("Acknowledged!!")
+					//log.Println("Acknowledment")
 				} else {
-					log.Println("NLMSG_ERROR Received..")
+					log.Println("NLMSG_ERROR Received")
 				}
 			}
 			if m.Header.Type == uint16(AUDIT_LIST_RULES) {
@@ -342,7 +342,7 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 
 		//TODO: String handling part
 		//else {
-		//	rule->values[rule->field_count] = //SEE HERE
+		//	rule->values[rule->field_count] = 
 		//			audit_name_to_errno(v);
 		//	if (rule->values[rule->field_count] == 0)
 		//		return -15;
@@ -484,6 +484,7 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 				rule.Values[rule.Field_count] = (uint32)(val)
 			}
 		} else if _, isString := fieldval.(string); isString {
+			log.Println("Error Setting Value:", fieldval)
 			return errNoStr
 		} else {
 			log.Println("Error Setting Value:", fieldval)
@@ -524,6 +525,33 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 
 var errEntryDep = errors.New("Use of entry filter is deprecated")
 
+func setActionAndFilters(actions []interface{}) (int, int) {
+	action := -1
+	filter := AUDIT_FILTER_UNSET
+
+	for _, value := range actions {
+		if  value == "never" {
+			action = AUDIT_NEVER
+		} else if value == "possible" {
+			action = AUDIT_POSSIBLE
+		} else if value == "always" {
+			action = AUDIT_ALWAYS
+		} else if value == "task" {
+			filter = AUDIT_FILTER_TASK
+		} else if value == "entry" {
+			log.Println("Support for Entry Filter is Deprecated. Switching back to Exit filter")
+			filter = AUDIT_FILTER_EXIT
+		} else if value == "exit" {
+			filter = AUDIT_FILTER_EXIT
+		} else if value == "user" {
+			filter = AUDIT_FILTER_USER
+		} else if value == "exclude" {
+			filter = AUDIT_FILTER_EXCLUDE
+		}
+	}
+	return action, filter
+}
+
 func AuditAddRuleData(s *NetlinkConnection, rule *AuditRuleData, flags int, action int) error {
 
 	if flags == AUDIT_FILTER_ENTRY {
@@ -545,7 +573,7 @@ func AuditAddRuleData(s *NetlinkConnection, rule *AuditRuleData, flags int, acti
 	// wb := newNetlinkAuditRequest(AUDIT_ADD_RULE, syscall.AF_NETLINK, int(buff.Len())+int(rule.Buflen))
 	// wb.Data = append(wb.Data[:], buff.Bytes()[:]...)
 
-	newwb := newNetlinkAuditRequest(uint16(AUDIT_ADD_RULE), syscall.AF_NETLINK, len(newbuff) /*+int(rule.Buflen)*/) //Length of newbuff takes care of Rule.buf too
+	newwb := newNetlinkAuditRequest(uint16(AUDIT_ADD_RULE), syscall.AF_NETLINK, len(newbuff))
 	newwb.Data = append(newwb.Data[:], newbuff[:]...)
 	var err error
 	if err = s.Send(newwb); err != nil {
@@ -559,25 +587,16 @@ func SetRules(s *NetlinkConnection, content []byte) error {
 
 	//var rule AuditRuleData
 	//AuditWatchRuleData(s, &rule, []byte("/etc/passwd"))
-
+	_audit_syscalladded = false;
 	var rules interface{}
 	err := json.Unmarshal(content, &rules)
 	if err != nil {
 		log.Print("Error:", err)
-		return err
+		return err 
 	}
 
 	m := rules.(map[string]interface{})
 
-	if _, ok := m["delete"]; ok {
-		//Delete all rules
-		log.Println("Deleting all rules")
-		err := DeleteAllRules(s)
-		if err != nil {
-			log.Println("Error Deleting Rules")
-			return err
-		}
-	}
 	var conf Config
 	var fieldmap Field
 
@@ -590,26 +609,6 @@ func SetRules(s *NetlinkConnection, content []byte) error {
 
 	for k, v := range m {
 		switch k {
-		case "custom_rule":
-			//TODO-  Find out if this is still needed ?
-			vi := v.([]interface{})
-			for ruleNo := range vi {
-				rule := vi[ruleNo].(map[string]interface{})
-				for l, m := range rule {
-					switch l {
-					case "action":
-						//TODO: handle actions case here
-						action := m.([]interface{})
-						log.Println("actions are : ", action[0])
-					case "fields":
-						//TODO: handle fields case here
-						fields := m.([]interface{})
-						for _, q := range fields {
-							log.Println("fields are", q)
-						}
-					}
-				}
-			}
 		case "file_rules":
 			vi := v.([]interface{})
 			for ruleNo := range vi {
@@ -618,9 +617,8 @@ func SetRules(s *NetlinkConnection, content []byte) error {
 				if path == "" {
 					log.Fatalln("Watch option needs a path")
 				}
-
 				perms := rule["permission"]
-				log.Println("Setting File Permissions", path)
+				log.Println("Setting watch on", path)
 				var dd AuditRuleData
 				dd.Buf = make([]byte, 0)
 				add := AUDIT_FILTER_EXIT
@@ -652,18 +650,19 @@ func SetRules(s *NetlinkConnection, content []byte) error {
 				}
 
 			}
+			log.Println("Done setting watches.")
 		case "syscall_rules":
 			vi := v.([]interface{})
 			for sruleNo := range vi {
 				srule := vi[sruleNo].(map[string]interface{})
 				var dd AuditRuleData
 				dd.Buf = make([]byte, 0)
-
 				// Process syscalls
 				if srule["syscalls"] != nil {
-					for l := range conf.Xmap {
-						syscalls := srule["syscalls"].([]interface{})
-						for syscall := range syscalls {
+					syscalls := srule["syscalls"].([]interface{})
+					syscalls_not_found := ""
+					for syscall := range syscalls {
+						for l := range conf.Xmap {
 							if conf.Xmap[l].Name == syscalls[syscall] {
 								log.Println("setting syscall rule", conf.Xmap[l].Name)
 								err = AuditRuleSyscallData(&dd, conf.Xmap[l].Id)
@@ -672,8 +671,12 @@ func SetRules(s *NetlinkConnection, content []byte) error {
 								} else {
 									return err
 								}
-							}	
+							}
 						}
+						syscalls_not_found += syscalls[syscall].(string)
+					}
+					if _audit_syscalladded != true {
+						return errors.New("Syscall not found: "+ syscalls_not_found )
 					}
 				}
 
@@ -681,33 +684,7 @@ func SetRules(s *NetlinkConnection, content []byte) error {
 				actions := srule["actions"].([]interface{})
 
 				//Apply action on syscall by separating the filters (exit) from actions (always)
-				action := 0
-				filter := 0
-				//This part assumes that actions and filters are written as always,exit or never,exit not viceversa
-				if actions[0] == "never" {
-					action = AUDIT_NEVER
-				} else if actions[0] == "possible" {
-					action = AUDIT_POSSIBLE
-				} else if actions[0] == "always" {
-					action = AUDIT_ALWAYS
-				} else {
-					action = -1
-				}
-
-				if actions[1] == "task" {
-					filter = AUDIT_FILTER_TASK
-				} else if actions[1] == "entry" {
-					log.Println("Support for Entry Filter is Deprecated. Switching back to Exit filter")
-					filter = AUDIT_FILTER_EXIT
-				} else if actions[1] == "exit" {
-					filter = AUDIT_FILTER_EXIT
-				} else if actions[1] == "user" {
-					filter = AUDIT_FILTER_USER
-				} else if actions[1] == "exclude" {
-					filter = AUDIT_FILTER_EXCLUDE
-				} else {
-					filter = AUDIT_FILTER_UNSET
-				}
+				action ,filter := setActionAndFilters(actions)
 
 				// Process fields
 				if srule["fields"] == nil {
@@ -736,6 +713,7 @@ func SetRules(s *NetlinkConnection, content []byte) error {
 						} else if op == "and" {
 							opval = AUDIT_BIT_MASK
 						}
+
 						//Take appropriate action according to filters provided
 						err = AuditRuleFieldPairData(&dd, fieldval, opval, fieldname.(string), fieldmap, filter) // &AUDIT_BIT_MASK
 						if err != nil {
@@ -761,7 +739,7 @@ func SetRules(s *NetlinkConnection, content []byte) error {
 				if filter != AUDIT_FILTER_UNSET {
 					AuditAddRuleData(s, &dd, filter, action)
 				} else {
-					return fmt.Errorf("Filters Not Set")
+					return fmt.Errorf("Filters not set or invalid: " + actions[0].(string)+", "+actions[1].(string))
 				}
 			}
 		}
@@ -811,7 +789,7 @@ func AuditSetupAndAddWatchDir(rule *AuditRuleData, path_name string) error {
 
 	if fileInfo, err := os.Stat(path_name); err != nil {
 		if os.IsNotExist(err) {
-			return errors.New("File does Not exist!")
+			return errors.New("File does Not exist: "+path_name)
 		} else {
 			return err
 		}
