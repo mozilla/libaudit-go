@@ -111,8 +111,7 @@ func GetAuditEvents(s *NetlinkConnection, cb EventCallback, ec chan error, args 
 							//Note - NLMSG_ERROR can be Acknowledgement from kernel
 							//If the first 4 bytes of Data part are zero
 						} else {
-							log.Println("Error:"+string(err))
-							//ec <- errors.New("NLMSG ERROR Recieved")
+							log.Println("NLMSG ERROR")
 						}
 					} else {
 						nae, err := NewAuditEvent(msg)

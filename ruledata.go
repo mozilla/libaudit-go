@@ -87,7 +87,7 @@ func AuditDeleteRuleData(s *NetlinkConnection, rule *AuditRuleData, flags uint32
 func DeleteAllRules(s *NetlinkConnection) error {
 	wb := newNetlinkAuditRequest(uint16(AUDIT_LIST_RULES), syscall.AF_NETLINK, 0)
 	if err := s.Send(wb); err != nil {
-		log.Print("Error:", err)
+		//log.Print("Error:", err)
 		return err
 	}
 
@@ -103,7 +103,7 @@ done:
 		for _, m := range msgs {
 			address, er := syscall.Getsockname(s.fd)
 			if er != nil {
-				log.Println("ERROR:", er)
+				//log.Println("ERROR:", er)
 				return er
 			}
 			switch v := address.(type) {
@@ -204,7 +204,7 @@ func AuditNameToFtype(name string, value *int) error {
 	content, err := ioutil.ReadFile(path)
 
 	if err != nil {
-		log.Print("Error:", err)
+		//log.Print("Error:", err)
 		return err
 	}
 
@@ -212,7 +212,7 @@ func AuditNameToFtype(name string, value *int) error {
 	err = json.Unmarshal(content, &filemap)
 
 	if err != nil {
-		log.Print("Error:", err)
+		//log.Print("Error:", err)
 		return err
 	}
 
@@ -579,7 +579,7 @@ func SetRules(s *NetlinkConnection, content []byte) error {
 	var rules interface{}
 	err := json.Unmarshal(content, &rules)
 	if err != nil {
-		log.Print("Error:", err)
+		//log.Print("Error:", err)
 		return err 
 	}
 
@@ -733,7 +733,6 @@ func SetRules(s *NetlinkConnection, content []byte) error {
 					return fmt.Errorf("Filters not set or invalid: " + actions[0].(string)+", "+actions[1].(string))
 				}
 			}
-			log.Println("Done setting syscall.")
 		}
 	}
 	return nil
@@ -906,7 +905,7 @@ func AuditUpdateWatchPerms(rule *AuditRuleData, perms int) error {
 func ListAllRules(s *NetlinkConnection) error {
 	wb := newNetlinkAuditRequest(uint16(AUDIT_LIST_RULES), syscall.AF_NETLINK, 0)
 	if err := s.Send(wb); err != nil {
-		log.Print("Error:", err)
+		//log.Print("Error:", err)
 		return err
 	}
 
