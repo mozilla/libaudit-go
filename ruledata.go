@@ -30,17 +30,6 @@ type AuditRuleData struct {
 	Buf         []byte // string fields buffer 
 }
 
-// For config
-type CMap struct {
-	Name string
-	Id   int
-}
-
-// For config
-type Config struct {
-	Xmap []CMap
-}
-
 // For fieldtab
 type FMap struct {
 	Name    string
@@ -161,22 +150,24 @@ var _audit_permadded bool
 var _audit_syscalladded bool
 
 // Load x86 map and fieldtab.json
-func loadSysMap_FieldTab(conf *Config, fieldmap *Field) error {
+func loadSysMap_FieldTab(x86_map interface{}, fieldmap *Field) error {
 	path, _ := filepath.Abs("libaudit-go/audit_x86_64.json")
 	content2, err := ioutil.ReadFile(path)
 	if err != nil {
 		return err
 	}
+
 	path, _ = filepath.Abs("libaudit-go/fieldtab.json")
 	content3, err := ioutil.ReadFile(path)
 	if err != nil {
 		return err
 	}
 
-	err = json.Unmarshal([]byte(content2), &conf)
+	err = json.Unmarshal([]byte(content2), &x86_map)
 	if err != nil {
 		return err
 	}
+
 	err = json.Unmarshal([]byte(content3), &fieldmap)
 	if err != nil {
 		return err
@@ -585,9 +576,6 @@ func AuditAddRuleData(s *NetlinkConnection, rule *AuditRuleData, flags int, acti
 //Sets each rule after reading configuration file
 func SetRules(s *NetlinkConnection, content []byte) error {
 
-	//var rule AuditRuleData
-	//AuditWatchRuleData(s, &rule, []byte("/etc/passwd"))
-	_audit_syscalladded = false;
 	var rules interface{}
 	err := json.Unmarshal(content, &rules)
 	if err != nil {
@@ -597,17 +585,20 @@ func SetRules(s *NetlinkConnection, content []byte) error {
 
 	m := rules.(map[string]interface{})
 
-	var conf Config
+	//var conf Config
+	var x86_map interface{} 
 	var fieldmap Field
 
 	// Load x86 map and fieldtab.json
-	err = loadSysMap_FieldTab(&conf, &fieldmap)
+	err = loadSysMap_FieldTab(&x86_map, &fieldmap)
 	if err != nil {
 		log.Println("Error :", err)
 		return err
 	}
-
+	syscall_map := x86_map.(map[string]interface{})
+	
 	for k, v := range m {
+		_audit_syscalladded = false;
 		switch k {
 		case "file_rules":
 			vi := v.([]interface{})
@@ -618,7 +609,7 @@ func SetRules(s *NetlinkConnection, content []byte) error {
 					log.Fatalln("Watch option needs a path")
 				}
 				perms := rule["permission"]
-				log.Println("Setting watch on", path)
+				//log.Println("Setting watch on", path)
 				var dd AuditRuleData
 				dd.Buf = make([]byte, 0)
 				add := AUDIT_FILTER_EXIT
@@ -658,25 +649,25 @@ func SetRules(s *NetlinkConnection, content []byte) error {
 				var dd AuditRuleData
 				dd.Buf = make([]byte, 0)
 				// Process syscalls
+				// TODO: support syscall no 
 				if srule["syscalls"] != nil {
 					syscalls := srule["syscalls"].([]interface{})
 					syscalls_not_found := ""
-					for syscall := range syscalls {
-						for l := range conf.Xmap {
-							if conf.Xmap[l].Name == syscalls[syscall] {
-								log.Println("setting syscall rule", conf.Xmap[l].Name)
-								err = AuditRuleSyscallData(&dd, conf.Xmap[l].Id)
-								if err == nil {
-									_audit_syscalladded = true
-								} else {
-									return err
-								}
+					for _, syscall := range syscalls {
+						syscall := syscall.(string)
+						if syscall_map[syscall] != nil {
+							//log.Println("setting syscall rule", syscall)
+							err = AuditRuleSyscallData(&dd, int(syscall_map[syscall].(float64)))
+							if err == nil {
+								_audit_syscalladded = true
+							} else {
+								return err
 							}
 						}
-						syscalls_not_found += syscalls[syscall].(string)
+						syscalls_not_found += " "+syscall
 					}
 					if _audit_syscalladded != true {
-						return errors.New("Syscall not found: "+ syscalls_not_found )
+						return errors.New("One or more syscall not found: "+ syscalls_not_found )
 					}
 				}
 
@@ -742,6 +733,7 @@ func SetRules(s *NetlinkConnection, content []byte) error {
 					return fmt.Errorf("Filters not set or invalid: " + actions[0].(string)+", "+actions[1].(string))
 				}
 			}
+			log.Println("Done setting syscall.")
 		}
 	}
 	return nil
