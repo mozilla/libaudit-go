@@ -1,4 +1,4 @@
-package netlinkAudit
+package libaudit
 
 import (
 	"bytes"
@@ -243,7 +243,8 @@ func AuditIsEnabled(s *NetlinkConnection) (state int, err error) {
 done:
 	for {
 		//TODO: Make the rb byte bigger because of large messages from Kernel doesn't fit in 4096
-		msgs, err := s.Receive(MAX_AUDIT_MESSAGE_LENGTH, syscall.MSG_DONTWAIT)
+		//msgs, err := s.Receive(MAX_AUDIT_MESSAGE_LENGTH, syscall.MSG_DONTWAIT)
+		msgs, err := s.Receive(MAX_AUDIT_MESSAGE_LENGTH, 0)
 		if err != nil {
 			return -1, err
 		}
@@ -298,7 +299,7 @@ done:
 }
 
 // Sends a message to kernel for setting of program pid
-// Wait mode WAIT_YES | WAIT_NO 
+// Wait mode WAIT_YES | WAIT_NO
 func AuditSetPid(s *NetlinkConnection, pid uint32) error {
 	var status AuditStatus
 	status.Mask = AUDIT_STATUS_PID
