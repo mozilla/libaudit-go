@@ -1,6 +1,7 @@
 package libaudit
 
 import (
+	"fmt"
 	"strconv"
 	"syscall"
 
@@ -11,6 +12,7 @@ type EventCallback func(*AuditEvent, chan error, ...interface{})
 
 type RawEventCallback func(string, chan error, ...interface{})
 
+// AuditEvent holds a parsed audit message
 type AuditEvent struct {
 	Serial    string
 	Timestamp string
@@ -27,7 +29,7 @@ func NewAuditEvent(msg NetlinkMessage) (*AuditEvent, error) {
 		return nil, err
 	}
 	if (*x).Type == "auditConstant("+strconv.Itoa(int(msg.Header.Type))+")" {
-		return nil, errors.New("Unknown Type: " + string(msg.Header.Type))
+		return nil, fmt.Errorf("NewAuditEvent failed: unknown message type %d", msg.Header.Type)
 	}
 
 	return x, nil

@@ -113,13 +113,14 @@ func ParseAuditEvent(str string, msgType auditConstant, interpret bool) (*AuditE
 	} else {
 		return nil, fmt.Errorf("malformed audit message")
 	}
-
-	var nBytes string
-	var orig = len(str)
-	var n int
-	var key string
-	var value string
-	var av bool
+	var (
+		nBytes string
+		orig   = len(str)
+		n      int
+		key    string
+		value  string
+		av     bool
+	)
 	for n < orig {
 		getSpaceSlice(&str, &nBytes, &n)
 		var newIndex int
@@ -264,7 +265,7 @@ func ParseAuditEvent(str string, msgType auditConstant, interpret bool) (*AuditE
 }
 
 // getSpaceSlice checks the index of the next space and put the string upto that space into
-// the second string, total number of characters is updated with each call to the function
+// the second string, total number of characters processed is updated with each call to the function
 func getSpaceSlice(str *string, b *string, v *int) {
 	// retry:
 	index := strings.Index(*str, " ")

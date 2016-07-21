@@ -3,33 +3,36 @@ package libaudit
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"log"
 	"os"
 	"sync/atomic"
 	"syscall"
 	"unsafe"
+
+	"github.com/pkg/errors"
 )
 
 var sequenceNumber uint32
 
 type NetlinkMessage syscall.NetlinkMessage
 
-// This is the struct for an "audit_status" message.
+// AuditStatus is used for "audit_status" messages
 type AuditStatus struct {
 	Mask            uint32 /* Bit mask for valid entries */
 	Enabled         uint32 /* 1 = enabled, 0 = disabled */
 	Failure         uint32 /* Failure-to-log action */
 	Pid             uint32 /* pid of auditd process */
-	Rate_limit      uint32 /* messages rate limit (per second) */
-	Backlog_limit   uint32 /* waiting messages limit */
+	RateLimit       uint32 /* messages rate limit (per second) */
+	BacklogLimit    uint32 /* waiting messages limit */
 	Lost            uint32 /* messages lost */
 	Backlog         uint32 /* messages waiting in queue */
 	Version         uint32 /* audit api version number */
 	BacklogWaitTime uint32 /* message queue wait timeout */
 }
 
+// NetlinkConnection holds the file descriptor and address for
+// an opened netlink connection
 type NetlinkConnection struct {
 	fd      int
 	address syscall.SockaddrNetlink
@@ -43,6 +46,7 @@ func nativeEndian() binary.ByteOrder {
 	return binary.LittleEndian
 }
 
+// ToWireFormat converts a NetlinkMessage to byte stream
 // Recvfrom in go takes only a byte [] to put the data recieved from the kernel that removes the need
 // for having a separate audit_reply Struct for recieving data from kernel.
 func (rr *NetlinkMessage) ToWireFormat() []byte {
@@ -67,8 +71,7 @@ func parseAuditNetlinkMessage(b []byte) ([]NetlinkMessage, error) {
 	var msgs []NetlinkMessage
 	h, dbuf, dlen, err := netlinkMessageHeaderAndData(b)
 	if err != nil {
-		log.Println("Error in parsing")
-		return nil, err
+		return nil, errors.Wrap(err, "error while parsing NetlinkMessage")
 	}
 
 	m := NetlinkMessage{Header: *h, Data: dbuf[:int(h.Len) /* -syscall.NLMSG_HDRLEN*/]}
@@ -83,35 +86,34 @@ func netlinkMessageHeaderAndData(b []byte) (*syscall.NlMsghdr, []byte, int, erro
 
 	h := (*syscall.NlMsghdr)(unsafe.Pointer(&b[0]))
 	if int(h.Len) < syscall.NLMSG_HDRLEN || int(h.Len) > len(b) {
-		foo := int32(nativeEndian().Uint32(b[0:4]))
-		log.Println("Headerlength with ", foo, b[0]) //bug!
-		log.Println("Error due to....HDRLEN:", syscall.NLMSG_HDRLEN, " Header Length:", h.Len, " Length of BYTE Array:", len(b))
-		return nil, nil, 0, syscall.EINVAL
+		// foo := int32(nativeEndian().Uint32(b[0:4]))
+		// log.Println("Headerlength with ", foo, b[0]) //bug!
+		// log.Println("Error due to....HDRLEN:", syscall.NLMSG_HDRLEN, " Header Length:", h.Len, " Length of BYTE Array:", len(b))
+		return nil, nil, 0, errors.Wrap(syscall.EINVAL, "Nlmsghdr header length unexpected")
 	}
 	return h, b[syscall.NLMSG_HDRLEN:], nlmAlignOf(int(h.Len)), nil
 }
 
 func newNetlinkAuditRequest(proto uint16, family, sizeofData int) *NetlinkMessage {
 	rr := &NetlinkMessage{}
-
 	rr.Header.Len = uint32(syscall.NLMSG_HDRLEN + sizeofData)
-	rr.Header.Type = uint16(proto)
+	rr.Header.Type = proto
 	rr.Header.Flags = syscall.NLM_F_REQUEST | syscall.NLM_F_ACK
 	rr.Header.Seq = atomic.AddUint32(&sequenceNumber, 1) //Autoincrementing Sequence
 	return rr
 }
 
-// Create a fresh connection and use it for all further communication
+// NewNetlinkConnection creates a fresh connection and use it for all further communication
 func NewNetlinkConnection() (*NetlinkConnection, error) {
 
 	// Check for root user
 	if os.Getuid() != 0 {
-		log.Fatalln("Not Root User! Exiting!")
+		return nil, fmt.Errorf("not root user, exiting")
 	}
 
 	fd, err := syscall.Socket(syscall.AF_NETLINK, syscall.SOCK_RAW, syscall.NETLINK_AUDIT)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "could not obtain socket")
 	}
 	s := &NetlinkConnection{
 		fd: fd,
@@ -122,63 +124,63 @@ func NewNetlinkConnection() (*NetlinkConnection, error) {
 
 	if err := syscall.Bind(fd, &s.address); err != nil {
 		syscall.Close(fd)
-		return nil, err
+		return nil, errors.Wrap(err, "could not bind socket to address")
 	}
 	return s, nil
 }
 
-// To end the socket conncetion
+// Close is a wrapper for closing netlink socket
 func (s *NetlinkConnection) Close() {
 	syscall.Close(s.fd)
 }
 
-// Wrapper for Sendto
+// Send is a wrapper for sending NetlinkMessage across netlink socket
 func (s *NetlinkConnection) Send(request *NetlinkMessage) error {
 	if err := syscall.Sendto(s.fd, request.ToWireFormat(), 0, &s.address); err != nil {
-		return err
+		return errors.Wrap(err, "could not send NetlinkMessage")
 	}
 	return nil
 }
 
-// Wrapper for Recvfrom
+// Receive is a wrapper for recieving from netlink socket and return an array of NetlinkMessage
 func (s *NetlinkConnection) Receive(bytesize int, block int) ([]NetlinkMessage, error) {
 	rb := make([]byte, bytesize)
 	nr, _, err := syscall.Recvfrom(s.fd, rb, 0|block)
 
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "recvfrom failed")
 	}
 	if nr < syscall.NLMSG_HDRLEN {
-		return nil, syscall.EINVAL
+		return nil, errors.Wrap(err, "message length shorter than expected")
 	}
 	rb = rb[:nr]
 	return parseAuditNetlinkMessage(rb)
 }
 
-// Get the audit system's reply
+// AuditGetReply connects to kernel to recieve a reply
 func AuditGetReply(s *NetlinkConnection, bytesize, block int, seq uint32) error {
 done:
 	for {
 		msgs, err := s.Receive(bytesize, block) //parseAuditNetlinkMessage(rb)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "AuditGetReply failed")
 		}
 		for _, m := range msgs {
 			address, err := syscall.Getsockname(s.fd)
 			if err != nil {
-				return err
+				return errors.Wrap(err, "AuditGetReply: Getsockname failed")
 			}
 			switch v := address.(type) {
 			case *syscall.SockaddrNetlink:
 
 				if m.Header.Seq != seq {
-					return fmt.Errorf("Wrong Seq nr %d, expected %d", m.Header.Seq, seq)
+					return fmt.Errorf("AuditGetReply: Wrong Seq nr %d, expected %d", m.Header.Seq, seq)
 				}
 				if m.Header.Pid != v.Pid {
-					return fmt.Errorf("Wrong pid %d, expected %d", m.Header.Pid, v.Pid)
+					return fmt.Errorf("AuditGetReply: Wrong pid %d, expected %d", m.Header.Pid, v.Pid)
 				}
 			default:
-				return syscall.EINVAL
+				return errors.Wrap(syscall.EINVAL, "AuditGetReply: socket type unexpected")
 			}
 
 			if m.Header.Type == syscall.NLMSG_DONE {
@@ -191,12 +193,12 @@ done:
 					break done
 				} else {
 					//log.Println("NLMSG_ERROR Received..")
+					//should be added: appropriate flow of actions
 				}
 				break done
 			}
-
+			// acknowledge AUDIT_GET replies from kernel
 			if m.Header.Type == uint16(AUDIT_GET) {
-				//log.Println("AUDIT_GET")
 				break done
 			}
 		}
@@ -204,142 +206,143 @@ done:
 	return nil
 }
 
-// Enable or Disable Audit
-// 1 for enable and 0 for disable
+// AuditSetEnabled enables or disables audit in kernel
+// `enabled` should be 1 for enabling and 0 for disabling
 func AuditSetEnabled(s *NetlinkConnection, enabled uint32) error {
-	var status AuditStatus
+	var (
+		status AuditStatus
+		err    error
+	)
+
 	status.Enabled = enabled
 	status.Mask = AUDIT_STATUS_ENABLED
 	buff := new(bytes.Buffer)
-	err := binary.Write(buff, nativeEndian(), status)
+	err = binary.Write(buff, nativeEndian(), status)
 	if err != nil {
-		log.Println("binary.Write failed:", err)
-		return err
+		return errors.Wrap(err, "AuditSetEnabled: binary write from AuditStatus failed")
 	}
 
 	wb := newNetlinkAuditRequest(uint16(AUDIT_SET), syscall.AF_NETLINK, int(unsafe.Sizeof(status)))
 	wb.Data = append(wb.Data[:], buff.Bytes()[:]...)
 	if err := s.Send(wb); err != nil {
-		return err
+		return errors.Wrap(err, "AuditSetEnabled failed")
 	}
 
 	// Receive in just one try
 	err = AuditGetReply(s, syscall.Getpagesize(), 0, wb.Header.Seq)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "AuditSetEnabled failed")
 	}
 	return nil
 }
 
-// This function will return 0 if auditing is NOT enabled and
-// 1 if enabled, and -1 and an error on error.
+// AuditIsEnabled returns 0 if auditing is NOT enabled and
+// 1 if enabled, and -1 on failure.
 func AuditIsEnabled(s *NetlinkConnection) (state int, err error) {
+	var status AuditStatus
 
 	wb := newNetlinkAuditRequest(uint16(AUDIT_GET), syscall.AF_NETLINK, 0)
 	if err = s.Send(wb); err != nil {
-		return -1, err
+		return -1, errors.Wrap(err, "AuditIsEnabled failed")
 	}
 
 done:
 	for {
-		//TODO: Make the rb byte bigger because of large messages from Kernel doesn't fit in 4096
-		//msgs, err := s.Receive(MAX_AUDIT_MESSAGE_LENGTH, syscall.MSG_DONTWAIT)
+		// MSG_DONTWAIT has implications on systems with low memory and CPU
+		// msgs, err := s.Receive(MAX_AUDIT_MESSAGE_LENGTH, syscall.MSG_DONTWAIT)
 		msgs, err := s.Receive(MAX_AUDIT_MESSAGE_LENGTH, 0)
 		if err != nil {
-			return -1, err
+			return -1, errors.Wrap(err, "AuditIsEnabled failed")
 		}
 
 		for _, m := range msgs {
-			address, er := syscall.Getsockname(s.fd)
-			if er != nil {
-				return -1, er
+			address, err := syscall.Getsockname(s.fd)
+			if err != nil {
+				return -1, errors.Wrap(err, "AuditIsEnabled: Getsockname failed")
 			}
 
 			switch v := address.(type) {
 			case *syscall.SockaddrNetlink:
 				if m.Header.Seq != uint32(wb.Header.Seq) {
-					return -1, errors.New("Wrong Seq no " +
-						string(int(m.Header.Seq)) +
-						", expected " + string(int(wb.Header.Seq)))
+
+					return -1, fmt.Errorf("AuditIsEnabled: Wrong Seq nr %d, expected %d", m.Header.Seq, wb.Header.Seq)
 				}
 				if m.Header.Pid != v.Pid {
-					return -1, errors.New("Wrong Seq nr " +
-						string(int(m.Header.Pid)) +
-						", expected " + string(int(v.Pid)))
+					return -1, fmt.Errorf("AuditIsEnabled: Wrong PID %d, expected %d", m.Header.Pid, v.Pid)
 				}
 
 			default:
-				return -1, syscall.EINVAL
+				return -1, errors.Wrap(syscall.EINVAL, "AuditIsEnabled: socket type unexpected")
 			}
 
 			if m.Header.Type == syscall.NLMSG_DONE {
-				//log.Println("Done")
 				break done
-			}
+			} else if m.Header.Type == syscall.NLMSG_ERROR {
+				e := int32(nativeEndian().Uint32(m.Data[0:4]))
+				if e == 0 {
+					//TODO: Better way to notify
+					log.Println("ACK")
+					continue
+				}
+				break done
 
-			if m.Header.Type == syscall.NLMSG_ERROR {
-				//log.Println("NLMSG_ERROR Received..")
 			}
 
 			if m.Header.Type == uint16(AUDIT_GET) {
 				//Convert the data part written to AuditStatus struct
 				buf := bytes.NewBuffer(m.Data[:])
-				var dumm AuditStatus
-				err = binary.Read(buf, nativeEndian(), &dumm)
+				err = binary.Read(buf, nativeEndian(), &status)
 				if err != nil {
-					log.Println("binary.Read failed:", err)
-					return -1, err
+					return -1, errors.Wrap(err, "AuditIsEnabled: binary read into AuditStatus failed")
 				}
-				state = int(dumm.Enabled)
-				break done
+				state = int(status.Enabled)
+				return state, nil
 			}
 		}
 	}
-	return state, nil
+	return -1, nil
 }
 
-// Sends a message to kernel for setting of program pid
+// AuditSetPID sends a message to kernel for setting of program PID
 // Wait mode WAIT_YES | WAIT_NO
-func AuditSetPid(s *NetlinkConnection, pid uint32) error {
+func AuditSetPID(s *NetlinkConnection, pid uint32) error {
 	var status AuditStatus
 	status.Mask = AUDIT_STATUS_PID
 	status.Pid = pid
 	buff := new(bytes.Buffer)
 	err := binary.Write(buff, nativeEndian(), status)
 	if err != nil {
-		log.Println("binary.Write failed:", err)
-		return err
+		return errors.Wrap(err, "AuditSetPID: binary write from AuditStatus failed")
 	}
 
 	wb := newNetlinkAuditRequest(uint16(AUDIT_SET), syscall.AF_NETLINK, int(unsafe.Sizeof(status)))
 	wb.Data = append(wb.Data[:], buff.Bytes()[:]...)
 	if err := s.Send(wb); err != nil {
-		return err
+		return errors.Wrap(err, "AuditSetPID failed")
 	}
 
 	err = AuditGetReply(s, syscall.Getpagesize(), 0, wb.Header.Seq)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "AuditSetPID failed")
 	}
-	//Polling in GO Is it needed ?
 	return nil
 }
 
+// AuditSetRateLimit sets rate limit for audit messages from kernel
 func AuditSetRateLimit(s *NetlinkConnection, limit int) error {
-	var foo AuditStatus
-	foo.Mask = AUDIT_STATUS_RATE_LIMIT
-	foo.Rate_limit = (uint32)(limit)
+	var status AuditStatus
+	status.Mask = AUDIT_STATUS_RATE_LIMIT
+	status.RateLimit = (uint32)(limit)
 	buff := new(bytes.Buffer)
-	err := binary.Write(buff, nativeEndian(), foo)
+	err := binary.Write(buff, nativeEndian(), status)
 	if err != nil {
-		log.Println("binary.Write failed:", err)
-		return err
+		return errors.Wrap(err, "AuditSetRateLimit: binary write from AuditStatus failed")
 	}
 
-	wb := newNetlinkAuditRequest(uint16(AUDIT_SET), syscall.AF_NETLINK, int(unsafe.Sizeof(foo)))
+	wb := newNetlinkAuditRequest(uint16(AUDIT_SET), syscall.AF_NETLINK, int(unsafe.Sizeof(status)))
 	wb.Data = append(wb.Data[:], buff.Bytes()[:]...)
 	if err := s.Send(wb); err != nil {
-		return err
+		return errors.Wrap(err, "AuditSetRateLimit failed")
 	}
 
 	err = AuditGetReply(s, syscall.Getpagesize(), 0, wb.Header.Seq)
@@ -350,26 +353,26 @@ func AuditSetRateLimit(s *NetlinkConnection, limit int) error {
 
 }
 
+// AuditSetBacklogLimit sets backlog limit for audit messages from kernel
 func AuditSetBacklogLimit(s *NetlinkConnection, limit int) error {
-	var foo AuditStatus
-	foo.Mask = AUDIT_STATUS_BACKLOG_LIMIT
-	foo.Backlog_limit = (uint32)(limit)
+	var status AuditStatus
+	status.Mask = AUDIT_STATUS_BACKLOG_LIMIT
+	status.BacklogLimit = (uint32)(limit)
 	buff := new(bytes.Buffer)
-	err := binary.Write(buff, nativeEndian(), foo)
+	err := binary.Write(buff, nativeEndian(), status)
 	if err != nil {
-		log.Println("binary.Write failed:", err)
-		return err
+		return errors.Wrap(err, "AuditSetBacklogLimit: binary write from AuditStatus failed")
 	}
 
-	wb := newNetlinkAuditRequest(uint16(AUDIT_SET), syscall.AF_NETLINK, int(unsafe.Sizeof(foo)))
+	wb := newNetlinkAuditRequest(uint16(AUDIT_SET), syscall.AF_NETLINK, int(unsafe.Sizeof(status)))
 	wb.Data = append(wb.Data[:], buff.Bytes()[:]...)
 	if err := s.Send(wb); err != nil {
-		return err
+		return errors.Wrap(err, "AuditSetBacklogLimit failed")
 	}
 
 	err = AuditGetReply(s, syscall.Getpagesize(), 0, wb.Header.Seq)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "AuditSetBacklogLimit failed")
 	}
 	return nil
 
