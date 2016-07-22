@@ -13,7 +13,7 @@ See [main.go](https://github.com/mozilla/audit-go/blob/master/main.go#L26) for e
 
 ##### NewNetlinkConnection 
 Open a audit netlink socket connection
-Similar to audit_open, NewNetlinkConnection  creates a NETLINK_AUDIT socket for communication with the kernel part of the Linux Audit Subsystem.
+Similar to `audit_open`, `NewNetlinkConnection` creates a `NETLINK_AUDIT` socket for communication with the kernel part of the Linux Audit Subsystem.
 
 It provide three methods
 
@@ -23,7 +23,7 @@ It provide three methods
 
 Example : 
 ```
-s, err := netlinkAudit.NewNetlinkConnection()
+s, err := libaudit.NewNetlinkConnection()
 
 if err != nil {
     log.Println(err)
@@ -61,7 +61,7 @@ Example:
 
 ```golang
 
-func EventCallback(msg *netlinkAudit.AuditEvent, ce chan error, args ...interface{}) {
+func EventCallback(msg *libaudit.AuditEvent, ce chan error, args ...interface{}) {
 	// print the info map
 	log.Println(msg.Data)
 	// print the raw event
@@ -69,7 +69,7 @@ func EventCallback(msg *netlinkAudit.AuditEvent, ce chan error, args ...interfac
 }
 
 // Go rutine to monitor events and call callback for each event fired
-netlinkAudit.GetAuditEvents(s, EventCallback, errchan)
+libaudit.GetAuditEvents(s, EventCallback, errchan)
 ```
 
 The callback accept AuditEvent type variable as an argument. AuditEvent is defined as
@@ -101,7 +101,7 @@ func RawEventCallback(msg string, ce chan error, args ...interface{}) {
 }
 
 // Go rutine to monitor events and feed raw events to the callback
-netlinkAudit.GetRawAuditEvents(s, RawEventCallback, errchan)
+libaudit.GetRawAuditEvents(s, RawEventCallback, errchan)
 ```
 
 ##### AuditGetReply
@@ -131,7 +131,7 @@ func AuditIsEnabled(s *NetlinkConnection) (state int, err error)
 Example :
 
 ```
-status, err := netlinkAudit.AuditIsEnabled(s)
+status, err := libaudit.AuditIsEnabled(s)
 ```
 
 ##### AuditRequestStatus
@@ -152,7 +152,7 @@ func AuditSetEnabled(s *NetlinkConnection) error
 Example : 
 
 ```
-err := netlinkAudit.AuditSetEnabled(s, 1)
+err := libaudit.AuditSetEnabled(s, 1)
 ```
 
 
@@ -170,7 +170,7 @@ This function set the maximum number of messages that the kernel will send per s
 Example:
 
 ```
-err = netlinkAudit.AuditSetRateLimit(s, 600)
+err = libaudit.AuditSetRateLimit(s, 600)
 ```
 
 ##### AuditSetBacklogLimit
@@ -186,7 +186,7 @@ This function sets the queue length for audit events awaiting transfer to the au
 
 Example :
 ```
-err = netlinkAudit.AuditSetBacklogLimit(s, 420)
+err = libaudit.AuditSetBacklogLimit(s, 420)
 ```
 
 ##### AuditSetPid
@@ -203,7 +203,7 @@ This function tells the kernel what the pid is of the audit daemon
 
 Example :
 ```
-err = netlinkAudit.AuditSetPid(s, uint32(syscall.Getpid()))
+err = libaudit.AuditSetPid(s, uint32(syscall.Getpid()))
 ```
 
 ##### AuditSetFailure
@@ -235,7 +235,7 @@ if err != nil {
 }
 
 // Set audit rules
-err = netlinkAudit.SetRules(s, content)
+err = libaudit.SetRules(s, content)
 ```
 
 
