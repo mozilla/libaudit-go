@@ -3,7 +3,6 @@ package libaudit
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"os/user"
 	"path"
@@ -67,7 +66,7 @@ func AuditDeleteRuleData(s *NetlinkConnection, rule *AuditRuleData, flags uint32
 	rule.Action = action
 
 	newbuff := rule.ToWireFormat()
-	// avoiding standard method of unwrapping the struct due to occasional failures
+	// avoiding standard method of unwrapping the struct due to restriction on byte array in AuditRuleData
 	// buff := new(bytes.Buffer)
 	// err := binary.Write(buff, nativeEndian(), *rule)
 	// if err != nil {
@@ -94,7 +93,7 @@ func DeleteAllRules(s *NetlinkConnection) error {
 
 done:
 	for {
-		// Make the rb byte bigger because of large messages from Kernel doesn't fit in 4096
+		// Avoid DONTWAIT due to implications on systems with low resources
 		// msgs, err := s.Receive(MAX_AUDIT_MESSAGE_LENGTH, syscall.MSG_DONTWAIT)
 		msgs, err := s.Receive(MAX_AUDIT_MESSAGE_LENGTH, 0)
 		if err != nil {
@@ -208,11 +207,11 @@ func AuditNameToFtype(name string, value *int) error {
 }
 
 var (
-	errMaxField = errors.New("Max Fields for AuditRuleData exceeded")
-	errNoStr    = errors.New("No support for string values")
-	errUnset    = errors.New("Unable to set value")
-	errNoSys    = errors.New("No syscall added")
-	errMaxLen   = errors.New("Max Rule length Exceeded")
+	errMaxField = errors.New("max fields for rule exceeded")
+	errNoStr    = errors.New("no support for string values")
+	errUnset    = errors.New("unable to set value")
+	errNoSys    = errors.New("no prior syscall added")
+	errMaxLen   = errors.New("max Rule length exceeded")
 )
 
 // AuditRuleFieldPairData process the passed AuditRuleData struct for passing to kernel
@@ -316,7 +315,6 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 		fallthrough //IMP
 	case AUDIT_SUBJ_USER, AUDIT_SUBJ_ROLE, AUDIT_SUBJ_TYPE, AUDIT_SUBJ_SEN, AUDIT_SUBJ_CLR, AUDIT_FILTERKEY:
 		//If And only if a syscall is added or a permisission is added then this field should be set
-		//TODO - More debugging required
 		if fieldid == AUDIT_FILTERKEY && !(auditSyscallAdded || auditPermAdded) {
 			return errors.Wrap(errNoSys, "AuditRuleFieldPairData failed: Key field needs a watch or syscall given prior to it")
 		}
@@ -409,19 +407,6 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 
 	case AUDIT_ARG0, AUDIT_ARG1, AUDIT_ARG2, AUDIT_ARG3:
 		if val, isInt := fieldval.(float64); isInt {
-			// if val < 0 {
-			// 	// For trimming "-" and evaluating th condition vlen >=2 (which is not needed)
-			// 	valString := strconv.FormatInt((int64)(val), 10)
-			// 	fieldvalUID := strings.Replace(valString, "-", "", -1)
-			// 	a, err := strconv.Atoi(fieldvalUID)
-			// 	if err != nil {
-			// 		return errors.Wrap(err, "AuditRuleFieldPairData: fieldvalUID conversion failed")
-			// 	}
-			// 	rule.Values[rule.FieldCount] = (uint32)(a)
-
-			// } else {
-			// 	rule.Values[rule.FieldCount] = (uint32)(val)
-			// }
 			rule.Values[rule.FieldCount] = (uint32)(val)
 		} else if _, isString := fieldval.(string); isString {
 			return errors.Wrap(errNoStr, fmt.Sprintf("AuditRuleFieldPairData failed: %v should be a number", fieldname))
@@ -462,7 +447,7 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 	return nil
 }
 
-var errEntryDep = errors.New("Use of entry filter is deprecated")
+var errEntryDep = errors.New("use of entry filter is deprecated")
 
 func setActionAndFilters(actions []interface{}) (int, int) {
 	action := -1
@@ -478,7 +463,6 @@ func setActionAndFilters(actions []interface{}) (int, int) {
 		} else if value == "task" {
 			filter = AUDIT_FILTER_TASK
 		} else if value == "entry" {
-			// log.Println("Support for Entry Filter is Deprecated. Switching back to Exit filter")
 			filter = AUDIT_FILTER_EXIT
 		} else if value == "exit" {
 			filter = AUDIT_FILTER_EXIT
@@ -551,12 +535,10 @@ func SetRules(s *NetlinkConnection, content []byte) error {
 			vi := v.([]interface{})
 			for ruleNo := range vi {
 				rule := vi[ruleNo].(map[string]interface{})
-				path := rule["path"]
-				if path == "" {
+				path, ok := rule["path"]
+				if path == "" || !ok {
 					return errors.Wrap(err, "SetRules failed: watch option needs a path")
 				}
-				perms := rule["permission"]
-				//log.Println("Setting watch on", path)
 				var ruleData AuditRuleData
 				ruleData.Buf = make([]byte, 0)
 				add := AUDIT_FILTER_EXIT
@@ -567,15 +549,16 @@ func SetRules(s *NetlinkConnection, content []byte) error {
 				if err != nil {
 					return errors.Wrap(err, "SetRules failed")
 				}
-				if perms != nil {
+				perms, ok := rule["permission"]
+				if ok {
 					err = AuditSetupAndUpdatePerms(&ruleData, perms.(string))
 					if err != nil {
 						return errors.Wrap(err, "SetRules failed")
 					}
 				}
 
-				key := rule["key"]
-				if key != nil {
+				key, ok := rule["key"]
+				if ok {
 					err = AuditRuleFieldPairData(&ruleData, key, AUDIT_EQUAL, "key", fieldmap, AUDIT_FILTER_UNSET) // &AUDIT_BIT_MASK
 					if err != nil {
 						return errors.Wrap(err, "SetRules failed")
@@ -599,7 +582,6 @@ func SetRules(s *NetlinkConnection, content []byte) error {
 				)
 				ruleData.Buf = make([]byte, 0)
 				// Process syscalls
-				// TODO: support syscall no
 				syscalls, ok := srule["syscalls"].([]interface{})
 				if ok {
 					for _, syscall := range syscalls {
@@ -608,7 +590,6 @@ func SetRules(s *NetlinkConnection, content []byte) error {
 							return fmt.Errorf("SetRules failed: unexpected syscall name %v", syscall)
 						}
 						if ival, ok := syscallMap[syscall]; ok {
-							//log.Println("setting syscall rule", syscall)
 							err = AuditRuleSyscallData(&ruleData, int(ival.(float64)))
 							if err == nil {
 								auditSyscallAdded = true
@@ -630,15 +611,12 @@ func SetRules(s *NetlinkConnection, content []byte) error {
 				action, filter := setActionAndFilters(actions)
 
 				// Process fields
-				if srule["fields"] == nil {
-					//TODO: add proper ways to display warnings
-					log.Println("WARNING - 32/64 bit syscall mismatch, you should specify an arch")
-				} else {
-					for _, field := range srule["fields"].([]interface{}) {
+				fields, ok := srule["fields"].([]interface{})
+				if ok {
+					for _, field := range fields {
 						fieldval := field.(map[string]interface{})["value"]
 						op := field.(map[string]interface{})["op"]
 						fieldname := field.(map[string]interface{})["name"]
-						//log.Println(fieldval, op, fieldname)
 						var opval uint32
 						if op == "nt_eq" {
 							opval = AUDIT_NOT_EQUAL
@@ -694,9 +672,9 @@ func SetRules(s *NetlinkConnection, content []byte) error {
 	return nil
 }
 
-var errPathTooBig = errors.New("The path passed for the watch is too big")
-var errPathStart = errors.New("The path must start with '/'")
-var errBaseTooBig = errors.New("The base name of the path is too big")
+var errPathTooBig = errors.New("the path passed for the watch is too big")
+var errPathStart = errors.New("the path must start with '/'")
+var errBaseTooBig = errors.New("the base name of the path is too big")
 
 func checkPath(pathName string) error {
 	if len(pathName) >= PATH_MAX {
@@ -712,14 +690,12 @@ func checkPath(pathName string) error {
 		return errors.Wrap(errBaseTooBig, "checkPath failed")
 	}
 
-	if strings.ContainsAny(base, "..") {
-		// TODO: better ways to show warnings
-		log.Println("Warning - relative path notation is not supported!")
+	if strings.Contains(base, "..") {
+		return fmt.Errorf("warning: relative path notation is not supported %v", base)
 	}
 
-	if strings.ContainsAny(base, "*") || strings.ContainsAny(base, "?") {
-		// TODO: better ways to show warnings
-		log.Println("Warning - wildcard notation is not supported!")
+	if strings.Contains(base, "*") || strings.Contains(base, "?") {
+		return fmt.Errorf("warning: wildcard notation is not supported %v", base)
 	}
 
 	return nil
@@ -910,7 +886,7 @@ func AuditUpdateWatchPerms(rule *AuditRuleData, perms int) error {
 // 	return nil
 // }
 
-//AuditSyscallToName takes syscall number can returns the syscall name. Applicable only for x64 arch only.
+//AuditSyscallToName takes syscall number and returns the syscall name. Applicable only for x64 arch.
 func AuditSyscallToName(syscall string) (name string, err error) {
 	var x64Map interface{}
 	err = json.Unmarshal([]byte(reverseSysMap), &x64Map)

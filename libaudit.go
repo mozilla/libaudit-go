@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"log"
 	"os"
 	"sync/atomic"
 	"syscall"
@@ -86,9 +85,6 @@ func netlinkMessageHeaderAndData(b []byte) (*syscall.NlMsghdr, []byte, int, erro
 
 	h := (*syscall.NlMsghdr)(unsafe.Pointer(&b[0]))
 	if int(h.Len) < syscall.NLMSG_HDRLEN || int(h.Len) > len(b) {
-		// foo := int32(nativeEndian().Uint32(b[0:4]))
-		// log.Println("Headerlength with ", foo, b[0]) //bug!
-		// log.Println("Error due to....HDRLEN:", syscall.NLMSG_HDRLEN, " Header Length:", h.Len, " Length of BYTE Array:", len(b))
 		return nil, nil, 0, errors.Wrap(syscall.EINVAL, "Nlmsghdr header length unexpected")
 	}
 	return h, b[syscall.NLMSG_HDRLEN:], nlmAlignOf(int(h.Len)), nil
@@ -187,15 +183,12 @@ done:
 				break done
 			}
 			if m.Header.Type == syscall.NLMSG_ERROR {
-				error := int32(nativeEndian().Uint32(m.Data[0:4]))
-				if error == 0 {
-					//log.Println("Acknowledged!!")
+				e := int32(nativeEndian().Uint32(m.Data[0:4]))
+				if e == 0 {
 					break done
 				} else {
-					//log.Println("NLMSG_ERROR Received..")
-					//should be added: appropriate flow of actions
+					return fmt.Errorf("AuditGetReply: error while recieving reply -%d", e)
 				}
-				break done
 			}
 			// acknowledge AUDIT_GET replies from kernel
 			if m.Header.Type == uint16(AUDIT_GET) {
@@ -280,8 +273,7 @@ done:
 			} else if m.Header.Type == syscall.NLMSG_ERROR {
 				e := int32(nativeEndian().Uint32(m.Data[0:4]))
 				if e == 0 {
-					//TODO: Better way to notify
-					log.Println("ACK")
+					// request ack from kernel
 					continue
 				}
 				break done
@@ -304,7 +296,6 @@ done:
 }
 
 // AuditSetPID sends a message to kernel for setting of program PID
-// Wait mode WAIT_YES | WAIT_NO
 func AuditSetPID(s *NetlinkConnection, pid uint32) error {
 	var status AuditStatus
 	status.Mask = AUDIT_STATUS_PID
@@ -377,27 +368,3 @@ func AuditSetBacklogLimit(s *NetlinkConnection, limit int) error {
 	return nil
 
 }
-
-/*
-If further needed
-var ErrStrings = []string{"E2BIG", "EACCES", "EADDRINUSE", "EADDRNOTAVAIL", "EADV", "EAFNOSUPPORT", "EAGAIN", "EALREADY", "EBADE", "EBADF",
-	"EBADFD", "EBADMSG", "EBADR", "EBADRQC", "EBADSLT", "EBFONT", "EBUSY", "ECANCELED", "ECHILD", "ECHRNG",
-	"ECOMM", "ECONNABORTED", "ECONNREFUSED", "ECONNRESET", "EDEADLK", "EDEADLOCK", "EDESTADDRREQ", "EDOM", "EDOTDOT", "EDQUOT",
-	"EEXIST", "EFAULT", "EFBIG", "EHOSTDOWN", "EHOSTUNREACH", "EIDRM", "EILSEQ", "EINPROGRESS", "EINTR", "EINVAL",
-	"EIO", "EISCONN", "EISDIR", "EISNAM", "EKEYEXPIRED", "EKEYREJECTED", "EKEYREVOKED", "EL2HLT", "EL2NSYNC", "EL3HLT",
-	"EL3RST", "ELIBACC", "ELIBBAD", "ELIBEXEC", "ELIBMAX", "ELIBSCN", "ELNRNG", "ELOOP", "EMEDIUMTYPE", "EMFILE",
-	"EMLINK", "EMSGSIZE", "EMULTIHOP", "ENAMETOOLONG", "ENAVAIL", "ENETDOWN", "ENETRESET", "ENETUNREACH", "ENFILE", "ENOANO",
-	"ENOBUFS", "ENOCSI", "ENODATA", "ENODEV", "ENOENT", "ENOEXEC", "ENOKEY", "ENOLCK", "ENOLINK", "ENOMEDIUM",
-	"ENOMEM", "ENOMSG", "ENONET", "ENOPKG", "ENOPROTOOPT", "ENOSPC", "ENOSR", "ENOSTR", "ENOSYS", "ENOTBLK",
-	"ENOTCONN", "ENOTDIR", "ENOTEMPTY", "ENOTNAM", "ENOTRECOVERABLE", "ENOTSOCK", "ENOTTY", "ENOTUNIQ", "ENXIO", "EOPNOTSUPP",
-	"EOVERFLOW", "EOWNERDEAD", "EPERM", "EPFNOSUPPORT", "EPIPE", "EPROTO", "EPROTONOSUPPORT", "EPROTOTYPE", "ERANGE", "EREMCHG",
-	"EREMOTE", "EREMOTEIO", "ERESTART", "EROFS", "ESHUTDOWN", "ESOCKTNOSUPPORT", "ESPIPE", "ESRCH", "ESRMNT", "ESTALE",
-	"ESTRPIPE", "ETIME", "ETIMEDOUT", "ETOOMANYREFS", "ETXTBSY", "EUCLEAN", "EUNATCH", "EUSERS", "EWOULDBLOCK", "EXDEV",
-	"EXFULL"}
-
-var ErrS2iI = []int{7, 13, 98, 99, 68, 97, 11, 114, 52, 9, 77, 74, 53, 56, 57, 59, 16, 125, 10, 44, 70, 103, 111, 104, 35, 35, 89, 33, 73, 122, 17, 14, 27, 112, 113, 43, 84, 115, 4, 22,
-	5, 106, 21, 120, 127, 129, 128, 51, 45, 46, 47, 79, 80, 83, 82, 81, 48, 40, 124, 24, 31, 90, 72, 36, 119, 100, 102, 101, 23, 55, 105, 50, 61, 19, 2, 8, 126, 37, 67, 123, 12, 42, 64, 65, 92, 28, 63, 60, 38, 15,
-	107, 20, 39, 118, 131, 88, 25, 76, 6, 95, 75, 130, 1, 96, 32, 71, 93, 91, 34, 78, 66, 121, 85, 30, 108, 94, 29, 3, 69, 116, 86, 62, 110, 109, 26, 117, 49, 87, 11, 18, 54}
-
-var audit_elf uint = 0
-*/
