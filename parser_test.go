@@ -196,7 +196,7 @@ var auditTests = []struct {
 }
 
 func TestMalformedPrefix(t *testing.T) {
-	var err = fmt.Errorf("malformed audit message")
+	var err = fmt.Errorf("parsing failed: malformed audit message")
 	tmsg := []struct {
 		msg     string
 		msgType auditConstant
