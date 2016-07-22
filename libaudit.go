@@ -103,7 +103,7 @@ func newNetlinkAuditRequest(proto uint16, family, sizeofData int) *NetlinkMessag
 	return rr
 }
 
-// NewNetlinkConnection creates a fresh connection and use it for all further communication
+// NewNetlinkConnection creates a fresh netlink connection
 func NewNetlinkConnection() (*NetlinkConnection, error) {
 
 	// Check for root user

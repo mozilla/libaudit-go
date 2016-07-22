@@ -436,7 +436,7 @@ func AuditRuleFieldPairData(rule *AuditRuleData, fieldval interface{}, opval uin
 	default:
 		if fieldid == AUDIT_INODE {
 			if !(opval == AUDIT_NOT_EQUAL || opval == AUDIT_EQUAL) {
-				return fmt.Errorf("AuditRuleFieldPairData failed: operator can only be AUDIT_NOT_EQUAL or AUDIT_EQUAL")
+				return fmt.Errorf("AuditRuleFieldPairData failed: %v only takes = or != operators", fieldname)
 			}
 		}
 
@@ -593,13 +593,15 @@ func SetRules(s *NetlinkConnection, content []byte) error {
 			vi := v.([]interface{})
 			for sruleNo := range vi {
 				srule := vi[sruleNo].(map[string]interface{})
-				var ruleData AuditRuleData
+				var (
+					ruleData         AuditRuleData
+					syscallsNotFound string
+				)
 				ruleData.Buf = make([]byte, 0)
 				// Process syscalls
 				// TODO: support syscall no
-				if srule["syscalls"] != nil {
-					var syscallsNotFound string
-					syscalls := srule["syscalls"].([]interface{})
+				syscalls, ok := srule["syscalls"].([]interface{})
+				if ok {
 					for _, syscall := range syscalls {
 						syscall, ok := syscall.(string)
 						if !ok {
@@ -616,9 +618,9 @@ func SetRules(s *NetlinkConnection, content []byte) error {
 						}
 						syscallsNotFound += " " + syscall
 					}
-					if auditSyscallAdded != true {
-						return fmt.Errorf("SetRules failed: one or more syscalls not found: %v", syscallsNotFound)
-					}
+				}
+				if auditSyscallAdded != true {
+					return fmt.Errorf("SetRules failed: one or more syscalls not found: %v", syscallsNotFound)
 				}
 
 				// Process action
@@ -759,9 +761,9 @@ func AuditSetupAndAddWatchDir(rule *AuditRuleData, pathName string) error {
 func AuditAddWatchDir(typeName uint16, rule *AuditRuleData, pathName string) error {
 
 	// Check if Rule is Empty
-	// if rule && rule.FieldCount {
-	// 	return errors.New("Rule is Not Empty!")
-	// }
+	if rule.FieldCount != 0 {
+		return fmt.Errorf("AuditAddWatchDir failed: rule is not empty")
+	}
 
 	if typeName != uint16(AUDIT_DIR) && typeName != uint16(AUDIT_WATCH) {
 		return fmt.Errorf("AuditAddWatchDir failed: invalid type %v used", typeName)
@@ -769,8 +771,7 @@ func AuditAddWatchDir(typeName uint16, rule *AuditRuleData, pathName string) err
 
 	rule.Flags = uint32(AUDIT_FILTER_EXIT)
 	rule.Action = uint32(AUDIT_ALWAYS)
-	// set mask
-	// TODO : Setup audit_rule_syscallbyname_data(rule, "all")
+	// mark all bits as would be done by audit_rule_syscallbyname_data(rule, "all")
 	for i := 0; i < AUDIT_BITMASK_SIZE-1; i++ {
 		rule.Mask[i] = 0xFFFFFFFF
 	}
@@ -781,11 +782,7 @@ func AuditAddWatchDir(typeName uint16, rule *AuditRuleData, pathName string) err
 	rule.Fieldflags[0] = uint32(AUDIT_EQUAL)
 	valbyte := []byte(pathName)
 	vlen := len(valbyte)
-	// if fieldid == AUDIT_FILTERKEY && vlen > AUDIT_MAX_KEY_LEN {
-	// 	return errMaxLen
-	// } else if vlen > PATH_MAX {
-	// 	return errMaxLen
-	// }
+
 	rule.Values[0] = (uint32)(vlen)
 	rule.Buflen = (uint32)(vlen)
 	//Now append the key value with the rule buffer space
