@@ -67,15 +67,28 @@ func nlmAlignOf(msglen int) int {
 // Parse a byte stream to an array of NetlinkMessage structs
 func parseAuditNetlinkMessage(b []byte) ([]NetlinkMessage, error) {
 
-	var msgs []NetlinkMessage
-	h, dbuf, dlen, err := netlinkMessageHeaderAndData(b)
-	if err != nil {
-		return nil, errors.Wrap(err, "error while parsing NetlinkMessage")
-	}
+	var (
+		msgs []NetlinkMessage
+		m    NetlinkMessage
+	)
+	for len(b) >= syscall.NLMSG_HDRLEN {
+		h, dbuf, dlen, err := netlinkMessageHeaderAndData(b)
+		if err != nil {
+			return nil, errors.Wrap(err, "error while parsing NetlinkMessage")
+		}
+		if len(dbuf) == int(h.Len) {
+			// this should never be possible in correct scenarios
+			// but sometimes kernel reponse have length of header == length of data appended
+			// which would lead to trimming of data if we subtract NLMSG_HDRLEN
+			// therefore following workaround
+			m = NetlinkMessage{Header: *h, Data: dbuf[:int(h.Len)]}
+		} else {
+			m = NetlinkMessage{Header: *h, Data: dbuf[:int(h.Len)-syscall.NLMSG_HDRLEN]}
+		}
 
-	m := NetlinkMessage{Header: *h, Data: dbuf[:int(h.Len) /* -syscall.NLMSG_HDRLEN*/]}
-	msgs = append(msgs, m)
-	b = b[dlen:]
+		msgs = append(msgs, m)
+		b = b[dlen:]
+	}
 
 	return msgs, nil
 }
@@ -85,7 +98,7 @@ func netlinkMessageHeaderAndData(b []byte) (*syscall.NlMsghdr, []byte, int, erro
 
 	h := (*syscall.NlMsghdr)(unsafe.Pointer(&b[0]))
 	if int(h.Len) < syscall.NLMSG_HDRLEN || int(h.Len) > len(b) {
-		return nil, nil, 0, errors.Wrap(syscall.EINVAL, "Nlmsghdr header length unexpected")
+		return nil, nil, 0, fmt.Errorf("Nlmsghdr header length unexpected %v, actual packet length %v", h.Len, len(b))
 	}
 	return h, b[syscall.NLMSG_HDRLEN:], nlmAlignOf(int(h.Len)), nil
 }
@@ -201,13 +214,13 @@ done:
 
 // AuditSetEnabled enables or disables audit in kernel
 // `enabled` should be 1 for enabling and 0 for disabling
-func AuditSetEnabled(s *NetlinkConnection, enabled uint32) error {
+func AuditSetEnabled(s *NetlinkConnection, enabled int) error {
 	var (
 		status AuditStatus
 		err    error
 	)
 
-	status.Enabled = enabled
+	status.Enabled = (uint32)(enabled)
 	status.Mask = AUDIT_STATUS_ENABLED
 	buff := new(bytes.Buffer)
 	err = binary.Write(buff, nativeEndian(), status)
@@ -296,10 +309,10 @@ done:
 }
 
 // AuditSetPID sends a message to kernel for setting of program PID
-func AuditSetPID(s *NetlinkConnection, pid uint32) error {
+func AuditSetPID(s *NetlinkConnection, pid int) error {
 	var status AuditStatus
 	status.Mask = AUDIT_STATUS_PID
-	status.Pid = pid
+	status.Pid = (uint32)(pid)
 	buff := new(bytes.Buffer)
 	err := binary.Write(buff, nativeEndian(), status)
 	if err != nil {
