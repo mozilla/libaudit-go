@@ -1,6 +1,7 @@
 package libaudit
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"syscall"
 	"unsafe"
 
+	"github.com/lunixbochs/struc"
 	"github.com/pkg/errors"
 )
 
@@ -18,15 +20,15 @@ var rulesRetrieved AuditRuleData
 
 // AuditRuleData is used while adding/deleting/listing audit rules
 type AuditRuleData struct {
-	Flags      uint32 // AUDIT_PER_{TASK,CALL}, AUDIT_PREPEND
-	Action     uint32 // AUDIT_NEVER, AUDIT_POSSIBLE, AUDIT_ALWAYS
-	FieldCount uint32
-	Mask       [AUDIT_BITMASK_SIZE]uint32 // syscall(s) affected
-	Fields     [AUDIT_MAX_FIELDS]uint32
-	Values     [AUDIT_MAX_FIELDS]uint32
-	Fieldflags [AUDIT_MAX_FIELDS]uint32
-	Buflen     uint32 // total length of string fields
-	Buf        []byte // string fields buffer
+	Flags      uint32                     `struc:"uint32,little"` // AUDIT_PER_{TASK,CALL}, AUDIT_PREPEND
+	Action     uint32                     `struc:"uint32,little"` // AUDIT_NEVER, AUDIT_POSSIBLE, AUDIT_ALWAYS
+	FieldCount uint32                     `struc:"uint32,little"`
+	Mask       [AUDIT_BITMASK_SIZE]uint32 `struc:"[64]uint32,little"` // syscall(s) affected
+	Fields     [AUDIT_MAX_FIELDS]uint32   `struc:"[64]uint32,little"`
+	Values     [AUDIT_MAX_FIELDS]uint32   `struc:"[64]uint32,little"`
+	Fieldflags [AUDIT_MAX_FIELDS]uint32   `struc:"[64]uint32,little"`
+	Buflen     uint32                     `struc:"uint32,little,sizeof=Buf"` // total length of string fields
+	Buf        []byte                     `struc:"[]byte,little"`            // string fields buffer
 }
 
 // FMap denotes a field for rules
@@ -835,56 +837,63 @@ func AuditUpdateWatchPerms(rule *AuditRuleData, perms int) error {
 
 // ListAllRules lists all audit rules currently loaded in audit kernel
 // TODO: this funcion needs a lot of work to print actual rules
-// func ListAllRules(s *NetlinkConnection) error {
-// 	wb := newNetlinkAuditRequest(uint16(AUDIT_LIST_RULES), syscall.AF_NETLINK, 0)
-// 	if err := s.Send(wb); err != nil {
-// 		//log.Print("Error:", err)
-// 		return errors.Wrap(err, "ListAllRules failed")
-// 	}
+func ListAllRules(s *NetlinkConnection) error {
+	wb := newNetlinkAuditRequest(uint16(AUDIT_LIST_RULES), syscall.AF_NETLINK, 0)
+	if err := s.Send(wb); err != nil {
+		//log.Print("Error:", err)
+		return errors.Wrap(err, "ListAllRules failed")
+	}
+done:
+	for {
+		// msgs, err := s.Receive(MAX_AUDIT_MESSAGE_LENGTH, syscall.MSG_DONTWAIT)
+		msgs, err := s.Receive(MAX_AUDIT_MESSAGE_LENGTH, 0)
+		if err != nil {
+			return errors.Wrap(err, "ListAllRules failed")
+		}
 
-// done:
-// 	for {
-// 		// msgs, err := s.Receive(MAX_AUDIT_MESSAGE_LENGTH, syscall.MSG_DONTWAIT)
-// 		msgs, err := s.Receive(MAX_AUDIT_MESSAGE_LENGTH, 0)
-// 		if err != nil {
-// 			return errors.Wrap(err, "ListAllRules failed")
-// 		}
+		for _, m := range msgs {
+			fmt.Println("ong")
 
-// 		for _, m := range msgs {
+			address, err := syscall.Getsockname(s.fd)
+			if err != nil {
+				return errors.Wrap(err, "ListAllRules failed: Getsockname failed")
+			}
+			switch v := address.(type) {
+			case *syscall.SockaddrNetlink:
+				if m.Header.Seq != wb.Header.Seq {
+					return fmt.Errorf("ListAllRules: Wrong Seq nr %d, expected %d", m.Header.Seq, wb.Header.Seq)
+				}
+				if m.Header.Pid != v.Pid {
+					return fmt.Errorf("ListAllRules: Wrong pid %d, expected %d", m.Header.Pid, v.Pid)
+				}
+			default:
+				return fmt.Errorf("ListAllRules: socket type unexpected")
+			}
 
-// 			address, err := syscall.Getsockname(s.fd)
-// 			if err != nil {
-// 				return errors.Wrap(err, "ListAllRules failed: Getsockname failed")
-// 			}
-// 			switch v := address.(type) {
-// 			case *syscall.SockaddrNetlink:
-// 				if m.Header.Seq != wb.Header.Seq {
-// 					return fmt.Errorf("ListAllRules: Wrong Seq nr %d, expected %d", m.Header.Seq, wb.Header.Seq)
-// 				}
-// 				if m.Header.Pid != v.Pid {
-// 					return fmt.Errorf("ListAllRules: Wrong pid %d, expected %d", m.Header.Pid, v.Pid)
-// 				}
-// 			default:
-// 				return errors.Wrap(syscall.EINVAL, "ListAllRules: socket type unexpected")
-// 			}
-
-// 			if m.Header.Type == syscall.NLMSG_DONE {
-// 				break done
-// 			}
-// 			if m.Header.Type == syscall.NLMSG_ERROR {
-// 				error := int32(nativeEndian().Uint32(m.Data[0:4]))
-// 				if error == 0 {
-// 					break done
-// 				}
-// 			}
-// 			if m.Header.Type == uint16(AUDIT_LIST_RULES) {
-// 				p := (*AuditRuleData)(unsafe.Pointer(&m.Data[0]))
-// 				log.Println(p.Flags)
-// 			}
-// 		}
-// 	}
-// 	return nil
-// }
+			if m.Header.Type == syscall.NLMSG_DONE {
+				break done
+			}
+			if m.Header.Type == syscall.NLMSG_ERROR {
+				e := int32(nativeEndian().Uint32(m.Data[0:4]))
+				if e == 0 {
+					continue
+				}
+			}
+			if m.Header.Type == uint16(AUDIT_LIST_RULES) {
+				fmt.Println("HH")
+				var r AuditRuleData
+				nbuf := bytes.NewBuffer(m.Data)
+				err = struc.Unpack(nbuf, &r)
+				if err != nil {
+					return errors.Wrap(err, "ListAllRules failed")
+				}
+				fmt.Println(string(r.Buf))
+				// p := (*AuditRuleData)(unsafe.Pointer(&m.Data[0]))
+			}
+		}
+	}
+	return nil
+}
 
 //AuditSyscallToName takes syscall number and returns the syscall name. Applicable only for x64 arch.
 func AuditSyscallToName(syscall string) (name string, err error) {
