@@ -15,348 +15,348 @@ import (
 	"github.com/pkg/errors"
 )
 
-type FieldType int
+type fieldType int
 
 const (
-	TypeUID FieldType = iota
-	TypeGID
-	TypeSyscall
-	TypeArch
-	TypeExit
-	TypePerm
-	TypeEscaped
-	TypeMode
-	TypeSockaddr
-	TypePromisc
-	TypeCapability
-	TypeSuccess
-	TypeA0
-	TypeA1
-	TypeA2
-	TypeA3
-	TypeSignal
-	TypeList
-	TypeTTYData
-	TypeSession
-	TypeCapBitmap
-	TypeNFProto
-	TypeICMP
-	TypeProtocol
-	TypeAddr
-	TypePersonality
-	TypeOFlag
-	TypeSeccomp
-	TypeMmap
-	TypeMacLabel
-	TypeProctile
-	TypeUnclassified
-	TypeModeShort
+	typeUID fieldType = iota
+	typeGID
+	typeSyscall
+	typeArch
+	typeExit
+	typePerm
+	typeEscaped
+	typeMode
+	typeSockaddr
+	typePromisc
+	typeCapability
+	typeSuccess
+	typeA0
+	typeA1
+	typeA2
+	typeA3
+	typeSignal
+	typeList
+	typeTTYData
+	typeSession
+	typeCapBitmap
+	typeNFProto
+	typeICMP
+	typeProtocol
+	typeAddr
+	typePersonality
+	typeOFlag
+	typeSeccomp
+	typeMmap
+	typeMacLabel
+	typeProctile
+	typeUnclassified
+	typeModeShort
 )
 
-var FieldLookupMap = map[string]FieldType{
-	"auid":           TypeUID,
-	"uid":            TypeUID,
-	"euid":           TypeUID,
-	"suid":           TypeUID,
-	"fsuid":          TypeUID,
-	"ouid":           TypeUID,
-	"oauid":          TypeUID,
-	"iuid":           TypeUID,
-	"id":             TypeUID,
-	"inode_uid":      TypeUID,
-	"sauid":          TypeUID,
-	"obj_uid":        TypeUID,
-	"obj_gid":        TypeGID,
-	"gid":            TypeGID,
-	"egid":           TypeGID,
-	"sgid":           TypeGID,
-	"fsgid":          TypeGID,
-	"ogid":           TypeGID,
-	"igid":           TypeGID,
-	"inode_gid":      TypeGID,
-	"new_gid":        TypeGID,
-	"syscall":        TypeSyscall,
-	"arch":           TypeArch,
-	"exit":           TypeExit,
-	"path":           TypeEscaped,
-	"comm":           TypeEscaped,
-	"exe":            TypeEscaped,
-	"file":           TypeEscaped,
-	"name":           TypeEscaped,
-	"watch":          TypeEscaped,
-	"cwd":            TypeEscaped,
-	"cmd":            TypeEscaped,
-	"acct":           TypeEscaped,
-	"dir":            TypeEscaped,
-	"key":            TypeEscaped,
-	"vm":             TypeEscaped,
-	"old-disk":       TypeEscaped,
-	"new-disk":       TypeEscaped,
-	"old-fs":         TypeEscaped,
-	"new-fs":         TypeEscaped,
-	"device":         TypeEscaped,
-	"cgroup":         TypeEscaped,
-	"perm":           TypePerm,
-	"perm_mask":      TypePerm,
-	"mode":           TypeMode,
-	"saddr":          TypeSockaddr,
-	"prom":           TypePromisc,
-	"old_prom":       TypePromisc,
-	"capability":     TypeCapability,
-	"res":            TypeSuccess,
-	"result":         TypeSuccess,
-	"a0":             TypeA0,
-	"a1":             TypeA1,
-	"a2":             TypeA2,
-	"a3":             TypeA3,
-	"sig":            TypeSignal,
-	"list":           TypeList,
-	"data":           TypeTTYData,
-	"ses":            TypeSession,
-	"cap_pi":         TypeCapBitmap,
-	"cap_pe":         TypeCapBitmap,
-	"cap_pp":         TypeCapBitmap,
-	"cap_fi":         TypeCapBitmap,
-	"cap_fp":         TypeCapBitmap,
-	"fp":             TypeCapBitmap,
-	"fi":             TypeCapBitmap,
-	"fe":             TypeCapBitmap,
-	"old_pp":         TypeCapBitmap,
-	"old_pi":         TypeCapBitmap,
-	"old_pe":         TypeCapBitmap,
-	"new_pp":         TypeCapBitmap,
-	"new_pi":         TypeCapBitmap,
-	"new_pe":         TypeCapBitmap,
-	"family":         TypeNFProto,
-	"icmptype":       TypeICMP,
-	"proto":          TypeProtocol,
-	"addr":           TypeAddr,
-	"apparmor":       TypeEscaped,
-	"operation":      TypeEscaped,
-	"denied_mask":    TypeEscaped,
-	"info":           TypeEscaped,
-	"profile":        TypeEscaped,
-	"requested_mask": TypeEscaped,
-	"per":            TypePersonality,
-	"code":           TypeSeccomp,
-	"old-rng":        TypeEscaped,
-	"new-rng":        TypeEscaped,
-	"oflag":          TypeOFlag,
-	"ocomm":          TypeEscaped,
-	"flags":          TypeMmap,
-	"sigev_signo":    TypeEscaped,
-	"subj":           TypeMacLabel,
-	"obj":            TypeMacLabel,
-	"scontext":       TypeMacLabel,
-	"tcontext":       TypeMacLabel,
-	"vm-ctx":         TypeMacLabel,
-	"img-ctx":        TypeMacLabel,
-	"proctitle":      TypeProctile,
-	"grp":            TypeEscaped,
-	"new_group":      TypeEscaped,
+var fieldLookupMap = map[string]fieldType{
+	"auid":           typeUID,
+	"uid":            typeUID,
+	"euid":           typeUID,
+	"suid":           typeUID,
+	"fsuid":          typeUID,
+	"ouid":           typeUID,
+	"oauid":          typeUID,
+	"iuid":           typeUID,
+	"id":             typeUID,
+	"inode_uid":      typeUID,
+	"sauid":          typeUID,
+	"obj_uid":        typeUID,
+	"obj_gid":        typeGID,
+	"gid":            typeGID,
+	"egid":           typeGID,
+	"sgid":           typeGID,
+	"fsgid":          typeGID,
+	"ogid":           typeGID,
+	"igid":           typeGID,
+	"inode_gid":      typeGID,
+	"new_gid":        typeGID,
+	"syscall":        typeSyscall,
+	"arch":           typeArch,
+	"exit":           typeExit,
+	"path":           typeEscaped,
+	"comm":           typeEscaped,
+	"exe":            typeEscaped,
+	"file":           typeEscaped,
+	"name":           typeEscaped,
+	"watch":          typeEscaped,
+	"cwd":            typeEscaped,
+	"cmd":            typeEscaped,
+	"acct":           typeEscaped,
+	"dir":            typeEscaped,
+	"key":            typeEscaped,
+	"vm":             typeEscaped,
+	"old-disk":       typeEscaped,
+	"new-disk":       typeEscaped,
+	"old-fs":         typeEscaped,
+	"new-fs":         typeEscaped,
+	"device":         typeEscaped,
+	"cgroup":         typeEscaped,
+	"perm":           typePerm,
+	"perm_mask":      typePerm,
+	"mode":           typeMode,
+	"saddr":          typeSockaddr,
+	"prom":           typePromisc,
+	"old_prom":       typePromisc,
+	"capability":     typeCapability,
+	"res":            typeSuccess,
+	"result":         typeSuccess,
+	"a0":             typeA0,
+	"a1":             typeA1,
+	"a2":             typeA2,
+	"a3":             typeA3,
+	"sig":            typeSignal,
+	"list":           typeList,
+	"data":           typeTTYData,
+	"ses":            typeSession,
+	"cap_pi":         typeCapBitmap,
+	"cap_pe":         typeCapBitmap,
+	"cap_pp":         typeCapBitmap,
+	"cap_fi":         typeCapBitmap,
+	"cap_fp":         typeCapBitmap,
+	"fp":             typeCapBitmap,
+	"fi":             typeCapBitmap,
+	"fe":             typeCapBitmap,
+	"old_pp":         typeCapBitmap,
+	"old_pi":         typeCapBitmap,
+	"old_pe":         typeCapBitmap,
+	"new_pp":         typeCapBitmap,
+	"new_pi":         typeCapBitmap,
+	"new_pe":         typeCapBitmap,
+	"family":         typeNFProto,
+	"icmptype":       typeICMP,
+	"proto":          typeProtocol,
+	"addr":           typeAddr,
+	"apparmor":       typeEscaped,
+	"operation":      typeEscaped,
+	"denied_mask":    typeEscaped,
+	"info":           typeEscaped,
+	"profile":        typeEscaped,
+	"requested_mask": typeEscaped,
+	"per":            typePersonality,
+	"code":           typeSeccomp,
+	"old-rng":        typeEscaped,
+	"new-rng":        typeEscaped,
+	"oflag":          typeOFlag,
+	"ocomm":          typeEscaped,
+	"flags":          typeMmap,
+	"sigev_signo":    typeEscaped,
+	"subj":           typeMacLabel,
+	"obj":            typeMacLabel,
+	"scontext":       typeMacLabel,
+	"tcontext":       typeMacLabel,
+	"vm-ctx":         typeMacLabel,
+	"img-ctx":        typeMacLabel,
+	"proctitle":      typeProctile,
+	"grp":            typeEscaped,
+	"new_group":      typeEscaped,
 }
 
-func InterpretField(fieldName string, fieldValue string, msgType auditConstant, r record) (string, error) {
+func interpretField(fieldName string, fieldValue string, msgType auditConstant, r record) (string, error) {
 	// auparse_interpret_field() -> nvlist_interp_cur_val(const rnode *r) -> interpret(r) -> type = auparse_interp_adjust_type(r->type, id.name, id.val);
 	// 	out = auparse_do_interpretation(type, &id);
-	var ftype FieldType
+	var ftype fieldType
 	var result string
 	var err error
 
 	if msgType == AUDIT_EXECVE && strings.HasPrefix(fieldName, "a") && fieldName != "argc" && strings.Index(fieldName, "_len") == -1 {
-		ftype = TypeEscaped
+		ftype = typeEscaped
 	} else if msgType == AUDIT_AVC && fieldName == "saddr" {
-		ftype = TypeUnclassified
+		ftype = typeUnclassified
 	} else if msgType == AUDIT_USER_TTY && fieldName == "msg" {
-		ftype = TypeEscaped
+		ftype = typeEscaped
 	} else if msgType == AUDIT_NETFILTER_PKT && fieldName == "saddr" {
-		ftype = TypeAddr
+		ftype = typeAddr
 	} else if fieldName == "acct" {
 		if strings.HasPrefix(fieldValue, `"`) {
-			ftype = TypeEscaped
+			ftype = typeEscaped
 		} else if _, err := strconv.ParseInt(fieldValue, 16, -1); err != nil {
-			ftype = TypeEscaped
+			ftype = typeEscaped
 		} else {
-			ftype = TypeUnclassified
+			ftype = typeUnclassified
 		}
 	} else if msgType == AUDIT_MQ_OPEN && fieldName == "mode" {
-		ftype = TypeModeShort
+		ftype = typeModeShort
 	} else if msgType == AUDIT_CRYPTO_KEY_USER && fieldName == "fp" {
-		ftype = TypeUnclassified
+		ftype = typeUnclassified
 	} else if fieldName == "id" && (msgType == AUDIT_ADD_GROUP || msgType == AUDIT_GRP_MGMT ||
 		msgType == AUDIT_DEL_GROUP) {
-		ftype = TypeGID
+		ftype = typeGID
 	} else {
-		if _, ok := FieldLookupMap[fieldName]; ok {
-			ftype = FieldLookupMap[fieldName]
+		if _, ok := fieldLookupMap[fieldName]; ok {
+			ftype = fieldLookupMap[fieldName]
 		} else {
-			ftype = TypeUnclassified
+			ftype = typeUnclassified
 		}
 	}
 
 	switch ftype {
-	case TypeUID:
+	case typeUID:
 		result, err = printUID(fieldValue)
 		if err != nil {
 			return "", errors.Wrap(err, "UID interpretation failed")
 		}
-	case TypeGID:
+	case typeGID:
 		// printGID is currently only a stub
 		result, err = printGID(fieldValue)
 		if err != nil {
 			return "", errors.Wrap(err, "GID interpretation failed")
 		}
 
-	case TypeSyscall:
+	case typeSyscall:
 		result, err = printSyscall(fieldValue)
 		if err != nil {
 			return "", errors.Wrap(err, "syscall interpretation failed")
 		}
-	case TypeArch:
+	case typeArch:
 		return printArch()
-	case TypeExit:
+	case typeExit:
 		result, err = printExit(fieldValue) // peek on exit codes (stderror)
 		if err != nil {
 			return "", errors.Wrap(err, "exit interpretation failed")
 		}
-	case TypePerm:
+	case typePerm:
 		result, err = printPerm(fieldValue)
 		if err != nil {
 			return "", errors.Wrap(err, "perm interpretation failed")
 		}
-	case TypeEscaped:
+	case typeEscaped:
 		result, err = printEscaped(fieldValue)
 		if err != nil {
 			return "", errors.Wrap(err, "interpretation failed")
 		}
-	case TypeMode:
+	case typeMode:
 		result, err = printMode(fieldValue, 8)
 		if err != nil {
 			return "", errors.Wrap(err, "mode interpretation failed")
 		}
-	case TypeModeShort:
+	case typeModeShort:
 		result, err = printModeShort(fieldValue, 8)
 		if err != nil {
 			return "", errors.Wrap(err, "short mode interpretation failed")
 		}
-	case TypeSockaddr:
+	case typeSockaddr:
 		result, err = printSockAddr(fieldValue)
 		if err != nil {
 			return "", errors.Wrap(err, "sockaddr interpretation failed")
 		}
-	case TypePromisc:
+	case typePromisc:
 		result, err = printPromiscuous(fieldValue)
 		if err != nil {
 			return "", errors.Wrap(err, "promsc interpretation failed")
 		}
-	case TypeCapability:
+	case typeCapability:
 		result, err = printCapabilities(fieldValue, 10)
 		if err != nil {
 			return "", errors.Wrap(err, "capability interpretation failed")
 		}
-	case TypeSuccess:
+	case typeSuccess:
 		result, err = printSuccess(fieldValue)
 		if err != nil {
 			return "", errors.Wrap(err, "success interpretation failed")
 		}
-	case TypeA0:
+	case typeA0:
 		result, err = printA0(fieldValue, r.syscallNum)
 		if err != nil {
 			return "", errors.Wrap(err, "a0 interpretation failed")
 		}
-	case TypeA1:
+	case typeA1:
 		result, err = printA1(fieldValue, r.syscallNum, r.a0)
 		if err != nil {
 			return "", errors.Wrap(err, "a1 interpretation failed")
 		}
-	case TypeA2:
+	case typeA2:
 		result, err = printA2(fieldValue, r.syscallNum, r.a1)
 		if err != nil {
 			return "", errors.Wrap(err, "a2 interpretation failed")
 		}
-	case TypeA3:
+	case typeA3:
 		result, err = printA3(fieldValue, r.syscallNum)
 		if err != nil {
 			return "", errors.Wrap(err, "a3 interpretation failed")
 		}
-	case TypeSignal:
+	case typeSignal:
 		result, err = printSignals(fieldValue, 10)
 		if err != nil {
 			return "", errors.Wrap(err, "signal interpretation failed")
 		}
-	case TypeList:
+	case typeList:
 		result, err = printList(fieldValue)
 		if err != nil {
 			return "", errors.Wrap(err, "list interpretation failed")
 		}
-	case TypeTTYData:
+	case typeTTYData:
 		// discuss priority
 		// result, err = printTTYData(fieldValue)
 		// if err != nil {
 		// 	return "", errors.Wrap(err, "tty interpretation failed")
 		// }
-	case TypeSession:
+	case typeSession:
 		result, err = printSession(fieldValue)
 		if err != nil {
 			return "", errors.Wrap(err, "session interpretation failed")
 		}
-	case TypeCapBitmap:
+	case typeCapBitmap:
 		// discuss priority
 		// result, err = printCapBitMap(fieldValue)
 		// if err != nil {
 		// 	return "", errors.Wrap(err, "cap bitmap interpretation failed")
 		// }
-	case TypeNFProto:
+	case typeNFProto:
 		result, err = printNFProto(fieldValue)
 		if err != nil {
 			return "", errors.Wrap(err, "session interpretation failed")
 		}
-	case TypeICMP:
+	case typeICMP:
 		result, err = printICMP(fieldValue)
 		if err != nil {
 			return "", errors.Wrap(err, "ICMP type interpretation failed")
 		}
-	case TypeProtocol:
+	case typeProtocol:
 		// discuss priority
 		// getprotobynumber
 		// result, err = printProtocol(fieldValue)
 		// if err != nil {
 		// 	return "", errors.Wrap(err, "ICMP type interpretation failed")
 		// }
-	case TypeAddr:
+	case typeAddr:
 		result, err = printAddr(fieldValue)
 		if err != nil {
 			return "", errors.Wrap(err, "Addr interpretation failed")
 		}
-	case TypePersonality:
+	case typePersonality:
 		result, err = printPersonality(fieldValue)
 		if err != nil {
 			return "", errors.Wrap(err, "personality interpretation failed")
 		}
-	case TypeOFlag:
+	case typeOFlag:
 		result, err = printOpenFlags(fieldValue)
 		if err != nil {
 			return "", errors.Wrap(err, "Addr interpretation failed")
 		}
-	case TypeSeccomp:
+	case typeSeccomp:
 		result, err = printSeccompCode(fieldValue)
 		if err != nil {
 			return "", errors.Wrap(err, "seccomp code interpretation failed")
 		}
-	case TypeMmap:
+	case typeMmap:
 		result, err = printMmap(fieldValue)
 		if err != nil {
 			return "", errors.Wrap(err, "mmap interpretation failed")
 		}
-	case TypeProctile:
+	case typeProctile:
 		//printing proctitle is same as printing escaped
 		result, err = printEscaped(fieldValue)
 		if err != nil {
 			return "", errors.Wrap(err, "proctitle interpretation failed")
 		}
-	case TypeMacLabel:
+	case typeMacLabel:
 		fallthrough
-	case TypeUnclassified:
+	case typeUnclassified:
 		fallthrough
 	default:
 		result = fieldValue

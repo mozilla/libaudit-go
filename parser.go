@@ -223,7 +223,7 @@ func ParseAuditEvent(str string, msgType auditConstant, interpret bool) (*AuditE
 	}
 	if interpret {
 		for key, value := range m {
-			ivalue, err := InterpretField(key, value, msgType, r)
+			ivalue, err := interpretField(key, value, msgType, r)
 			if err != nil {
 				return nil, err
 			}

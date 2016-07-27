@@ -16,8 +16,8 @@ var sequenceNumber uint32
 
 type NetlinkMessage syscall.NetlinkMessage
 
-// AuditStatus is used for "audit_status" messages
-type AuditStatus struct {
+// auditStatus is used for "audit_status" messages
+type auditStatus struct {
 	Mask            uint32 /* Bit mask for valid entries */
 	Enabled         uint32 /* 1 = enabled, 0 = disabled */
 	Failure         uint32 /* Failure-to-log action */
@@ -166,30 +166,30 @@ func (s *NetlinkConnection) Receive(bytesize int, block int) ([]NetlinkMessage, 
 	return parseAuditNetlinkMessage(rb)
 }
 
-// AuditGetReply connects to kernel to recieve a reply
-func AuditGetReply(s *NetlinkConnection, bytesize, block int, seq uint32) error {
+// auditGetReply connects to kernel to recieve a reply
+func auditGetReply(s *NetlinkConnection, bytesize, block int, seq uint32) error {
 done:
 	for {
 		msgs, err := s.Receive(bytesize, block) //parseAuditNetlinkMessage(rb)
 		if err != nil {
-			return errors.Wrap(err, "AuditGetReply failed")
+			return errors.Wrap(err, "auditGetReply failed")
 		}
 		for _, m := range msgs {
 			address, err := syscall.Getsockname(s.fd)
 			if err != nil {
-				return errors.Wrap(err, "AuditGetReply: Getsockname failed")
+				return errors.Wrap(err, "auditGetReply: Getsockname failed")
 			}
 			switch v := address.(type) {
 			case *syscall.SockaddrNetlink:
 
 				if m.Header.Seq != seq {
-					return fmt.Errorf("AuditGetReply: Wrong Seq nr %d, expected %d", m.Header.Seq, seq)
+					return fmt.Errorf("auditGetReply: Wrong Seq nr %d, expected %d", m.Header.Seq, seq)
 				}
 				if m.Header.Pid != v.Pid {
-					return fmt.Errorf("AuditGetReply: Wrong pid %d, expected %d", m.Header.Pid, v.Pid)
+					return fmt.Errorf("auditGetReply: Wrong pid %d, expected %d", m.Header.Pid, v.Pid)
 				}
 			default:
-				return errors.Wrap(syscall.EINVAL, "AuditGetReply: socket type unexpected")
+				return errors.Wrap(syscall.EINVAL, "auditGetReply: socket type unexpected")
 			}
 
 			if m.Header.Type == syscall.NLMSG_DONE {
@@ -200,7 +200,7 @@ done:
 				if e == 0 {
 					break done
 				} else {
-					return fmt.Errorf("AuditGetReply: error while recieving reply -%d", e)
+					return fmt.Errorf("auditGetReply: error while recieving reply -%d", e)
 				}
 			}
 			// acknowledge AUDIT_GET replies from kernel
@@ -216,7 +216,7 @@ done:
 // `enabled` should be 1 for enabling and 0 for disabling
 func AuditSetEnabled(s *NetlinkConnection, enabled int) error {
 	var (
-		status AuditStatus
+		status auditStatus
 		err    error
 	)
 
@@ -225,7 +225,7 @@ func AuditSetEnabled(s *NetlinkConnection, enabled int) error {
 	buff := new(bytes.Buffer)
 	err = binary.Write(buff, nativeEndian(), status)
 	if err != nil {
-		return errors.Wrap(err, "AuditSetEnabled: binary write from AuditStatus failed")
+		return errors.Wrap(err, "AuditSetEnabled: binary write from auditStatus failed")
 	}
 
 	wb := newNetlinkAuditRequest(uint16(AUDIT_SET), syscall.AF_NETLINK, int(unsafe.Sizeof(status)))
@@ -235,7 +235,7 @@ func AuditSetEnabled(s *NetlinkConnection, enabled int) error {
 	}
 
 	// Receive in just one try
-	err = AuditGetReply(s, syscall.Getpagesize(), 0, wb.Header.Seq)
+	err = auditGetReply(s, syscall.Getpagesize(), 0, wb.Header.Seq)
 	if err != nil {
 		return errors.Wrap(err, "AuditSetEnabled failed")
 	}
@@ -245,7 +245,7 @@ func AuditSetEnabled(s *NetlinkConnection, enabled int) error {
 // AuditIsEnabled returns 0 if auditing is NOT enabled and
 // 1 if enabled, and -1 on failure.
 func AuditIsEnabled(s *NetlinkConnection) (state int, err error) {
-	var status AuditStatus
+	var status auditStatus
 
 	wb := newNetlinkAuditRequest(uint16(AUDIT_GET), syscall.AF_NETLINK, 0)
 	if err = s.Send(wb); err != nil {
@@ -294,11 +294,11 @@ done:
 			}
 
 			if m.Header.Type == uint16(AUDIT_GET) {
-				//Convert the data part written to AuditStatus struct
+				//Convert the data part written to auditStatus struct
 				buf := bytes.NewBuffer(m.Data[:])
 				err = binary.Read(buf, nativeEndian(), &status)
 				if err != nil {
-					return -1, errors.Wrap(err, "AuditIsEnabled: binary read into AuditStatus failed")
+					return -1, errors.Wrap(err, "AuditIsEnabled: binary read into auditStatus failed")
 				}
 				state = int(status.Enabled)
 				return state, nil
@@ -310,13 +310,13 @@ done:
 
 // AuditSetPID sends a message to kernel for setting of program PID
 func AuditSetPID(s *NetlinkConnection, pid int) error {
-	var status AuditStatus
+	var status auditStatus
 	status.Mask = AUDIT_STATUS_PID
 	status.Pid = (uint32)(pid)
 	buff := new(bytes.Buffer)
 	err := binary.Write(buff, nativeEndian(), status)
 	if err != nil {
-		return errors.Wrap(err, "AuditSetPID: binary write from AuditStatus failed")
+		return errors.Wrap(err, "AuditSetPID: binary write from auditStatus failed")
 	}
 
 	wb := newNetlinkAuditRequest(uint16(AUDIT_SET), syscall.AF_NETLINK, int(unsafe.Sizeof(status)))
@@ -325,7 +325,7 @@ func AuditSetPID(s *NetlinkConnection, pid int) error {
 		return errors.Wrap(err, "AuditSetPID failed")
 	}
 
-	err = AuditGetReply(s, syscall.Getpagesize(), 0, wb.Header.Seq)
+	err = auditGetReply(s, syscall.Getpagesize(), 0, wb.Header.Seq)
 	if err != nil {
 		return errors.Wrap(err, "AuditSetPID failed")
 	}
@@ -334,13 +334,13 @@ func AuditSetPID(s *NetlinkConnection, pid int) error {
 
 // AuditSetRateLimit sets rate limit for audit messages from kernel
 func AuditSetRateLimit(s *NetlinkConnection, limit int) error {
-	var status AuditStatus
+	var status auditStatus
 	status.Mask = AUDIT_STATUS_RATE_LIMIT
 	status.RateLimit = (uint32)(limit)
 	buff := new(bytes.Buffer)
 	err := binary.Write(buff, nativeEndian(), status)
 	if err != nil {
-		return errors.Wrap(err, "AuditSetRateLimit: binary write from AuditStatus failed")
+		return errors.Wrap(err, "AuditSetRateLimit: binary write from auditStatus failed")
 	}
 
 	wb := newNetlinkAuditRequest(uint16(AUDIT_SET), syscall.AF_NETLINK, int(unsafe.Sizeof(status)))
@@ -349,7 +349,7 @@ func AuditSetRateLimit(s *NetlinkConnection, limit int) error {
 		return errors.Wrap(err, "AuditSetRateLimit failed")
 	}
 
-	err = AuditGetReply(s, syscall.Getpagesize(), 0, wb.Header.Seq)
+	err = auditGetReply(s, syscall.Getpagesize(), 0, wb.Header.Seq)
 	if err != nil {
 		return err
 	}
@@ -359,13 +359,13 @@ func AuditSetRateLimit(s *NetlinkConnection, limit int) error {
 
 // AuditSetBacklogLimit sets backlog limit for audit messages from kernel
 func AuditSetBacklogLimit(s *NetlinkConnection, limit int) error {
-	var status AuditStatus
+	var status auditStatus
 	status.Mask = AUDIT_STATUS_BACKLOG_LIMIT
 	status.BacklogLimit = (uint32)(limit)
 	buff := new(bytes.Buffer)
 	err := binary.Write(buff, nativeEndian(), status)
 	if err != nil {
-		return errors.Wrap(err, "AuditSetBacklogLimit: binary write from AuditStatus failed")
+		return errors.Wrap(err, "AuditSetBacklogLimit: binary write from auditStatus failed")
 	}
 
 	wb := newNetlinkAuditRequest(uint16(AUDIT_SET), syscall.AF_NETLINK, int(unsafe.Sizeof(status)))
@@ -374,7 +374,7 @@ func AuditSetBacklogLimit(s *NetlinkConnection, limit int) error {
 		return errors.Wrap(err, "AuditSetBacklogLimit failed")
 	}
 
-	err = AuditGetReply(s, syscall.Getpagesize(), 0, wb.Header.Seq)
+	err = auditGetReply(s, syscall.Getpagesize(), 0, wb.Header.Seq)
 	if err != nil {
 		return errors.Wrap(err, "AuditSetBacklogLimit failed")
 	}
