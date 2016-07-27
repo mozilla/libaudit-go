@@ -60,8 +60,11 @@ const (
 	AUDIT_OBJ_LEV_HIGH          = 23
 	AUDIT_LOGINUID_SET          = 24
 	AUDIT_DEVMAJOR              = 100
+	AUDIT_DEVMINOR              = 101
 	AUDIT_INODE                 = 102
 	AUDIT_SUCCESS               = 104
+	AUDIT_FIELD_COMPARE         = 111
+	AUDIT_EXE                   = 112
 	AUDIT_PERM_EXEC             = 1
 	AUDIT_PERM_WRITE            = 2
 	AUDIT_PERM_READ             = 4
@@ -422,4 +425,30 @@ const (
 	AUDIT_VIRT_MACHINE_ID auditConstant = 2502 /* Binding of label to VM */
 	AUDIT_LAST_VIRT_MSG   auditConstant = 2599
 	AUDIT_LAST_USER_MSG2  auditConstant = 2999
+	// Field Comparing Constants
+	AUDIT_COMPARE_UID_TO_OBJ_UID   auditConstant = 1
+	AUDIT_COMPARE_GID_TO_OBJ_GID   auditConstant = 2
+	AUDIT_COMPARE_EUID_TO_OBJ_UID  auditConstant = 3
+	AUDIT_COMPARE_EGID_TO_OBJ_GID  auditConstant = 4
+	AUDIT_COMPARE_AUID_TO_OBJ_UID  auditConstant = 5
+	AUDIT_COMPARE_SUID_TO_OBJ_UID  auditConstant = 6
+	AUDIT_COMPARE_SGID_TO_OBJ_GID  auditConstant = 7
+	AUDIT_COMPARE_FSUID_TO_OBJ_UID auditConstant = 8
+	AUDIT_COMPARE_FSGID_TO_OBJ_GID auditConstant = 9
+	AUDIT_COMPARE_UID_TO_AUID      auditConstant = 10
+	AUDIT_COMPARE_UID_TO_EUID      auditConstant = 11
+	AUDIT_COMPARE_UID_TO_FSUID     auditConstant = 12
+	AUDIT_COMPARE_UID_TO_SUID      auditConstant = 13
+	AUDIT_COMPARE_AUID_TO_FSUID    auditConstant = 14
+	AUDIT_COMPARE_AUID_TO_SUID     auditConstant = 15
+	AUDIT_COMPARE_AUID_TO_EUID     auditConstant = 16
+	AUDIT_COMPARE_EUID_TO_SUID     auditConstant = 17
+	AUDIT_COMPARE_EUID_TO_FSUID    auditConstant = 18
+	AUDIT_COMPARE_SUID_TO_FSUID    auditConstant = 19
+	AUDIT_COMPARE_GID_TO_EGID      auditConstant = 20
+	AUDIT_COMPARE_GID_TO_FSGID     auditConstant = 21
+	AUDIT_COMPARE_GID_TO_SGID      auditConstant = 22
+	AUDIT_COMPARE_EGID_TO_FSGID    auditConstant = 23
+	AUDIT_COMPARE_EGID_TO_SGID     auditConstant = 24
+	AUDIT_COMPARE_SGID_TO_FSGID    auditConstant = 25
 )
