@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/user"
 	"path"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -836,23 +837,21 @@ func AuditUpdateWatchPerms(rule *AuditRuleData, perms int) error {
 }
 
 // ListAllRules lists all audit rules currently loaded in audit kernel
-// TODO: this funcion needs a lot of work to print actual rules
+// and displays them in the standard auditd format as done by auditctl utility
 func ListAllRules(s *NetlinkConnection) error {
+	var ruleArray []*AuditRuleData
 	wb := newNetlinkAuditRequest(uint16(AUDIT_LIST_RULES), syscall.AF_NETLINK, 0)
 	if err := s.Send(wb); err != nil {
-		//log.Print("Error:", err)
 		return errors.Wrap(err, "ListAllRules failed")
 	}
 done:
 	for {
-		// msgs, err := s.Receive(MAX_AUDIT_MESSAGE_LENGTH, syscall.MSG_DONTWAIT)
 		msgs, err := s.Receive(MAX_AUDIT_MESSAGE_LENGTH, 0)
 		if err != nil {
 			return errors.Wrap(err, "ListAllRules failed")
 		}
 
 		for _, m := range msgs {
-			fmt.Println("ong")
 
 			address, err := syscall.Getsockname(s.fd)
 			if err != nil {
@@ -871,24 +870,27 @@ done:
 			}
 
 			if m.Header.Type == syscall.NLMSG_DONE {
+				var result string
+				for _, r := range ruleArray {
+					result += printRule(r)
+				}
+				fmt.Print(result)
 				break done
 			}
 			if m.Header.Type == syscall.NLMSG_ERROR {
 				e := int32(nativeEndian().Uint32(m.Data[0:4]))
-				if e == 0 {
-					continue
+				if e != 0 {
+					return fmt.Errorf("ListAllRules: error while receiving rules")
 				}
 			}
 			if m.Header.Type == uint16(AUDIT_LIST_RULES) {
-				fmt.Println("HH")
 				var r AuditRuleData
 				nbuf := bytes.NewBuffer(m.Data)
 				err = struc.Unpack(nbuf, &r)
 				if err != nil {
 					return errors.Wrap(err, "ListAllRules failed")
 				}
-				fmt.Println(string(r.Buf))
-				// p := (*AuditRuleData)(unsafe.Pointer(&m.Data[0]))
+				ruleArray = append(ruleArray, &r)
 			}
 		}
 	}
@@ -908,5 +910,423 @@ func AuditSyscallToName(syscall string) (name string, err error) {
 		return syscallMap[syscall].(string), nil
 	}
 	return "", fmt.Errorf("AuditSyscallToName failed: syscall %v not found", syscall)
+
+}
+
+// printRule returns a string describing rule defined by the passed rule struct
+// the string is in the same format as printed by auditctl utility
+func printRule(rule *AuditRuleData) string {
+	var (
+		watch        = isWatch(rule)
+		result, n    string
+		bufferOffset int
+		count        int
+		sys          int
+		printed      bool
+	)
+	if !watch {
+		result = fmt.Sprintf("-a %s,%s", actionToName(rule.Action), flagToName(rule.Flags))
+		for i := 0; i < int(rule.FieldCount); i++ {
+			field := rule.Fields[i] & (^uint32(AUDIT_OPERATORS))
+			if field == AUDIT_ARCH {
+				op := rule.Fieldflags[i] & uint32(AUDIT_OPERATORS)
+				result += fmt.Sprintf("-F arch%s", operatorToSymbol(op))
+				//determining arch from the runtime package rather than looking from
+				//arch lookup table as auditd does
+				if runtime.GOARCH == "amd64" {
+					result += "b64"
+				} else if runtime.GOARCH == "386" {
+					result += "b32"
+				} else {
+					result += fmt.Sprintf("0x%X", field)
+				}
+				break
+			}
+		}
+		n, count, sys, printed = printSyscallRule(rule)
+		if printed {
+			result += n
+		}
+
+	}
+	for i := 0; i < int(rule.FieldCount); i++ {
+		op := (rule.Fieldflags[i] & uint32(AUDIT_OPERATORS))
+		field := (rule.Fields[i] & (^uint32(AUDIT_OPERATORS)))
+		if field == AUDIT_ARCH {
+			continue
+		}
+		fieldName := fieldToName(field)
+		if len(fieldName) == 0 {
+			// unknown field
+			result += fmt.Sprintf(" f%d%s%d", rule.Fields[i], operatorToSymbol(op), rule.Values[i])
+			continue
+		}
+		// Special cases to print the different field types
+		if field == AUDIT_MSGTYPE {
+			if strings.HasPrefix(auditConstant(rule.Values[i]).String(), "auditConstant") {
+				result += fmt.Sprintf(" f%d%s%d", rule.Fields[i], operatorToSymbol(op), rule.Values[i])
+			} else {
+				result += fmt.Sprintf(" -F %s%s%s", fieldName, operatorToSymbol(op), auditConstant(rule.Values[i]).String()[6:])
+			}
+		} else if (field >= AUDIT_SUBJ_USER && field <= AUDIT_OBJ_LEV_HIGH) && field != AUDIT_PPID {
+			// rule.Values[i] denotes the length of the buffer for the field
+			result += fmt.Sprintf(" -F %s%s%s", fieldName, operatorToSymbol(op), string(rule.Buf[bufferOffset:bufferOffset+int(rule.Values[i])]))
+		} else if field == AUDIT_WATCH {
+			if watch {
+				result += fmt.Sprintf("-w %s", string(rule.Buf[bufferOffset:bufferOffset+int(rule.Values[i])]))
+			} else {
+				result += fmt.Sprintf(" -F path=%s", string(rule.Buf[bufferOffset:bufferOffset+int(rule.Values[i])]))
+			}
+			bufferOffset += int(rule.Values[i])
+		} else if field == AUDIT_DIR {
+			if watch {
+				result += fmt.Sprintf("-w %s", string(rule.Buf[bufferOffset:bufferOffset+int(rule.Values[i])]))
+			} else {
+				result += fmt.Sprintf(" -F dir=%s", string(rule.Buf[bufferOffset:bufferOffset+int(rule.Values[i])]))
+			}
+			bufferOffset += int(rule.Values[i])
+		} else if field == AUDIT_EXE {
+			result += fmt.Sprintf(" -F exe=%s", string(rule.Buf[bufferOffset:bufferOffset+int(rule.Values[i])]))
+			bufferOffset += int(rule.Values[i])
+		} else if field == AUDIT_FILTERKEY {
+			key := fmt.Sprintf("%s", string(rule.Buf[bufferOffset:bufferOffset+int(rule.Values[i])]))
+			bufferOffset += int(rule.Values[i])
+			// checking for multiple keys
+			keyList := strings.Split(key, `\0`)
+			for _, k := range keyList {
+				if watch {
+					result += fmt.Sprintf(" -k %s", k)
+				} else {
+					result += fmt.Sprintf(" -F key=%s", k)
+				}
+			}
+		} else if field == AUDIT_PERM {
+			var perms string
+			if (rule.Values[i] & uint32(AUDIT_PERM_READ)) > 0 {
+				perms += "r"
+			}
+			if (rule.Values[i] & uint32(AUDIT_PERM_WRITE)) > 0 {
+				perms += "w"
+			}
+			if (rule.Values[i] & uint32(AUDIT_PERM_EXEC)) > 0 {
+				perms += "x"
+			}
+			if (rule.Values[i] & uint32(AUDIT_PERM_ATTR)) > 0 {
+				perms += "a"
+			}
+			if watch {
+				result += fmt.Sprintf(" -p %s", perms)
+			} else {
+				result += fmt.Sprintf(" -F perm=%s", perms)
+			}
+		} else if field == AUDIT_INODE {
+			result += fmt.Sprintf(" -F %s%s%d", fieldName, operatorToSymbol(op), rule.Values[i])
+		} else if field == AUDIT_FIELD_COMPARE {
+			result += printFieldCmp(rule.Values[i], op)
+		} else if field >= AUDIT_ARG0 && field <= AUDIT_ARG3 {
+			var a0, a1 int
+			if field == AUDIT_ARG0 {
+				a0 = int(rule.Values[i])
+			} else if field == AUDIT_ARG1 {
+				a1 = int(rule.Values[i])
+			}
+			if count > 1 {
+				result += fmt.Sprintf(" -F %s%s0x%X", fieldName, operatorToSymbol(op), rule.Values[i])
+			} else {
+				// we try to parse the argument passed so we need the syscall found earlier
+				var r = record{syscallNum: fmt.Sprintf("%d", sys), a0: a0, a1: a1}
+				n, err := InterpretField("syscall", fmt.Sprintf("%x", rule.Values[i]), AUDIT_SYSCALL, r)
+				if err != nil {
+					continue
+				}
+				result += fmt.Sprintf(" -F %s%s0x%X", fieldName, operatorToSymbol(op), n)
+			}
+		} else if field == AUDIT_EXIT {
+			// in this case rule.Values[i] holds the error code for EXIT
+			// therefore it will need a audit_errno_to_name() function that peeks on error codes
+			// but error codes are widely varied and printExit() function only matches 0 => success
+			// so we are directly printing the integer error code in the rule
+			// and not their string equivalents
+			result += fmt.Sprintf(" -F %s%s%d", fieldName, operatorToSymbol(op), int(rule.Values[i]))
+		} else {
+			result += fmt.Sprintf(" -F %s%s%d", fieldName, operatorToSymbol(op), rule.Values[i])
+		}
+
+	}
+	result += "\n"
+	return result
+}
+
+//isWatch checks if the AuditRuleData is a watch rule.
+//returns true when syscall == all and a perm field is detected in AuditRuleData
+func isWatch(rule *AuditRuleData) bool {
+	var (
+		perm bool
+		all  = true
+	)
+	for i := 0; i < int(rule.FieldCount); i++ {
+		field := rule.Fields[i] & (^uint32(AUDIT_OPERATORS))
+		if field == AUDIT_PERM {
+			perm = true
+		}
+		if field != AUDIT_PERM && field != AUDIT_FILTERKEY && field != AUDIT_DIR && field != AUDIT_WATCH {
+			return false
+		}
+	}
+	if ((rule.Flags & AUDIT_FILTER_MASK) != AUDIT_FILTER_USER) && ((rule.Flags & AUDIT_FILTER_MASK) != AUDIT_FILTER_TASK) && ((rule.Flags & AUDIT_FILTER_MASK) != AUDIT_FILTER_EXCLUDE) {
+		for i := 0; i < int(AUDIT_BITMASK_SIZE-1); i++ {
+			if rule.Mask[i] != ^uint32(0) {
+				all = false
+				break
+			}
+		}
+	}
+	if perm && all {
+		return true
+	}
+
+	return false
+}
+
+//actionToName converts integer action value to its string counterpart
+func actionToName(action uint32) string {
+	var (
+		name         string
+		actionLookup = map[int]string{
+			AUDIT_NEVER:    "never",
+			AUDIT_POSSIBLE: "possible",
+			AUDIT_ALWAYS:   "always",
+		}
+	)
+	name = actionLookup[int(action)]
+	return name
+}
+
+//flagToName converts integer flag value to its string counterpart
+func flagToName(flag uint32) string {
+	var (
+		name       string
+		flagLookup = map[int]string{
+			AUDIT_FILTER_TASK:    "task",
+			AUDIT_FILTER_ENTRY:   "entry",
+			AUDIT_FILTER_EXIT:    "exit",
+			AUDIT_FILTER_USER:    "user",
+			AUDIT_FILTER_EXCLUDE: "exclude",
+		}
+	)
+	name = flagLookup[int(flag)]
+	return name
+}
+
+//operatorToSymbol convers integer operator value to its symbolic string
+func operatorToSymbol(op uint32) string {
+	var (
+		name     string
+		opLookup = map[int]string{
+			AUDIT_EQUAL:                 "=",
+			AUDIT_NOT_EQUAL:             "!=",
+			AUDIT_GREATER_THAN:          ">",
+			AUDIT_GREATER_THAN_OR_EQUAL: ">=",
+			AUDIT_LESS_THAN:             "<",
+			AUDIT_LESS_THAN_OR_EQUAL:    "<=",
+			AUDIT_BIT_MASK:              "&",
+			AUDIT_BIT_TEST:              "&=",
+		}
+	)
+	name = opLookup[int(op)]
+	return name
+}
+
+//printSyscallRule returns the syscall loaded in the AuditRuleData struct
+//auditd counterpart -> print_syscall in auditctl-listing.c
+func printSyscallRule(rule *AuditRuleData) (string, int, int, bool) {
+	//TODO: support syscall for all archs
+	var (
+		name    string
+		all     = true
+		count   int
+		syscall int
+		i       int
+	)
+	/* Rules on the following filters do not take a syscall */
+	if ((rule.Flags & AUDIT_FILTER_MASK) == AUDIT_FILTER_USER) ||
+		((rule.Flags & AUDIT_FILTER_MASK) == AUDIT_FILTER_TASK) ||
+		((rule.Flags & AUDIT_FILTER_MASK) == AUDIT_FILTER_EXCLUDE) {
+		return name, count, syscall, false
+	}
+
+	/* See if its all or specific syscalls */
+	for i = 0; i < (AUDIT_BITMASK_SIZE - 1); i++ {
+		if rule.Mask[i] != ^uint32(0) {
+			all = false
+			break
+		}
+	}
+	if all {
+		name += fmt.Sprintf(" -S all")
+		count = i
+		return name, count, syscall, true
+	}
+	for i = 0; i < AUDIT_BITMASK_SIZE*32; i++ {
+		word := auditWord(i)
+		bit := auditBit(i)
+		if (rule.Mask[word] & bit) > 0 {
+			n, err := AuditSyscallToName(fmt.Sprintf("%d", i))
+			if len(name) == 0 {
+				name += fmt.Sprintf(" -S ")
+			}
+			if count > 0 {
+				name += ","
+			}
+			if err != nil {
+				name += fmt.Sprintf("%d", i)
+			} else {
+				name += n
+			}
+			count++
+			// we set the syscall to the last occuring one
+			// behaviour same as print_syscall() in auditctl-listing.c
+			syscall = i
+		}
+	}
+	return name, count, syscall, true
+}
+
+func fieldToName(field uint32) string {
+	var (
+		name        string
+		fieldLookup = map[int]string{
+			AUDIT_PID:      "pid",
+			AUDIT_UID:      "uid",
+			AUDIT_EUID:     "euid",
+			AUDIT_SUID:     "suid",
+			AUDIT_FSUID:    "fsuid",
+			AUDIT_GID:      "gid",
+			AUDIT_EGID:     "egid",
+			AUDIT_SGID:     "sgid",
+			AUDIT_FSGID:    "fsgid",
+			AUDIT_LOGINUID: "auid",
+			// AUDIT_LOGINUID:     "loginuid",
+			AUDIT_PERS:          "pers",
+			AUDIT_ARCH:          "arch",
+			AUDIT_MSGTYPE:       "msgtype",
+			AUDIT_SUBJ_USER:     "subj_user",
+			AUDIT_SUBJ_ROLE:     "subj_role",
+			AUDIT_SUBJ_TYPE:     "subj_type",
+			AUDIT_SUBJ_SEN:      "subj_sen",
+			AUDIT_SUBJ_CLR:      "subj_clr",
+			AUDIT_PPID:          "ppid",
+			AUDIT_OBJ_USER:      "obj_user",
+			AUDIT_OBJ_ROLE:      "obj_role",
+			AUDIT_OBJ_TYPE:      "obj_type",
+			AUDIT_OBJ_LEV_LOW:   "obj_lev_low",
+			AUDIT_OBJ_LEV_HIGH:  "obj_lev_high",
+			AUDIT_DEVMAJOR:      "devmajor",
+			AUDIT_DEVMINOR:      "devminor",
+			AUDIT_INODE:         "inode",
+			AUDIT_EXIT:          "exit",
+			AUDIT_SUCCESS:       "success",
+			AUDIT_WATCH:         "path",
+			AUDIT_PERM:          "perm",
+			AUDIT_DIR:           "dir",
+			AUDIT_FILETYPE:      "filetype",
+			AUDIT_OBJ_UID:       "obj_uid",
+			AUDIT_OBJ_GID:       "obj_gid",
+			AUDIT_FIELD_COMPARE: "field_compare",
+			AUDIT_ARG0:          "a0",
+			AUDIT_ARG1:          "a1",
+			AUDIT_ARG2:          "a2",
+			AUDIT_ARG3:          "a3",
+			AUDIT_FILTERKEY:     "key",
+			AUDIT_EXE:           "exe",
+		}
+	)
+	name = fieldLookup[int(field)]
+	return name
+}
+
+//printFieldCmp returs a string denoting the comparsion between the field values
+func printFieldCmp(value, op uint32) string {
+	var result string
+
+	switch auditConstant(value) {
+	case AUDIT_COMPARE_UID_TO_OBJ_UID:
+		result = fmt.Sprintf(" -C uid%sobj_uid", operatorToSymbol(op))
+	case AUDIT_COMPARE_GID_TO_OBJ_GID:
+		result = fmt.Sprintf(" -C gid%sobj_gid", operatorToSymbol(op))
+	case AUDIT_COMPARE_EUID_TO_OBJ_UID:
+		result = fmt.Sprintf(" -C euid%sobj_uid", operatorToSymbol(op))
+	case AUDIT_COMPARE_EGID_TO_OBJ_GID:
+		result = fmt.Sprintf(" -C egid%sobj_gid", operatorToSymbol(op))
+	case AUDIT_COMPARE_AUID_TO_OBJ_UID:
+		result = fmt.Sprintf(" -C auid%sobj_uid", operatorToSymbol(op))
+	case AUDIT_COMPARE_SUID_TO_OBJ_UID:
+		result = fmt.Sprintf(" -C suid%sobj_uid", operatorToSymbol(op))
+	case AUDIT_COMPARE_SGID_TO_OBJ_GID:
+		result = fmt.Sprintf(" -C sgid%sobj_gid", operatorToSymbol(op))
+	case AUDIT_COMPARE_FSUID_TO_OBJ_UID:
+		result = fmt.Sprintf(" -C fsuid%sobj_uid", operatorToSymbol(op))
+	case AUDIT_COMPARE_FSGID_TO_OBJ_GID:
+		result = fmt.Sprintf(" -C fsgid%sobj_gid", operatorToSymbol(op))
+	case AUDIT_COMPARE_UID_TO_AUID:
+		result = fmt.Sprintf(" -C uid%sauid", operatorToSymbol(op))
+	case AUDIT_COMPARE_UID_TO_EUID:
+		result = fmt.Sprintf(" -C uid%seuid", operatorToSymbol(op))
+	case AUDIT_COMPARE_UID_TO_FSUID:
+		result = fmt.Sprintf(" -C uid%sfsuid", operatorToSymbol(op))
+	case AUDIT_COMPARE_UID_TO_SUID:
+		result = fmt.Sprintf(" -C uid%ssuid", operatorToSymbol(op))
+	case AUDIT_COMPARE_AUID_TO_FSUID:
+		result = fmt.Sprintf(" -C auid%sfsuid", operatorToSymbol(op))
+	case AUDIT_COMPARE_AUID_TO_SUID:
+		result = fmt.Sprintf(" -C auid%ssuid", operatorToSymbol(op))
+	case AUDIT_COMPARE_AUID_TO_EUID:
+		result = fmt.Sprintf(" -C auid%seuid", operatorToSymbol(op))
+	case AUDIT_COMPARE_EUID_TO_SUID:
+		result = fmt.Sprintf(" -C euid%ssuid", operatorToSymbol(op))
+	case AUDIT_COMPARE_EUID_TO_FSUID:
+		result = fmt.Sprintf(" -C euid%sfsuid", operatorToSymbol(op))
+	case AUDIT_COMPARE_SUID_TO_FSUID:
+		result = fmt.Sprintf(" -C suid%sfsuid", operatorToSymbol(op))
+	case AUDIT_COMPARE_GID_TO_EGID:
+		result = fmt.Sprintf(" -C gid%segid", operatorToSymbol(op))
+	case AUDIT_COMPARE_GID_TO_FSGID:
+		result = fmt.Sprintf(" -C gid%sfsgid", operatorToSymbol(op))
+	case AUDIT_COMPARE_GID_TO_SGID:
+		result = fmt.Sprintf(" -C gid%ssgid", operatorToSymbol(op))
+	case AUDIT_COMPARE_EGID_TO_FSGID:
+		result = fmt.Sprintf(" -C egid%sfsgid", operatorToSymbol(op))
+	case AUDIT_COMPARE_EGID_TO_SGID:
+		result = fmt.Sprintf(" -C egid%ssgid", operatorToSymbol(op))
+	case AUDIT_COMPARE_SGID_TO_FSGID:
+		result = fmt.Sprintf(" -C sgid%sfsgid", operatorToSymbol(op))
+	}
+
+	return result
+}
+
+//keyMatch indicates whether or not rule should be printed or not
+//it is to be used for filtering the list of rules by a particular key
+//currently unused but filtering capability can be added later
+func keyMatch(rule *AuditRuleData, key string) bool {
+	var (
+		bufferOffset int
+	)
+	if len(key) == 0 {
+		return true
+	}
+	for i := 0; i < int(rule.FieldCount); i++ {
+		field := rule.Fields[i] & (^uint32(AUDIT_OPERATORS))
+		if field == AUDIT_FILTERKEY {
+			keyptr := fmt.Sprintf("%s", string(rule.Buf[bufferOffset:bufferOffset+int(rule.Values[i])]))
+			if strings.Index(keyptr, key) != -1 {
+				return true
+			}
+		}
+		if ((field >= AUDIT_SUBJ_USER && field <= AUDIT_OBJ_LEV_HIGH) && field != AUDIT_PPID) || field == AUDIT_WATCH || field == AUDIT_DIR || field == AUDIT_FILTERKEY || field == AUDIT_EXE {
+			bufferOffset += int(rule.Values[i])
+		}
+	}
+	return false
 
 }
