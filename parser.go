@@ -26,17 +26,17 @@ func ParseAuditEventRegex(str string) (serial string, timestamp string, m map[st
 	}
 	serial = match[2]
 	timestamp = match[1]
-	data := ParseAuditKeyValue(match[3])
+	data := parseAuditKeyValue(match[3])
 	return serial, timestamp, data, nil
 }
 
-// ParseAuditKeyValue takes the field=value part of audit message and returns a map of fields with values
+// parseAuditKeyValue takes the field=value part of audit message and returns a map of fields with values
 // Important: Regex is to be tested against vast type of audit messages
 // Unsupported type of messages:
 // type=CRED_REFR msg=audit(1464093935.845:993): pid=4148 uid=0 auid=4294967295 ses=4294967295 msg='op=PAM:setcred acct="root" exe="/usr/bin/sudo" hostname=? addr=? terminal=/dev/pts/18 res=success'
 // type=AVC msg=audit(1226874073.147:96): avc:  denied  { getattr } for  pid=2465 comm="httpd" path="/var/www/html/file1" dev=dm-0 ino=284133 scontext=unconfined_u:system_r:httpd_t:s0 tcontext=unconfined_u:object_r:samba_share_t:s0 tclass=file
-// lua decoder at audit-go repo works with all kinds but similar regex capability is unavailable in Go so it should be fixed in Go way
-func ParseAuditKeyValue(str string) map[string]string {
+// NOTE: lua decoder at audit-go repo works with all kinds but similar regex capability is unavailable in Go so it should be fixed in Go way
+func parseAuditKeyValue(str string) map[string]string {
 	fields := regexp.MustCompile(`(?P<fieldname>[A-Za-z0-9_-]+)=(?P<fieldvalue>"(?:[^'"\\]+)*"|(?:[^ '"\\]+)*)|'(?:[^"'\\]+)*'`)
 	matches := fields.FindAllStringSubmatch(str, -1)
 	m := make(map[string]string)
@@ -55,15 +55,10 @@ func ParseAuditKeyValue(str string) map[string]string {
 }
 
 // ParseAuditEvent parses an incoming audit message from kernel and returns an AuditEvent.
-// msgType is supposed to come from the calling function which holds the msg header indicating type of the messages
-// It relies on using simple string parsing techniques.
+// msgType is supposed to come from the calling function which holds the msg header indicating header type of the messages
+// it uses simple string parsing techniques and provider better performance than the regex parser
 // idea taken from parse_up_record(rnode* r) in ellist.c (libauparse)
-// sample messages to be tested against
-// audit(1267534395.930:19): user pid=1169 uid=0 auid=4294967295 ses=4294967295 subj=system_u:unconfined_r:unconfined_t msg='avc: denied { read } for request=SELinux:SELinuxGetClientContext comm=X-setest resid=3c00001 restype=<unknown> scontext=unconfined_u:unconfined_r:x_select_paste_t tcontext=unconfined_u:unconfined_r:unconfined_t  tclass=x_resource : exe="/usr/bin/Xorg" sauid=0 hostname=? addr=? terminal=?'
-// audit(1464176620.068:1445): auid=4294967295 uid=1000 gid=1000 ses=4294967295 pid=23975 comm="chrome" exe="/opt/google/chrome/chrome" sig=0 arch=c000003e syscall=273 compat=0 ip=0x7f1da6d8b694 code=0x50000
-// audit(1464163771.720:20): arch=c000003e syscall=1 success=yes exit=658651 a0=6 a1=7f26862ea010 a2=a0cdb a3=0 items=0 ppid=712 pid=716 auid=4294967295 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=(none) ses=4294967295 comm="apparmor_parser" exe="/sbin/apparmor_parser" key=(null)
-//audit(1464093935.845:993): pid=4148 uid=0 auid=4294967295 ses=4294967295 msg='op=PAM:setcred acct="root" exe="/usr/bin/sudo" hostname=? addr=? terminal=/dev/pts/18 res=success'
-// audit(1226874073.147:96): avc:  denied  { getattr } for  pid=2465 comm="httpd" path="/var/www/html/file1" dev=dm-0 ino=284133 scontext=unconfined_u:system_r:httpd_t:s0 tcontext=unconfined_u:object_r:samba_share_t:s0 tclass=file
+// any intersting looking audit message should be added to parser_test and see how parser performs against it
 func ParseAuditEvent(str string, msgType auditConstant, interpret bool) (*AuditEvent, error) {
 	var r record
 	m := make(map[string]string)

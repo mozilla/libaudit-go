@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	"github.com/lunixbochs/struc"
+	"github.com/mozilla/libaudit-go/headers"
 	"github.com/pkg/errors"
 )
 
@@ -54,109 +55,6 @@ const (
 	typeUnclassified
 	typeModeShort
 )
-
-var fieldLookupMap = map[string]fieldType{
-	"auid":           typeUID,
-	"uid":            typeUID,
-	"euid":           typeUID,
-	"suid":           typeUID,
-	"fsuid":          typeUID,
-	"ouid":           typeUID,
-	"oauid":          typeUID,
-	"iuid":           typeUID,
-	"id":             typeUID,
-	"inode_uid":      typeUID,
-	"sauid":          typeUID,
-	"obj_uid":        typeUID,
-	"obj_gid":        typeGID,
-	"gid":            typeGID,
-	"egid":           typeGID,
-	"sgid":           typeGID,
-	"fsgid":          typeGID,
-	"ogid":           typeGID,
-	"igid":           typeGID,
-	"inode_gid":      typeGID,
-	"new_gid":        typeGID,
-	"syscall":        typeSyscall,
-	"arch":           typeArch,
-	"exit":           typeExit,
-	"path":           typeEscaped,
-	"comm":           typeEscaped,
-	"exe":            typeEscaped,
-	"file":           typeEscaped,
-	"name":           typeEscaped,
-	"watch":          typeEscaped,
-	"cwd":            typeEscaped,
-	"cmd":            typeEscaped,
-	"acct":           typeEscaped,
-	"dir":            typeEscaped,
-	"key":            typeEscaped,
-	"vm":             typeEscaped,
-	"old-disk":       typeEscaped,
-	"new-disk":       typeEscaped,
-	"old-fs":         typeEscaped,
-	"new-fs":         typeEscaped,
-	"device":         typeEscaped,
-	"cgroup":         typeEscaped,
-	"perm":           typePerm,
-	"perm_mask":      typePerm,
-	"mode":           typeMode,
-	"saddr":          typeSockaddr,
-	"prom":           typePromisc,
-	"old_prom":       typePromisc,
-	"capability":     typeCapability,
-	"res":            typeSuccess,
-	"result":         typeSuccess,
-	"a0":             typeA0,
-	"a1":             typeA1,
-	"a2":             typeA2,
-	"a3":             typeA3,
-	"sig":            typeSignal,
-	"list":           typeList,
-	"data":           typeTTYData,
-	"ses":            typeSession,
-	"cap_pi":         typeCapBitmap,
-	"cap_pe":         typeCapBitmap,
-	"cap_pp":         typeCapBitmap,
-	"cap_fi":         typeCapBitmap,
-	"cap_fp":         typeCapBitmap,
-	"fp":             typeCapBitmap,
-	"fi":             typeCapBitmap,
-	"fe":             typeCapBitmap,
-	"old_pp":         typeCapBitmap,
-	"old_pi":         typeCapBitmap,
-	"old_pe":         typeCapBitmap,
-	"new_pp":         typeCapBitmap,
-	"new_pi":         typeCapBitmap,
-	"new_pe":         typeCapBitmap,
-	"family":         typeNFProto,
-	"icmptype":       typeICMP,
-	"proto":          typeProtocol,
-	"addr":           typeAddr,
-	"apparmor":       typeEscaped,
-	"operation":      typeEscaped,
-	"denied_mask":    typeEscaped,
-	"info":           typeEscaped,
-	"profile":        typeEscaped,
-	"requested_mask": typeEscaped,
-	"per":            typePersonality,
-	"code":           typeSeccomp,
-	"old-rng":        typeEscaped,
-	"new-rng":        typeEscaped,
-	"oflag":          typeOFlag,
-	"ocomm":          typeEscaped,
-	"flags":          typeMmap,
-	"sigev_signo":    typeEscaped,
-	"subj":           typeMacLabel,
-	"obj":            typeMacLabel,
-	"scontext":       typeMacLabel,
-	"tcontext":       typeMacLabel,
-	"vm-ctx":         typeMacLabel,
-	"img-ctx":        typeMacLabel,
-	"proctitle":      typeProctile,
-	"grp":            typeEscaped,
-	"new_group":      typeEscaped,
-}
 
 // interpretField takes fieldName and the encoded fieldValue (part of the audit message) and
 // returns the string representations for the values
@@ -562,46 +460,6 @@ func printSockAddr(fieldValue string) (string, error) {
 		Sin6_scope_id uint32   `struc:"uint32,little"` // Scope ID
 	}
 
-	var famLookup = map[int]string{
-		syscall.AF_LOCAL:      "local",
-		syscall.AF_INET:       "inet",
-		syscall.AF_AX25:       "ax25",
-		syscall.AF_IPX:        "ipx",
-		syscall.AF_APPLETALK:  "appletalk",
-		syscall.AF_NETROM:     "netrom",
-		syscall.AF_BRIDGE:     "bridge",
-		syscall.AF_ATMPVC:     "atmpvc",
-		syscall.AF_X25:        "x25",
-		syscall.AF_INET6:      "inet6",
-		syscall.AF_ROSE:       "rose",
-		syscall.AF_DECnet:     "decnet",
-		syscall.AF_NETBEUI:    "netbeui",
-		syscall.AF_SECURITY:   "security",
-		syscall.AF_KEY:        "key",
-		syscall.AF_NETLINK:    "netlink",
-		syscall.AF_PACKET:     "packet",
-		syscall.AF_ASH:        "ash",
-		syscall.AF_ECONET:     "econet",
-		syscall.AF_ATMSVC:     "atmsvc",
-		syscall.AF_RDS:        "rds",
-		syscall.AF_SNA:        "sna",
-		syscall.AF_IRDA:       "irda",
-		syscall.AF_PPPOX:      "pppox",
-		syscall.AF_WANPIPE:    "wanpipe",
-		syscall.AF_LLC:        "llc",
-		syscall.AF_CAN:        "can",
-		syscall.AF_TIPC:       "tipc",
-		syscall.AF_BLUETOOTH:  "bluetooth",
-		syscall.AF_IUCV:       "iucv",
-		syscall.AF_RXRPC:      "rxrpc",
-		syscall.AF_ISDN:       "isdn",
-		syscall.AF_PHONET:     "phonet",
-		syscall.AF_IEEE802154: "ieee802154",
-		37: "caif",
-		38: "alg",
-		39: "nfc",
-		40: "vsock",
-	}
 	var name string
 	var s sockaddr
 
@@ -618,11 +476,11 @@ func printSockAddr(fieldValue string) (string, error) {
 	}
 	family := int(s.Sa_family)
 
-	if _, ok := famLookup[int(family)]; !ok {
+	if _, ok := headers.SocketFamLookup[int(family)]; !ok {
 		return fmt.Sprintf("unknown family (%d)", family), nil
 	}
 
-	errstring := fmt.Sprintf("%s (error resolving addr)", famLookup[family])
+	errstring := fmt.Sprintf("%s (error resolving addr)", headers.SocketFamLookup[family])
 
 	switch family {
 
@@ -634,7 +492,7 @@ func printSockAddr(fieldValue string) (string, error) {
 		if err != nil {
 			return fieldValue, errors.Wrap(err, errstring)
 		}
-		name = fmt.Sprintf("%s %s", famLookup[family], string(p.Sun_path[:]))
+		name = fmt.Sprintf("%s %s", headers.SocketFamLookup[family], string(p.Sun_path[:]))
 		return name, nil
 
 	case syscall.AF_INET:
@@ -647,8 +505,9 @@ func printSockAddr(fieldValue string) (string, error) {
 		}
 		addrBytes := ip4.In_addr[:]
 		var x net.IP = addrBytes
-		name = fmt.Sprintf("%s host:%s serv:%d", famLookup[family], x.String(), ip4.Sin_port)
+		name = fmt.Sprintf("%s host:%s serv:%d", headers.SocketFamLookup[family], x.String(), ip4.Sin_port)
 		return name, nil
+
 	case syscall.AF_INET6:
 		var ip6 sockaddr_in6
 		nbuf := bytes.NewBuffer(bytestr)
@@ -658,7 +517,7 @@ func printSockAddr(fieldValue string) (string, error) {
 		}
 		addrBytes := ip6.Sin6_addr[:]
 		var x net.IP = addrBytes
-		name = fmt.Sprintf("%s host:%s serv:%d", famLookup[family], x.String(), ip6.Sin6_port)
+		name = fmt.Sprintf("%s host:%s serv:%d", headers.SocketFamLookup[family], x.String(), ip6.Sin6_port)
 		return name, nil
 
 	case syscall.AF_NETLINK:
@@ -669,7 +528,7 @@ func printSockAddr(fieldValue string) (string, error) {
 		if err != nil {
 			return fieldValue, errors.Wrap(err, errstring)
 		}
-		name = fmt.Sprintf("%s pid:%d", famLookup[family], n.Nl_pid)
+		name = fmt.Sprintf("%s pid:%d", headers.SocketFamLookup[family], n.Nl_pid)
 		return name, nil
 
 	case syscall.AF_PACKET:
@@ -683,10 +542,9 @@ func printSockAddr(fieldValue string) (string, error) {
 		// TODO: decide on kind of information to return
 		// currently only returning the family name
 		// name = fmt.Sprintf("%s pid:%u", famLookup[family], l.)
-		return famLookup[family], nil
-
+		return headers.SocketFamLookup[family], nil
 	}
-	return famLookup[family], nil
+	return headers.SocketFamLookup[family], nil
 }
 
 // this is currently just a stub as its only used in RHEL kernels
@@ -746,47 +604,7 @@ func printCapabilities(fieldValue string, base int) (string, error) {
 	if err != nil {
 		return "", errors.Wrap(err, "capability parsing failed")
 	}
-	var capLookup = map[int]string{
-		0:  "chown",
-		1:  "dac_override",
-		2:  "dac_read_search",
-		3:  "fowner",
-		4:  "fsetid",
-		5:  "kill",
-		6:  "setgid",
-		7:  "setuid",
-		8:  "setpcap",
-		9:  "linux_immutable",
-		10: "net_bind_service",
-		11: "net_broadcast",
-		12: "net_admin",
-		13: "net_raw",
-		14: "ipc_lock",
-		15: "ipc_owner",
-		16: "sys_module",
-		17: "sys_rawio",
-		18: "sys_chroot",
-		19: "sys_ptrace",
-		20: "sys_pacct",
-		21: "sys_admin",
-		22: "sys_boot",
-		23: "sys_nice",
-		24: "sys_resource",
-		25: "sys_time",
-		26: "sys_tty_config",
-		27: "mknod",
-		28: "lease",
-		29: "audit_write",
-		30: "audit_control",
-		31: "setfcap",
-		32: "mac_override",
-		33: "mac_admin",
-		34: "syslog",
-		35: "wake_alarm",
-		36: "block_suspend",
-		37: "audit_read",
-	}
-	cap, ok := capLookup[int(ival)]
+	cap, ok := headers.CapabLookup[int(ival)]
 	if ok {
 		return cap, nil
 	}
@@ -913,47 +731,13 @@ func printA0(fieldValue string, sysNum string) (string, error) {
 }
 
 func printSignals(fieldValue string, base int) (string, error) {
-	var sigMap = map[int]string{
-		0:  "SIG0",
-		1:  "SIGHUP",
-		2:  "SIGINT",
-		3:  "SIGQUIT",
-		4:  "SIGILL",
-		5:  "SIGTRAP",
-		6:  "SIGABRT",
-		7:  "SIGBUS",
-		8:  "SIGFPE",
-		9:  "SIGKILL",
-		10: "SIGUSR1",
-		11: "SIGSEGV",
-		12: "SIGUSR2",
-		13: "SIGPIPE",
-		14: "SIGALRM",
-		15: "SIGTERM",
-		16: "SIGSTKFLT",
-		17: "SIGCHLD",
-		18: "SIGCONT",
-		19: "SIGSTOP",
-		20: "SIGTSTP",
-		21: "SIGTTIN",
-		22: "SIGTTOU",
-		23: "SIGURG",
-		24: "SIGXCPU",
-		25: "SIGXFSZ",
-		26: "SIGVTALRM",
-		27: "SIGPROF",
-		28: "SIGWINCH",
-		29: "SIGIO",
-		30: "IGPWR",
-		31: "SIGSYS",
-	}
 
 	ival, err := strconv.ParseInt(fieldValue, base, 64)
 	if err != nil {
 		return "", errors.Wrap(err, "signal parsing failed")
 	}
 	if ival < 31 {
-		return sigMap[int(ival)], nil
+		return headers.SignalLookup[int(ival)], nil
 	}
 	if base == 16 {
 		return fmt.Sprintf("unknown signal (0x%s)", fieldValue), nil
@@ -974,34 +758,8 @@ func printCloneFlags(fieldValue string) (string, error) {
 		return "", errors.Wrap(err, "clone flags parsing failed")
 	}
 
-	var cloneLookUp = map[int]string{
-		0x00000100: "CLONE_VM",
-		0x00000200: "CLONE_FS",
-		0x00000400: "CLONE_FILES",
-		0x00000800: "CLONE_SIGHAND",
-		0x00002000: "CLONE_PTRACE",
-		0x00004000: "CLONE_VFORK",
-		0x00008000: "CLONE_PARENT",
-		0x00010000: "CLONE_THREAD",
-		0x00020000: "CLONE_NEWNS",
-		0x00040000: "CLONE_SYSVSEM",
-		0x00080000: "CLONE_SETTLS",
-		0x00100000: "CLONE_PARENT_SETTID",
-		0x00200000: "CLONE_CHILD_CLEARTID",
-		0x00400000: "CLONE_DETACHED",
-		0x00800000: "CLONE_UNTRACED",
-		0x01000000: "CLONE_CHILD_SETTID",
-		0x02000000: "CLONE_STOPPED",
-		0x04000000: "CLONE_NEWUTS",
-		0x08000000: "CLONE_NEWIPC",
-		0x10000000: "CLONE_NEWUSER",
-		0x20000000: "CLONE_NEWPID",
-		0x40000000: "CLONE_NEWNET",
-		0x80000000: "CLONE_IO",
-	}
-
 	var name string
-	for key, val := range cloneLookUp {
+	for key, val := range headers.CloneLookUp {
 		if key&int(ival) > 0 {
 			if len(name) > 0 {
 				name += "|"
@@ -1010,45 +768,11 @@ func printCloneFlags(fieldValue string) (string, error) {
 		}
 	}
 	var cloneSignal = ival & 0xFF
-	var signalLookup = map[int]string{
-		0:  "SIG0",
-		1:  "SIGHUP",
-		2:  "SIGINT",
-		3:  "SIGQUIT",
-		4:  "SIGILL",
-		5:  "SIGTRAP",
-		6:  "SIGABRT",
-		7:  "SIGBUS",
-		8:  "SIGFPE",
-		9:  "SIGKILL",
-		10: "SIGUSR1",
-		11: "SIGSEGV",
-		12: "SIGUSR2",
-		13: "SIGPIPE",
-		14: "SIGALRM",
-		15: "SIGTERM",
-		16: "SIGSTKFLT",
-		17: "SIGCHLD",
-		18: "SIGCONT",
-		19: "SIGSTOP",
-		20: "SIGTSTP",
-		21: "SIGTTIN",
-		22: "SIGTTOU",
-		23: "SIGURG",
-		24: "SIGXCPU",
-		25: "SIGXFSZ",
-		26: "SIGVTALRM",
-		27: "SIGPROF",
-		28: "SIGWINCH",
-		29: "SIGIO",
-		30: "IGPWR",
-		31: "SIGSYS",
-	}
 	if cloneSignal > 0 && cloneSignal < 32 {
 		if len(name) > 0 {
 			name += "|"
 		}
-		name += signalLookup[int(cloneSignal)]
+		name += headers.SignalLookup[int(cloneSignal)]
 	}
 	if len(name) == 0 {
 		return fmt.Sprintf("0x%d", ival), nil
@@ -1057,26 +781,12 @@ func printCloneFlags(fieldValue string) (string, error) {
 }
 
 func printClockID(fieldValue string) (string, error) {
-	var clockMap = map[int]string{
-		0:  "CLOCK_REALTIME",
-		1:  "CLOCK_MONOTONIC",
-		2:  "CLOCK_PROCESS_CPUTIME_ID",
-		3:  "CLOCK_THREAD_CPUTIME_ID",
-		4:  "CLOCK_MONOTONIC_RAW",
-		5:  "CLOCK_REALTIME_COARSE",
-		6:  "CLOCK_MONOTONIC_COARSE",
-		7:  "CLOCK_BOOTTIME",
-		8:  "CLOCK_REALTIME_ALARM",
-		9:  "CLOCK_BOOTTIME_ALARM",
-		10: "CLOCK_SGI_CYCLE",
-		11: "CLOCK_TAI",
-	}
 	ival, err := strconv.ParseInt(fieldValue, 16, 64)
 	if err != nil {
 		return "", errors.Wrap(err, "clock ID parsing failed")
 	}
 	if ival < 7 {
-		return clockMap[int(ival)], nil
+		return headers.ClockLookup[int(ival)], nil
 	}
 	return fmt.Sprintf("unknown clk_id (0x%s)", fieldValue), nil
 }
@@ -1092,43 +802,10 @@ func printPtrace(fieldValue string) (string, error) {
 	if err != nil {
 		return "", errors.Wrap(err, "ptrace parsing failed")
 	}
-	var ptraceLookup = map[int]string{
-		0:      "PTRACE_TRACEME",
-		1:      "PTRACE_PEEKTEXT",
-		2:      "PTRACE_PEEKDATA",
-		3:      "PTRACE_PEEKUSER",
-		4:      "PTRACE_POKETEXT",
-		5:      "PTRACE_POKEDATA",
-		6:      "PTRACE_POKEUSER",
-		7:      "PTRACE_CONT",
-		8:      "PTRACE_KILL",
-		9:      "PTRACE_SINGLESTEP",
-		12:     "PTRACE_GETREGS",
-		13:     "PTRACE_SETREGS",
-		14:     "PTRACE_GETFPREGS",
-		15:     "PTRACE_SETFPREGS",
-		16:     "PTRACE_ATTACH",
-		17:     "PTRACE_DETACH",
-		18:     "PTRACE_GETFPXREGS",
-		19:     "PTRACE_SETFPXREGS",
-		24:     "PTRACE_SYSCALL",
-		0x4200: "PTRACE_SETOPTIONS",
-		0x4201: "PTRACE_GETEVENTMSG",
-		0x4202: "PTRACE_GETSIGINFO",
-		0x4203: "PTRACE_SETSIGINFO",
-		0x4204: "PTRACE_GETREGSET",
-		0x4205: "PTRACE_SETREGSET",
-		0x4206: "PTRACE_SEIZE",
-		0x4207: "PTRACE_INTERRUPT",
-		0x4208: "PTRACE_LISTEN",
-		0x4209: "PTRACE_PEEKSIGINFO",
-		0x420a: "PTRACE_GETSIGMASK",
-		0x420b: "PTRACE_SETSIGMASK",
-	}
-	if _, ok := ptraceLookup[int(ival)]; !ok {
+	if _, ok := headers.PtraceLookup[int(ival)]; !ok {
 		return fmt.Sprintf("unknown ptrace (0x%s)", fieldValue), nil
 	}
-	return ptraceLookup[int(ival)], nil
+	return headers.PtraceLookup[int(ival)], nil
 }
 
 func printPrctlOpt(fieldValue string) (string, error) {
@@ -1136,56 +813,10 @@ func printPrctlOpt(fieldValue string) (string, error) {
 	if err != nil {
 		return "", errors.Wrap(err, "prctl parsing failed")
 	}
-	var prctlLookup = map[int]string{
-		1:  "PR_SET_PDEATHSIG",
-		2:  "PR_GET_PDEATHSIG",
-		3:  "PR_GET_DUMPABLE",
-		4:  "PR_SET_DUMPABLE",
-		5:  "PR_GET_UNALIGN",
-		6:  "PR_SET_UNALIGN",
-		7:  "PR_GET_KEEPCAPS",
-		8:  "PR_SET_KEEPCAPS",
-		9:  "PR_GET_FPEMU",
-		10: "PR_SET_FPEMU",
-		11: "PR_GET_FPEXC",
-		12: "PR_SET_FPEXC",
-		13: "PR_GET_TIMING",
-		14: "PR_SET_TIMING",
-		15: "PR_SET_NAME",
-		16: "PR_GET_NAME",
-		19: "PR_GET_ENDIAN",
-		20: "PR_SET_ENDIAN",
-		21: "PR_GET_SECCOMP",
-		22: "PR_SET_SECCOMP",
-		23: "PR_CAPBSET_READ",
-		24: "PR_CAPBSET_DROP",
-		25: "PR_GET_TSC",
-		26: "PR_SET_TSC",
-		27: "PR_GET_SECUREBITS",
-		28: "PR_SET_SECUREBITS",
-		29: "PR_SET_TIMERSLACK",
-		30: "PR_GET_TIMERSLACK",
-		31: "PR_TASK_PERF_EVENTS_DISABLE",
-		32: "PR_TASK_PERF_EVENTS_ENABLE",
-		33: "PR_MCE_KILL",
-		34: "PR_MCE_KILL_GET",
-		35: "PR_SET_MM",
-		36: "PR_SET_CHILD_SUBREAPER",
-		37: "PR_GET_CHILD_SUBREAPER",
-		38: "PR_SET_NO_NEW_PRIVS",
-		39: "PR_GET_NO_NEW_PRIVS",
-		40: "PR_GET_TID_ADDRESS",
-		41: "PR_SET_THP_DISABLE",
-		42: "PR_GET_THP_DISABLE",
-		43: "PR_MPX_ENABLE_MANAGEMENT",
-		44: "PR_MPX_DISABLE_MANAGEMENT",
-		45: "PR_SET_FP_MODE",
-		46: "PR_GET_FP_MODE",
-	}
-	if _, ok := prctlLookup[int(ival)]; !ok {
+	if _, ok := headers.PrctlLookup[int(ival)]; !ok {
 		return fmt.Sprintf("unknown prctl option (0x%s)", fieldValue), nil
 	}
-	return prctlLookup[int(ival)], nil
+	return headers.PrctlLookup[int(ival)], nil
 }
 
 func printSocketDomain(fieldValue string) (string, error) {
@@ -1193,51 +824,10 @@ func printSocketDomain(fieldValue string) (string, error) {
 	if err != nil {
 		return "", errors.Wrap(err, "socket domain parsing failed")
 	}
-	var famLookup = map[int]string{
-		syscall.AF_LOCAL:      "local",
-		syscall.AF_INET:       "inet",
-		syscall.AF_AX25:       "ax25",
-		syscall.AF_IPX:        "ipx",
-		syscall.AF_APPLETALK:  "appletalk",
-		syscall.AF_NETROM:     "netrom",
-		syscall.AF_BRIDGE:     "bridge",
-		syscall.AF_ATMPVC:     "atmpvc",
-		syscall.AF_X25:        "x25",
-		syscall.AF_INET6:      "inet6",
-		syscall.AF_ROSE:       "rose",
-		syscall.AF_DECnet:     "decnet",
-		syscall.AF_NETBEUI:    "netbeui",
-		syscall.AF_SECURITY:   "security",
-		syscall.AF_KEY:        "key",
-		syscall.AF_NETLINK:    "netlink",
-		syscall.AF_PACKET:     "packet",
-		syscall.AF_ASH:        "ash",
-		syscall.AF_ECONET:     "econet",
-		syscall.AF_ATMSVC:     "atmsvc",
-		syscall.AF_RDS:        "rds",
-		syscall.AF_SNA:        "sna",
-		syscall.AF_IRDA:       "irda",
-		syscall.AF_PPPOX:      "pppox",
-		syscall.AF_WANPIPE:    "wanpipe",
-		syscall.AF_LLC:        "llc",
-		syscall.AF_CAN:        "can",
-		syscall.AF_TIPC:       "tipc",
-		syscall.AF_BLUETOOTH:  "bluetooth",
-		syscall.AF_IUCV:       "iucv",
-		syscall.AF_RXRPC:      "rxrpc",
-		syscall.AF_ISDN:       "isdn",
-		syscall.AF_PHONET:     "phonet",
-		syscall.AF_IEEE802154: "ieee802154",
-		37: "caif",
-		38: "alg",
-		39: "nfc",
-		40: "vsock",
-	}
-
-	if _, ok := famLookup[int(ival)]; !ok {
+	if _, ok := headers.SocketFamLookup[int(ival)]; !ok {
 		return fmt.Sprintf("unknown family (0x%s)", fieldValue), nil
 	}
-	return famLookup[int(ival)], nil
+	return headers.SocketFamLookup[int(ival)], nil
 
 }
 
@@ -1246,32 +836,10 @@ func printSocketCall(fieldValue string, base int) (string, error) {
 	if err != nil {
 		return "", errors.Wrap(err, "socketcall parsing failed")
 	}
-	var sockLookup = map[int]string{
-		syscall.SYS_SOCKET:      "socket",
-		syscall.SYS_BIND:        "bind",
-		syscall.SYS_CONNECT:     "connect",
-		syscall.SYS_LISTEN:      "listen",
-		syscall.SYS_ACCEPT:      "accept",
-		syscall.SYS_GETSOCKNAME: "getsockname",
-		syscall.SYS_GETPEERNAME: "getpeername",
-		syscall.SYS_SOCKETPAIR:  "socketpair",
-		9:                      "send",
-		10:                     "recv",
-		syscall.SYS_SENDTO:     "sendto",
-		syscall.SYS_RECVFROM:   "recvfrom",
-		syscall.SYS_SHUTDOWN:   "shutdown",
-		syscall.SYS_SETSOCKOPT: "setsockopt",
-		syscall.SYS_GETSOCKOPT: "getsockopt",
-		syscall.SYS_SENDMSG:    "sendmsg",
-		syscall.SYS_RECVMSG:    "recvmsg",
-		syscall.SYS_ACCEPT4:    "accept4",
-		19:                     "recvmmsg",
-		20:                     "sendmmsg",
-	}
-	if _, ok := sockLookup[int(ival)]; !ok {
+	if _, ok := headers.SockLookup[int(ival)]; !ok {
 		return fmt.Sprintf("unknown socketcall (0x%s)", fieldValue), nil
 	}
-	return sockLookup[int(ival)], nil
+	return headers.SockLookup[int(ival)], nil
 }
 
 func printRLimit(fieldValue string) (string, error) {
@@ -1279,28 +847,10 @@ func printRLimit(fieldValue string) (string, error) {
 	if err != nil {
 		return "", errors.Wrap(err, "rlimit parsing failed")
 	}
-	var rlimitLookup = map[int]string{
-		0:  "RLIMIT_CPU",
-		1:  "RLIMIT_FSIZE",
-		2:  "RLIMIT_DATA",
-		3:  "RLIMIT_STACK",
-		4:  "RLIMIT_CORE",
-		5:  "RLIMIT_RSS",
-		6:  "RLIMIT_NPROC",
-		7:  "RLIMIT_NOFILE",
-		8:  "RLIMIT_MEMLOCK",
-		9:  "RLIMIT_AS",
-		10: "RLIMIT_LOCKS",
-		11: "RLIMIT_SIGPENDING",
-		12: "RLIMIT_MSGQUEUE",
-		13: "RLIMIT_NICE",
-		14: "RLIMIT_RTPRIO",
-		15: "RLIMIT_RTTIME",
-	}
-	if _, ok := rlimitLookup[int(ival)]; !ok {
+	if _, ok := headers.RlimitLookup[int(ival)]; !ok {
 		return fmt.Sprintf("unknown rlimit (0x%s)", fieldValue), nil
 	}
-	return rlimitLookup[int(ival)], nil
+	return headers.RlimitLookup[int(ival)], nil
 }
 
 func printIpcCall(fieldValue string, base int) (string, error) {
@@ -1308,24 +858,10 @@ func printIpcCall(fieldValue string, base int) (string, error) {
 	if err != nil {
 		return "", errors.Wrap(err, "ipccall parsing failed")
 	}
-	var ipccallLookup = map[int]string{
-		syscall.SYS_SEMOP:  "semop",
-		syscall.SYS_SEMGET: "semget",
-		syscall.SYS_SEMCTL: "semctl",
-		4:                  "semtimedop",
-		syscall.SYS_MSGSND: "msgsnd",
-		syscall.SYS_MSGRCV: "msgrcv",
-		syscall.SYS_MSGGET: "msgget",
-		syscall.SYS_MSGCTL: "msgctl",
-		syscall.SYS_SHMAT:  "shmat",
-		syscall.SYS_SHMDT:  "shmdt",
-		syscall.SYS_SHMGET: "shmget",
-		syscall.SYS_SHMCTL: "shmctl",
-	}
-	if _, ok := ipccallLookup[int(ival)]; !ok {
+	if _, ok := headers.IpccallLookup[int(ival)]; !ok {
 		return fmt.Sprintf("unknown ipccall (%s)", fieldValue), nil
 	}
-	return ipccallLookup[int(ival)], nil
+	return headers.IpccallLookup[int(ival)], nil
 }
 
 func printA1(fieldValue, sysNum string, a0 int) (string, error) {
@@ -1405,39 +941,10 @@ func printFcntlCmd(fieldValue string) (string, error) {
 	if err != nil {
 		return "", errors.Wrap(err, "fcntl command parsing failed")
 	}
-	var fcntlLookup = map[int]string{
-		0:    "F_DUPFD",
-		1:    "F_GETFD",
-		2:    "F_SETFD",
-		3:    "F_GETFL",
-		4:    "F_SETFL",
-		5:    "F_GETLK",
-		6:    "F_SETLK",
-		7:    "F_SETLKW",
-		8:    "F_SETOWN",
-		9:    "F_GETOWN",
-		10:   "F_SETSIG",
-		11:   "F_GETSIG",
-		12:   "F_GETLK64",
-		13:   "F_SETLK64",
-		14:   "F_SETLKW64",
-		15:   "F_SETOWN_EX",
-		16:   "F_GETOWN_EX",
-		17:   "F_GETOWNER_UIDS",
-		1024: "F_SETLEASE",
-		1025: "F_GETLEASE",
-		1026: "F_NOTIFY",
-		1029: "F_CANCELLK",
-		1030: "F_DUPFD_CLOEXEC",
-		1031: "F_SETPIPE_SZ",
-		1032: "F_GETPIPE_SZ",
-		1033: "F_ADD_SEALS",
-		1034: "F_GET_SEALS",
-	}
-	if _, ok := fcntlLookup[int(ival)]; !ok {
+	if _, ok := headers.FcntlLookup[int(ival)]; !ok {
 		return fmt.Sprintf("unknown fcntl command(%d)", ival), nil
 	}
-	return fcntlLookup[int(ival)], nil
+	return headers.FcntlLookup[int(ival)], nil
 }
 
 func printSocketType(fieldValue string) (string, error) {
@@ -1445,19 +952,10 @@ func printSocketType(fieldValue string) (string, error) {
 	if err != nil {
 		return "", errors.Wrap(err, "socket type parsing failed")
 	}
-	var socketLookup = map[int]string{
-		1:  "SOCK_STREAM",
-		2:  "SOCK_DGRAM",
-		3:  "SOCK_RAW",
-		4:  "SOCK_RDM",
-		5:  "SOCK_SEQPACKET",
-		6:  "SOCK_DCCP",
-		10: "SOCK_PACKET",
-	}
-	if _, ok := socketLookup[int(ival)]; !ok {
+	if _, ok := headers.SockTypeLookup[int(ival)]; !ok {
 		return fmt.Sprintf("unknown socket type(%d)", ival), nil
 	}
-	return socketLookup[int(ival)], nil
+	return headers.SockTypeLookup[int(ival)], nil
 }
 
 func printSched(fieldValue string) (string, error) {
@@ -1466,21 +964,13 @@ func printSched(fieldValue string) (string, error) {
 	if err != nil {
 		return "", errors.Wrap(err, "sched parsing failed")
 	}
-	var schedLookup = map[int]string{
-		0: "SCHED_OTHER",
-		1: "SCHED_FIFO",
-		2: "SCHED_RR",
-		3: "SCHED_BATCH",
-		5: "SCHED_IDLE",
-		6: "SCHED_DEADLINE",
-	}
-	if _, ok := schedLookup[int(ival)&0x0F]; !ok {
+	if _, ok := headers.SchedLookup[int(ival)&0x0F]; !ok {
 		return fmt.Sprintf("unknown scheduler policy (0x%s)", fieldValue), nil
 	}
 	if ival&schedResetOnFork > 0 {
-		return schedLookup[int(ival)] + "|SCHED_RESET_ON_FORK", nil
+		return headers.SchedLookup[int(ival)] + "|SCHED_RESET_ON_FORK", nil
 	}
-	return schedLookup[int(ival)], nil
+	return headers.SchedLookup[int(ival)], nil
 }
 
 // TODO: add interpretation
@@ -1506,13 +996,8 @@ func printAccess(fieldValue string) (string, error) {
 	if ival&0x0F == 0 {
 		return "F_OK", nil
 	}
-	var accessLookUp = map[int]string{
-		1: "X_OK",
-		2: "W_OK",
-		4: "R_OK",
-	}
 	var name string
-	for key, val := range accessLookUp {
+	for key, val := range headers.AccessLookUp {
 		if key&int(ival) > 0 {
 			if len(name) > 0 {
 				name += "|"
@@ -1520,7 +1005,6 @@ func printAccess(fieldValue string) (string, error) {
 			name += val
 		}
 	}
-
 	if len(name) == 0 {
 		return fmt.Sprintf("0x%s", fieldValue), nil
 	}
@@ -1532,15 +1016,10 @@ func printEpollCtl(fieldValue string) (string, error) {
 	if err != nil {
 		return "", errors.Wrap(err, "epoll parsing failed")
 	}
-	var epollLookup = map[int]string{
-		1: "EPOLL_CTL_ADD",
-		2: "EPOLL_CTL_DEL",
-		3: "EPOLL_CTL_MOD",
-	}
-	if _, ok := epollLookup[int(ival)]; !ok {
+	if _, ok := headers.EpollLookup[int(ival)]; !ok {
 		return fmt.Sprintf("unknown epoll_ctl operation (%d)", ival), nil
 	}
-	return epollLookup[int(ival)], nil
+	return headers.EpollLookup[int(ival)], nil
 }
 
 func printUmount(fieldValue string) (string, error) {
@@ -1548,15 +1027,8 @@ func printUmount(fieldValue string) (string, error) {
 	if err != nil {
 		return "", errors.Wrap(err, "umount parsing failed")
 	}
-	var umountLookUp = map[int]string{
-		0x00000001: "MNT_FORCE",
-		0x00000002: "MNT_DETACH",
-		0x00000004: "MNT_EXPIRE",
-		0x00000008: "UMOUNT_NOFOLLOW",
-		0x80000001: "UMOUNT_UNUSED",
-	}
 	var name string
-	for key, val := range umountLookUp {
+	for key, val := range headers.UmountLookUp {
 		if key&int(ival) > 0 {
 			if len(name) > 0 {
 				name += "|"
@@ -1576,43 +1048,11 @@ func printIoctlReq(fieldValue string) (string, error) {
 	if err != nil {
 		return "", errors.Wrap(err, "ioctl req parsing failed")
 	}
-	var ioctlLookup = map[int]string{
-		0x4B3A:     "KDSETMODE",
-		0x4B3B:     "KDGETMODE",
-		0x5309:     "CDROMEJECT",
-		0x530F:     "CDROMEJECT_SW",
-		0x5311:     "CDROM_GET_UPC",
-		0x5316:     "CDROMSEEK",
-		0x5401:     "TCGETS",
-		0x5402:     "TCSETS",
-		0x5403:     "TCSETSW",
-		0x5404:     "TCSETSF",
-		0x5409:     "TCSBRK",
-		0x540B:     "TCFLSH",
-		0x540E:     "TIOCSCTTY",
-		0x540F:     "TIOCGPGRP",
-		0x5410:     "TIOCSPGRP",
-		0x5413:     "TIOCGWINSZ",
-		0x5414:     "TIOCSWINSZ",
-		0x541B:     "TIOCINQ",
-		0x5421:     "FIONBIO",
-		0x8901:     "FIOSETOWN",
-		0x8903:     "FIOGETOWN",
-		0x8910:     "SIOCGIFNAME",
-		0x8927:     "SIOCGIFHWADDR",
-		0x8933:     "SIOCGIFINDEX",
-		0x89a2:     "SIOCBRADDIF",
-		0x40045431: "TIOCSPTLCK",
-		0x80045430: "TIOCGPTN",
-		0x80045431: "TIOCSPTLCK",
-		0xC01C64A3: "DRM_IOCTL_MODE_CURSOR",
-		0xC01864B0: "DRM_IOCTL_MODE_PAGE_FLIP",
-		0xC01864B1: "DRM_IOCTL_MODE_DIRTYFB"}
 
-	if _, ok := ioctlLookup[int(ival)]; !ok {
+	if _, ok := headers.IoctlLookup[int(ival)]; !ok {
 		return fmt.Sprintf("0x%s", fieldValue), nil
 	}
-	return ioctlLookup[int(ival)], nil
+	return headers.IoctlLookup[int(ival)], nil
 }
 
 // TODO: add interpretation
@@ -1626,46 +1066,12 @@ func printSockOptLevel(fieldValue string) (string, error) {
 	if ival == syscall.SOL_SOCKET {
 		return "SOL_SOCKET", nil
 	}
-	var sockOptLookup = map[int]string{
-		0:   "SOL_IP",
-		6:   "SOL_TCP",
-		17:  "SOL_UDP",
-		41:  "SOL_IPV6",
-		58:  "SOL_ICMPV6",
-		132: "SOL_SCTP",
-		136: "SOL_UDPLITE",
-		255: "SOL_RAW",
-		256: "SOL_IPX",
-		257: "SOL_AX25",
-		258: "SOL_ATALK",
-		259: "SOL_NETROM",
-		260: "SOL_ROSE",
-		261: "SOL_DECNET",
-		263: "SOL_PACKET",
-		264: "SOL_ATM",
-		265: "SOL_AAL",
-		266: "SOL_IRDA",
-		267: "SOL_NETBEUI",
-		268: "SOL_LLC",
-		269: "SOL_DCCP",
-		270: "SOL_NETLINK",
-		271: "SOL_TIPC",
-		272: "SOL_RXRPC",
-		273: "SOL_PPPOL2TP",
-		274: "SOL_BLUETOOTH",
-		275: "SOL_PNPIPE",
-		276: "SOL_RDS",
-		277: "SOL_IUCV",
-		278: "SOL_CAIF",
-		279: "SOL_ALG",
-		280: "SOL_NFC",
-	}
 	// pure go implementation of getprotobynumber
 	// if not find by getprotobynumber use map
-	if _, ok := sockOptLookup[int(ival)]; !ok {
+	if _, ok := headers.SockOptLookup[int(ival)]; !ok {
 		return fmt.Sprintf("unknown sockopt level (0x%s)", fieldValue), nil
 	}
-	return sockOptLookup[int(ival)], nil
+	return headers.SockOptLookup[int(ival)], nil
 }
 
 // TODO: add interpretation
@@ -1780,56 +1186,10 @@ func printIPOptName(fieldValue string) (string, error) {
 	if err != nil {
 		return "", errors.Wrap(err, "ip opt parsing failed")
 	}
-	var ipOptLookup = map[int]string{
-		1:  "IP_TOS",
-		2:  "IP_TTL",
-		3:  "IP_HDRINCL",
-		4:  "IP_OPTIONS",
-		5:  "IP_ROUTER_ALERT",
-		6:  "IP_RECVOPTS",
-		7:  "IP_RETOPTS",
-		8:  "IP_PKTINFO",
-		9:  "IP_PKTOPTIONS",
-		10: "IP_MTU_DISCOVER",
-		11: "IP_RECVERR",
-		12: "IP_RECVTTL",
-		14: "IP_MTU",
-		15: "IP_FREEBIND",
-		16: "IP_IPSEC_POLICY",
-		17: "IP_XFRM_POLICY",
-		18: "IP_PASSSEC",
-		19: "IP_TRANSPARENT",
-		20: "IP_ORIGDSTADDR",
-		21: "IP_MINTTL",
-		22: "IP_NODEFRAG",
-		23: "IP_CHECKSUM",
-		32: "IP_MULTICAST_IF",
-		33: "IP_MULTICAST_TTL",
-		34: "IP_MULTICAST_LOOP",
-		35: "IP_ADD_MEMBERSHIP",
-		36: "IP_DROP_MEMBERSHIP",
-		37: "IP_UNBLOCK_SOURCE",
-		38: "IP_BLOCK_SOURCE",
-		39: "IP_ADD_SOURCE_MEMBERSHIP",
-		40: "IP_DROP_SOURCE_MEMBERSHIP",
-		41: "IP_MSFILTER",
-		42: "MCAST_JOIN_GROUP",
-		43: "MCAST_BLOCK_SOURCE",
-		44: "MCAST_UNBLOCK_SOURCE",
-		45: "MCAST_LEAVE_GROUP",
-		46: "MCAST_JOIN_SOURCE_GROUP",
-		47: "MCAST_LEAVE_SOURCE_GROUP",
-		48: "MCAST_MSFILTER",
-		49: "IP_MULTICAST_ALL",
-		50: "IP_UNICAST_IF",
-		64: "IPT_SO_SET_REPLACE",
-		65: "IPT_SO_SET_ADD_COUNTERS",
-		66: "IPT_SO_GET_REVISION_TARGET",
-	}
-	if _, ok := ipOptLookup[int(ival)]; !ok {
+	if _, ok := headers.IpOptLookup[int(ival)]; !ok {
 		return fmt.Sprintf("unknown ipopt name (0x%s)", fieldValue), nil
 	}
-	return ipOptLookup[int(ival)], nil
+	return headers.IpOptLookup[int(ival)], nil
 }
 
 func printIP6OptName(fieldValue string) (string, error) {
@@ -1837,74 +1197,10 @@ func printIP6OptName(fieldValue string) (string, error) {
 	if err != nil {
 		return "", errors.Wrap(err, "ip6 opt parsing failed")
 	}
-	var ip6OptLookup = map[int]string{
-		1:  "IPV6_ADDRFORM",
-		2:  "IPV6_2292PKTINFO",
-		3:  "IPV6_2292HOPOPTS",
-		4:  "IPV6_2292DSTOPTS",
-		5:  "IPV6_2292RTHDR",
-		6:  "IPV6_2292PKTOPTIONS",
-		7:  "IPV6_CHECKSUM",
-		8:  "IPV6_2292HOPLIMIT",
-		9:  "IPV6_NEXTHOP",
-		10: "IPV6_AUTHHDR",
-		11: "IPV6_FLOWINFO",
-		16: "IPV6_UNICAST_HOPS",
-		17: "IPV6_MULTICAST_IF",
-		18: "IPV6_MULTICAST_HOPS",
-		19: "IPV6_MULTICAST_LOOP",
-		20: "IPV6_ADD_MEMBERSHIP",
-		21: "IPV6_DROP_MEMBERSHIP",
-		22: "IPV6_ROUTER_ALERT",
-		23: "IPV6_MTU_DISCOVER",
-		24: "IPV6_MTU",
-		25: "IPV6_RECVERR",
-		26: "IPV6_V6ONLY",
-		27: "IPV6_JOIN_ANYCAST",
-		28: "IPV6_LEAVE_ANYCAST",
-		32: "IPV6_FLOWLABEL_MGR",
-		33: "IPV6_FLOWINFO_SEND",
-		34: "IPV6_IPSEC_POLICY",
-		35: "IPV6_XFRM_POLICY",
-		42: "MCAST_JOIN_GROUP",
-		43: "MCAST_BLOCK_SOURCE",
-		44: "MCAST_UNBLOCK_SOURCE",
-		45: "MCAST_LEAVE_GROUP",
-		46: "MCAST_JOIN_SOURCE_GROUP",
-		47: "MCAST_LEAVE_SOURCE_GROUP",
-		48: "MCAST_MSFILTER",
-		49: "IPV6_RECVPKTINFO",
-		50: "IPV6_PKTINFO",
-		51: "IPV6_RECVHOPLIMIT",
-		52: "IPV6_HOPLIMIT",
-		53: "IPV6_RECVHOPOPTS",
-		54: "IPV6_HOPOPTS",
-		55: "IPV6_RTHDRDSTOPTS",
-		56: "IPV6_RECVRTHDR",
-		57: "IPV6_RTHDR",
-		58: "IPV6_RECVDSTOPTS",
-		59: "IPV6_DSTOPTS",
-		60: "IPV6_RECVPATHMTU",
-		61: "IPV6_PATHMTU",
-		62: "IPV6_DONTFRAG",
-		63: "IPV6_USE_MIN_MTU",
-		64: "IP6T_SO_SET_REPLACE",
-		65: "IP6T_SO_SET_ADD_COUNTERS",
-		66: "IPV6_RECVTCLASS",
-		67: "IPV6_TCLASS",
-		68: "IP6T_SO_GET_REVISION_MATCH",
-		69: "IP6T_SO_GET_REVISION_TARGET",
-		72: "IPV6_ADDR_PREFERENCES",
-		73: "IPV6_MINHOPCOUNT",
-		74: "IPV6_ORIGDSTADDR",
-		75: "IPV6_TRANSPARENT",
-		76: "IPV6_UNICAST_IF",
-		80: "IP6T_SO_ORIGINAL_DST",
-	}
-	if _, ok := ip6OptLookup[int(ival)]; !ok {
+	if _, ok := headers.Ip6OptLookup[int(ival)]; !ok {
 		return fmt.Sprintf("unknown ip6opt name (0x%s)", fieldValue), nil
 	}
-	return ip6OptLookup[int(ival)], nil
+	return headers.Ip6OptLookup[int(ival)], nil
 }
 
 func printTCPOptName(fieldValue string) (string, error) {
@@ -1912,37 +1208,10 @@ func printTCPOptName(fieldValue string) (string, error) {
 	if err != nil {
 		return "", errors.Wrap(err, "tcp opt parsing failed")
 	}
-	var tcpOptLookup = map[int]string{
-		1:  "TCP_NODELAY",
-		2:  "TCP_MAXSEG",
-		3:  "TCP_CORK",
-		4:  "TCP_KEEPIDLE",
-		5:  "TCP_KEEPINTVL",
-		6:  "TCP_KEEPCNT",
-		7:  "TCP_SYNCNT",
-		8:  "TCP_LINGER2",
-		9:  "TCP_DEFER_ACCEPT",
-		10: "TCP_WINDOW_CLAMP",
-		11: "TCP_INFO",
-		12: "TCP_QUICKACK",
-		13: "TCP_CONGESTION",
-		14: "TCP_MD5SIG",
-		15: "TCP_COOKIE_TRANSACTIONS",
-		16: "TCP_THIN_LINEAR_TIMEOUTS",
-		17: "TCP_THIN_DUPACK",
-		18: "TCP_USER_TIMEOUT",
-		19: "TCP_REPAIR",
-		20: "TCP_REPAIR_QUEUE",
-		21: "TCP_QUEUE_SEQ",
-		22: "TCP_REPAIR_OPTIONS",
-		23: "TCP_FASTOPEN",
-		24: "TCP_TIMESTAMP",
-		25: "TCP_NOTSENT_LOWAT",
-	}
-	if _, ok := tcpOptLookup[int(ival)]; !ok {
+	if _, ok := headers.TcpOptLookup[int(ival)]; !ok {
 		return fmt.Sprintf("unknown tcpopt name (0x%s)", fieldValue), nil
 	}
-	return tcpOptLookup[int(ival)], nil
+	return headers.TcpOptLookup[int(ival)], nil
 }
 
 func printUDPOptName(fieldValue string) (string, error) {
@@ -1964,31 +1233,10 @@ func printPktOptName(fieldValue string) (string, error) {
 	if err != nil {
 		return "", errors.Wrap(err, "pkt opt parsing failed")
 	}
-	var pktOptLookup = map[int]string{
-		1:  "PACKET_ADD_MEMBERSHIP",
-		2:  "PACKET_DROP_MEMBERSHIP",
-		3:  "PACKET_RECV_OUTPUT",
-		5:  "PACKET_RX_RING",
-		6:  "PACKET_STATISTICS",
-		7:  "PACKET_COPY_THRESH",
-		8:  "PACKET_AUXDATA",
-		9:  "PACKET_ORIGDEV",
-		10: "PACKET_VERSION",
-		11: "PACKET_HDRLEN",
-		12: "PACKET_RESERVE",
-		13: "PACKET_TX_RING",
-		14: "PACKET_LOSS",
-		15: "PACKET_VNET_HDR",
-		16: "PACKET_TX_TIMESTAMP",
-		17: "PACKET_TIMESTAMP",
-		18: "PACKET_FANOUT",
-		19: "PACKET_TX_HAS_OFF",
-		20: "PACKET_QDISC_BYPASS",
-	}
-	if _, ok := pktOptLookup[int(ival)]; !ok {
+	if _, ok := headers.PktOptLookup[int(ival)]; !ok {
 		return fmt.Sprintf("unknown pktopt name (0x%s)", fieldValue), nil
 	}
-	return pktOptLookup[int(ival)], nil
+	return headers.PktOptLookup[int(ival)], nil
 }
 
 // tables (question, ) what are the actual values from table ( are they in binary?)
@@ -2052,15 +1300,9 @@ func printProt(fieldValue string, isMmap int) (string, error) {
 	if ival&0x07 == 0 {
 		return "PROT_NONE", nil
 	}
-	var protLookUp = map[int]string{
-		1: "PROT_READ",
-		2: "PROT_WRITE",
-		4: "PROT_EXEC",
-		8: "PROT_SEM",
-	}
 
 	var name string
-	for key, val := range protLookUp {
+	for key, val := range headers.ProtLookUp {
 		if key&int(ival) > 0 {
 			if len(name) > 0 {
 				name += "|"
@@ -2092,70 +1334,10 @@ func printSockOptName(fieldValue string) (string, error) {
 					opt >= 16 && opt <= 21)
 				opt+=100;
 	*/
-	var sockOptNameLookup = map[int]string{
-		1:  "SO_DEBUG",
-		2:  "SO_REUSEADDR",
-		3:  "SO_TYPE",
-		4:  "SO_ERROR",
-		5:  "SO_DONTROUTE",
-		6:  "SO_BROADCAST",
-		7:  "SO_SNDBUF",
-		8:  "SO_RCVBUF",
-		9:  "SO_KEEPALIVE",
-		10: "SO_OOBINLINE",
-		11: "SO_NO_CHECK",
-		12: "SO_PRIORITY",
-		13: "SO_LINGER",
-		14: "SO_BSDCOMPAT",
-		15: "SO_REUSEPORT",
-		16: "SO_PASSCRED",
-		17: "SO_PEERCRED",
-		18: "SO_RCVLOWAT",
-		19: "SO_SNDLOWAT",
-		20: "SO_RCVTIMEO",
-		21: "SO_SNDTIMEO",
-		22: "SO_SECURITY_AUTHENTICATION",
-		23: "SO_SECURITY_ENCRYPTION_TRANSPORT",
-		24: "SO_SECURITY_ENCRYPTION_NETWORK",
-		25: "SO_BINDTODEVICE",
-		26: "SO_ATTACH_FILTER",
-		27: "SO_DETACH_FILTER",
-		28: "SO_PEERNAME",
-		29: "SO_TIMESTAMP",
-		30: "SO_ACCEPTCONN",
-		31: "SO_PEERSEC",
-		32: "SO_SNDBUFFORCE",
-		33: "SO_RCVBUFFORCE",
-		34: "SO_PASSSEC",
-		35: "SO_TIMESTAMPNS",
-		36: "SO_MARK",
-		37: "SO_TIMESTAMPING",
-		38: "SO_PROTOCOL",
-		39: "SO_DOMAIN",
-		40: "SO_RXQ_OVFL",
-		41: "SO_WIFI_STATUS",
-		42: "SO_PEEK_OFF",
-		43: "SO_NOFCS",
-		44: "SO_LOCK_FILTER",
-		45: "SO_SELECT_ERR_QUEUE",
-		46: "SO_BUSY_POLL",
-		47: "SO_MAX_PACING_RATE",
-		48: "SO_BPF_EXTENSIONS",
-		49: "SO_INCOMING_CPU",
-		50: "SO_ATTACH_BPF",
-
-		// PPC has these different
-		116: "SO_RCVLOWAT",
-		117: "SO_SNDLOWAT",
-		118: "SO_RCVTIMEO",
-		119: "SO_SNDTIMEO",
-		120: "SO_PASSCRED",
-		121: "SO_PEERCRED",
-	}
-	if _, ok := sockOptNameLookup[int(ival)]; !ok {
+	if _, ok := headers.SockOptNameLookup[int(ival)]; !ok {
 		return fmt.Sprintf("unknown sockopt name (0x%s)", fieldValue), nil
 	}
-	return sockOptNameLookup[int(ival)], nil
+	return headers.SockOptNameLookup[int(ival)], nil
 }
 
 func printRecv(fieldValue string) (string, error) {
@@ -2163,31 +1345,8 @@ func printRecv(fieldValue string) (string, error) {
 	if err != nil {
 		return "", errors.Wrap(err, "recv parsing failed")
 	}
-	var recvLookUp = map[int]string{
-		0x00000001: "MSG_OOB",
-		0x00000002: "MSG_PEEK",
-		0x00000004: "MSG_DONTROUTE",
-		0x00000008: "MSG_CTRUNC",
-		0x00000010: "MSG_PROXY",
-		0x00000020: "MSG_TRUNC",
-		0x00000040: "MSG_DONTWAIT",
-		0x00000080: "MSG_EOR",
-		0x00000100: "MSG_WAITALL",
-		0x00000200: "MSG_FIN",
-		0x00000400: "MSG_SYN",
-		0x00000800: "MSG_CONFIRM",
-		0x00001000: "MSG_RST",
-		0x00002000: "MSG_ERRQUEUE",
-		0x00004000: "MSG_NOSIGNAL",
-		0x00008000: "MSG_MORE",
-		0x00010000: "MSG_WAITFORONE",
-		0x00020000: "MSG_SENDPAGE_NOTLAST",
-		0x20000000: "MSG_FASTOPEN",
-		0x40000000: "MSG_CMSG_CLOEXEC",
-		0x80000000: "MSG_CMSG_COMPAT",
-	}
 	var name string
-	for key, val := range recvLookUp {
+	for key, val := range headers.RecvLookUp {
 		if key&int(ival) > 0 {
 			if len(name) > 0 {
 				name += "|"
@@ -2208,17 +1367,10 @@ func printSeek(fieldValue string) (string, error) {
 		return "", errors.Wrap(err, "seek parsing failed")
 	}
 	var whence = int(ival) & 0xFF
-	var seekLookup = map[int]string{
-		0: "SEEK_SET",
-		1: "SEEK_CUR",
-		2: "SEEK_END",
-		3: "SEEK_DATA",
-		4: "SEEK_HOLE",
-	}
-	if _, ok := seekLookup[whence]; !ok {
+	if _, ok := headers.SeekLookup[whence]; !ok {
 		return fmt.Sprintf("unknown whence(0x%s)", fieldValue), nil
 	}
-	return seekLookup[whence], nil
+	return headers.SeekLookup[whence], nil
 }
 
 func printA3(fieldValue, sysNum string) (string, error) {
@@ -2258,27 +1410,11 @@ func printMmap(fieldValue string) (string, error) {
 	if err != nil {
 		return "", errors.Wrap(err, "mmap parsing failed")
 	}
-	var mmapLookUp = map[int]string{
-		0x00001: "MAP_SHARED",
-		0x00002: "MAP_PRIVATE",
-		0x00010: "MAP_FIXED",
-		0x00020: "MAP_ANONYMOUS",
-		0x00040: "MAP_32BIT",
-		0x00100: "MAP_GROWSDOWN",
-		0x00800: "MAP_DENYWRITE",
-		0x01000: "MAP_EXECUTABLE",
-		0x02000: "MAP_LOCKED",
-		0x04000: "MAP_NORESERVE",
-		0x08000: "MAP_POPULATE",
-		0x10000: "MAP_NONBLOCK",
-		0x20000: "MAP_STACK",
-		0x40000: "MAP_HUGETLB",
-	}
 	var name string
 	if ival&0x0F == 0 {
 		name += "MAP_FILE"
 	}
-	for key, val := range mmapLookUp {
+	for key, val := range headers.MmapLookUp {
 		if key&int(ival) > 0 {
 			if len(name) > 0 {
 				name += "|"
@@ -2298,38 +1434,8 @@ func printMount(fieldValue string) (string, error) {
 	if err != nil {
 		return "", errors.Wrap(err, "mount parsing failed")
 	}
-	var mountLookUp = map[int]string{
-		syscall.MS_RDONLY:      "MS_RDONLY",
-		syscall.MS_NOSUID:      "MS_NOSUID",
-		syscall.MS_NODEV:       "MS_NODEV",
-		syscall.MS_NOEXEC:      "MS_NOEXEC",
-		syscall.MS_SYNCHRONOUS: "MS_SYNCHRONOUS",
-		syscall.MS_REMOUNT:     "MS_REMOUNT",
-		syscall.MS_MANDLOCK:    "MS_MANDLOCK",
-		syscall.MS_DIRSYNC:     "MS_DIRSYNC",
-		syscall.MS_NOATIME:     "MS_NOATIME",
-		syscall.MS_NODIRATIME:  "MS_NODIRATIME",
-		syscall.MS_BIND:        "MS_BIND",
-		syscall.MS_MOVE:        "MS_MOVE",
-		syscall.MS_REC:         "MS_REC",
-		syscall.MS_SILENT:      "MS_SILENT",
-		syscall.MS_POSIXACL:    "MS_POSIXACL",
-		syscall.MS_UNBINDABLE:  "MS_UNBINDABLE",
-		syscall.MS_PRIVATE:     "MS_PRIVATE",
-		syscall.MS_SLAVE:       "MS_SLAVE",
-		syscall.MS_SHARED:      "MS_SHARED",
-		syscall.MS_RELATIME:    "MS_RELATIME",
-		syscall.MS_KERNMOUNT:   "MS_KERNMOUNT",
-		syscall.MS_I_VERSION:   "MS_I_VERSION",
-		1 << 24:                "MS_STRICTATIME",
-		1 << 27:                "MS_SNAP_STABLE",
-		1 << 28:                "MS_NOSEC",
-		1 << 29:                "MS_BORN",
-		syscall.MS_ACTIVE:      "MS_ACTIVE",
-		syscall.MS_NOUSER:      "MS_NOUSER",
-	}
 	var name string
-	for key, val := range mountLookUp {
+	for key, val := range headers.MountLookUp {
 		if key&int(ival) > 0 {
 			if len(name) > 0 {
 				name += "|"
@@ -2356,19 +1462,10 @@ func printNFProto(fieldValue string) (string, error) {
 	if err != nil {
 		return "", errors.Wrap(err, "netfilter protocol parsing failed")
 	}
-	var nfProtoLookup = map[int]string{
-		0:  "unspecified",
-		1:  "inet",
-		2:  "ipv4",
-		3:  "arp",
-		7:  "bridge",
-		10: "ipv6",
-		12: "decnet",
-	}
-	if _, ok := nfProtoLookup[int(ival)]; !ok {
+	if _, ok := headers.NfProtoLookup[int(ival)]; !ok {
 		return fmt.Sprintf("unknown netfilter protocol (%s)", fieldValue), nil
 	}
-	return nfProtoLookup[int(ival)], nil
+	return headers.NfProtoLookup[int(ival)], nil
 }
 
 func printICMP(fieldValue string) (string, error) {
@@ -2376,25 +1473,10 @@ func printICMP(fieldValue string) (string, error) {
 	if err != nil {
 		return "", errors.Wrap(err, "icmp type parsing failed")
 	}
-	var icmpLookup = map[int]string{
-		0:  "echo-reply",
-		3:  "destination-unreachable",
-		4:  "source-quench",
-		5:  "redirect",
-		8:  "echo",
-		11: "time-exceeded",
-		12: "parameter-problem",
-		13: "timestamp-request",
-		14: "timestamp-reply",
-		15: "info-request",
-		16: "info-reply",
-		17: "address-mask-request",
-		18: "address-mask-reply",
-	}
-	if _, ok := icmpLookup[int(ival)]; !ok {
+	if _, ok := headers.IcmpLookup[int(ival)]; !ok {
 		return fmt.Sprintf("unknown icmp type (%s)", fieldValue), nil
 	}
-	return icmpLookup[int(ival)], nil
+	return headers.IcmpLookup[int(ival)], nil
 }
 
 func printAddr(fieldValue string) (string, error) {
@@ -2410,17 +1492,10 @@ func printSeccompCode(fieldValue string) (string, error) {
 		return "", errors.Wrap(err, "seccomp code parsing failed")
 	}
 	var SECCOMPRETACTION = 0x7fff0000
-	var seccompCodeLookUp = map[int]string{
-		0x00000000: "kill",
-		0x00030000: "trap",
-		0x00050000: "errno",
-		0x7ff00000: "trace",
-		0x7fff0000: "allow",
-	}
-	if _, ok := seccompCodeLookUp[int(ival)&SECCOMPRETACTION]; !ok {
+	if _, ok := headers.SeccompCodeLookUp[int(ival)&SECCOMPRETACTION]; !ok {
 		return fmt.Sprintf("unknown seccomp code (%s)", fieldValue), nil
 	}
-	return seccompCodeLookUp[int(ival)&SECCOMPRETACTION], nil
+	return headers.SeccompCodeLookUp[int(ival)&SECCOMPRETACTION], nil
 }
 
 func printList(fieldValue string) (string, error) {
@@ -2428,15 +1503,8 @@ func printList(fieldValue string) (string, error) {
 	if err != nil {
 		return "", errors.Wrap(err, "list parsing failed")
 	}
-	var listLookUp = map[int]string{
-		AUDIT_FILTER_TASK:    "task",
-		AUDIT_FILTER_ENTRY:   "entry",
-		AUDIT_FILTER_EXIT:    "exit",
-		AUDIT_FILTER_USER:    "user",
-		AUDIT_FILTER_EXCLUDE: "exclude",
-	}
-	if _, ok := listLookUp[int(ival)]; !ok {
+	if _, ok := flagLookup[int(ival)]; !ok {
 		return fmt.Sprintf("unknown list (%s)", fieldValue), nil
 	}
-	return listLookUp[int(ival)], nil
+	return flagLookup[int(ival)], nil
 }

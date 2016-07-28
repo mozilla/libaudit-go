@@ -57,12 +57,8 @@ func GetAuditEvents(s *NetlinkConnection, cb EventCallback, ec chan error, args 
 				for _, msg := range msgs {
 					if msg.Header.Type == syscall.NLMSG_ERROR {
 						err := int32(nativeEndian().Uint32(msg.Data[0:4]))
-						if err == 0 {
-							//Note - NLMSG_ERROR can be Acknowledgement from kernel
-							//If the first 4 bytes of Data part are zero
-						} else {
-							// log.Println("NLMSG ERROR")
-							continue
+						if err != 0 {
+							ec <- fmt.Errorf("error receiving events -%d", err)
 						}
 					} else {
 						nae, err := NewAuditEvent(msg)
@@ -90,10 +86,8 @@ func GetRawAuditEvents(s *NetlinkConnection, cb RawEventCallback, ec chan error,
 					m := ""
 					if msg.Header.Type == syscall.NLMSG_ERROR {
 						err := int32(nativeEndian().Uint32(msg.Data[0:4]))
-						if err == 0 {
-							//Acknowledgement from kernel
-						} else {
-							continue
+						if err != 0 {
+							ec <- fmt.Errorf("error receiving events -%d", err)
 						}
 					} else {
 						Type := auditConstant(msg.Header.Type)
@@ -125,10 +119,8 @@ func GetAuditMessages(s *NetlinkConnection, cb EventCallback, ec *chan error, do
 			for _, msg := range msgs {
 				if msg.Header.Type == syscall.NLMSG_ERROR {
 					err := int32(nativeEndian().Uint32(msg.Data[0:4]))
-					if err == 0 {
-						//Acknowledgement from kernel
-					} else {
-						continue
+					if err != 0 {
+						*ec <- fmt.Errorf("error receiving events -%d", err)
 					}
 				} else {
 					nae, err := NewAuditEvent(msg)
