@@ -17,6 +17,8 @@ import (
 
 type fieldType int
 
+// fieldType denotes the integer values of various
+// fields occuring in audit messages
 const (
 	typeUID fieldType = iota
 	typeGID
@@ -156,9 +158,14 @@ var fieldLookupMap = map[string]fieldType{
 	"new_group":      typeEscaped,
 }
 
+// interpretField takes fieldName and the encoded fieldValue (part of the audit message) and
+// returns the string representations for the values
+// For eg. syscall numbers to names, uids to usernames etc.
 func interpretField(fieldName string, fieldValue string, msgType auditConstant, r record) (string, error) {
-	// auparse_interpret_field() -> nvlist_interp_cur_val(const rnode *r) -> interpret(r) -> type = auparse_interp_adjust_type(r->type, id.name, id.val);
-	// 	out = auparse_do_interpretation(type, &id);
+	// the code follows the same logic as these auditd functions (call chain is shown) =>
+	// auparse_interpret_field() [auparse.c] -> nvlist_interp_cur_val(const rnode *r) [nvlist.c]-> interpret(r) [interpret.c] ->
+	// type = auparse_interp_adjust_type(r->type, id.name, id.val); [interpret.c]
+	// 	out = auparse_do_interpretation(type, &id); [interpret.c]
 	var ftype fieldType
 	var result string
 	var err error
@@ -290,7 +297,7 @@ func interpretField(fieldName string, fieldValue string, msgType auditConstant, 
 			return "", errors.Wrap(err, "list interpretation failed")
 		}
 	case typeTTYData:
-		// discuss priority
+		// TODO: add printTTYData (see interpret.c (auparse) for ideas)
 		// result, err = printTTYData(fieldValue)
 		// if err != nil {
 		// 	return "", errors.Wrap(err, "tty interpretation failed")
@@ -301,7 +308,7 @@ func interpretField(fieldName string, fieldValue string, msgType auditConstant, 
 			return "", errors.Wrap(err, "session interpretation failed")
 		}
 	case typeCapBitmap:
-		// discuss priority
+		// TODO: add printCapBitMap (see interpret.c (auparse) for ideas)
 		// result, err = printCapBitMap(fieldValue)
 		// if err != nil {
 		// 	return "", errors.Wrap(err, "cap bitmap interpretation failed")
@@ -603,7 +610,6 @@ func printSockAddr(fieldValue string) (string, error) {
 		return fieldValue, errors.Wrap(err, "sockaddr parsing failed")
 	}
 
-	// family := int(bytestr[0]) + 256*int(bytestr[1])
 	buf := bytes.NewBuffer(bytestr)
 	err = struc.Unpack(buf, &s)
 
@@ -674,7 +680,8 @@ func printSockAddr(fieldValue string) (string, error) {
 		if err != nil {
 			return fieldValue, errors.Wrap(err, errstring)
 		}
-		// decide on kind of info to return
+		// TODO: decide on kind of information to return
+		// currently only returning the family name
 		// name = fmt.Sprintf("%s pid:%u", famLookup[family], l.)
 		return famLookup[family], nil
 
@@ -682,7 +689,9 @@ func printSockAddr(fieldValue string) (string, error) {
 	return famLookup[family], nil
 }
 
-// not needed
+// this is currently just a stub as its only used in RHEL kernels
+// later interpretation can be added
+// for ideas see auparse -> interpret.c -> print_flags()
 func printFlags(fieldValue string) (string, error) {
 	return fieldValue, nil
 }
@@ -718,13 +727,6 @@ func unescape(fieldvalue string) string {
 	if err != nil {
 		return fieldvalue
 	}
-	// for i := 0; i < len(fieldvalue)-1; i += 2 {
-	// 	ival, err := strconv.ParseInt(fieldvalue[i:i+2], 16, -1)
-	// 	if err != nil {
-	// 		return str
-	// 	}
-	// 	str += fmt.Sprintf("%d", ival)
-	// }
 	return string(str)
 }
 
@@ -798,7 +800,8 @@ func printSuccess(fieldValue string) (string, error) {
 
 	ival, err := strconv.ParseInt(fieldValue, 10, 64)
 	if err != nil {
-		// following as per auparse interpret
+		// if we are unable to parse success values just return them as it is
+		// behaviour same as auparse -interpret.c
 		return fieldValue, nil
 	}
 	const (
@@ -819,8 +822,7 @@ func printSuccess(fieldValue string) (string, error) {
 }
 
 func printA0(fieldValue string, sysNum string) (string, error) {
-	//NOTE: considering only x64 machines
-	// need to fetch syscall number on this as well ? design decision ?
+	// TODO: currently only considering only x64 machines
 	name, err := AuditSyscallToName(sysNum)
 	if err != nil {
 		return "", errors.Wrap(err, "syscall parsing failed")
@@ -1079,8 +1081,8 @@ func printClockID(fieldValue string) (string, error) {
 	return fmt.Sprintf("unknown clk_id (0x%s)", fieldValue), nil
 }
 
-// skipping personality interpretation
-// auparse specific table persontab.h
+// TODO: add personality interpretation
+// see auparse -> interpret.c -> print_personality() lookup table persontab.h
 func printPersonality(fieldValue string) (string, error) {
 	return fieldValue, nil
 }
@@ -1327,8 +1329,7 @@ func printIpcCall(fieldValue string, base int) (string, error) {
 }
 
 func printA1(fieldValue, sysNum string, a0 int) (string, error) {
-	//NOTE: considering only x64 machines
-	// need to fetch syscall number on this as well ? design decision ?
+	//TODO: currently only considering x64 machines
 	name, err := AuditSyscallToName(sysNum)
 	if err != nil {
 		return "", errors.Wrap(err, "syscall parsing failed")
@@ -1482,7 +1483,8 @@ func printSched(fieldValue string) (string, error) {
 	return schedLookup[int(ival)], nil
 }
 
-// not currently used (so skipped for now)
+// TODO: add interpretation
+// see auparse -> interpret.c -> print_open_flags() for ideas
 // useful for debugging rather than forensics
 // actual policy is to filter either on open or write or both
 // and emit msg that this happened so if its opened in r,rw, etc.
@@ -1541,8 +1543,6 @@ func printEpollCtl(fieldValue string) (string, error) {
 	return epollLookup[int(ival)], nil
 }
 
-// not used currently
-// auparse specific table is umounttab.h
 func printUmount(fieldValue string) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, 16, 64)
 	if err != nil {
@@ -1615,7 +1615,9 @@ func printIoctlReq(fieldValue string) (string, error) {
 	return ioctlLookup[int(ival)], nil
 }
 
-// discuss priority + def designs ?
+// TODO: add interpretation
+// see auparse -> interpret.c -> print_sock_opt_level
+// needs a go implementation of getprotobynumber
 func printSockOptLevel(fieldValue string) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, 16, 64)
 	if err != nil {
@@ -1666,7 +1668,9 @@ func printSockOptLevel(fieldValue string) (string, error) {
 	return sockOptLookup[int(ival)], nil
 }
 
-// pure go implementation of getprotobynumber
+// TODO: add interpretation
+// see auparse -> interpret.c -> print_socket_proto
+// add pure go implementation of getprotobynumber
 func printSocketProto(fieldValue string) (string, error) {
 	// ival, err := strconv.ParseInt(fieldValue, 16, 64)
 	// if err != nil {
@@ -1679,8 +1683,7 @@ func printSocketProto(fieldValue string) (string, error) {
 }
 
 func printA2(fieldValue, sysNum string, a1 int) (string, error) {
-	//NOTE: considering only x64 machines
-	// need to fetch syscall number on this as well ? design decision ?
+	//TODO: currently only considering x64 machines
 	name, err := AuditSyscallToName(sysNum)
 	if err != nil {
 		return "", errors.Wrap(err, "syscall parsing failed")
@@ -2219,8 +2222,7 @@ func printSeek(fieldValue string) (string, error) {
 }
 
 func printA3(fieldValue, sysNum string) (string, error) {
-	//NOTE: considering only x64 machines
-	// need to fetch syscall number on this as well ? design decision ?
+	// TODO: currently only considering x64 machines
 	name, err := AuditSyscallToName(sysNum)
 	if err != nil {
 		return "", errors.Wrap(err, "syscall parsing failed")

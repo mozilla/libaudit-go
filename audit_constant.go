@@ -1,3 +1,7 @@
+//audit_constant.go contains constants that are used within libaudit for indicating
+//message types, field values etc.
+//The list is compiled from linux/audit.h (from the kernel) and libaudit.h from the auditd source
+
 package libaudit
 
 const (

@@ -8,11 +8,21 @@ import (
 	"github.com/pkg/errors"
 )
 
+// EventCallback is the function signature for any function that wants to receive an AuditEvent as soon as
+// it is received from the kernel, error channel will be used to indicate any error that happens while receiving
+// messages
 type EventCallback func(*AuditEvent, chan error, ...interface{})
 
+// RawEventCallback is similar to EventCallback and provides a function signature but the difference is that the function
+// will receive only the message string which contains the audit event and not the parsed AuditEvent struct
 type RawEventCallback func(string, chan error, ...interface{})
 
 // AuditEvent holds a parsed audit message
+// Serial holds serial number for the message
+// Timestamp holds the unix timestamp of the message
+// Type indicates the type of the audit message
+// Data holds a map of field values of audit messages where keys => field names and values => field values
+// Raw string holds the original audit message received from kernel
 type AuditEvent struct {
 	Serial    string
 	Timestamp string
@@ -35,6 +45,9 @@ func NewAuditEvent(msg NetlinkMessage) (*AuditEvent, error) {
 	return x, nil
 }
 
+// GetAuditEvents receives audit messages from kernel parses them to AuditEvent and pass them
+// along the callback cb, error channel will be used to indicate any error that happens while
+// receiving the message. receving code runs inside a go-routine.
 func GetAuditEvents(s *NetlinkConnection, cb EventCallback, ec chan error, args ...interface{}) {
 	go func() {
 		for {
@@ -64,6 +77,9 @@ func GetAuditEvents(s *NetlinkConnection, cb EventCallback, ec chan error, args 
 	}()
 }
 
+// GetRawAuditEvents receives raw audit messages from kernel parses them to AuditEvent and pass them
+// along the raw callback cb, error channel will be used to indicate any error that happens while
+// receiving the message. receving code runs inside a go-routine.
 func GetRawAuditEvents(s *NetlinkConnection, cb RawEventCallback, ec chan error, args ...interface{}) {
 	go func() {
 		for {
@@ -94,6 +110,11 @@ func GetRawAuditEvents(s *NetlinkConnection, cb RawEventCallback, ec chan error,
 	}()
 }
 
+// GetAuditMessages is a blocking function (runs in forever for loop) that
+// receives audit messages from kernel parses them to AuditEvent and pass them
+// along the callback cb and error channel will be used to indicate any error that happens while
+// receiving the message.
+// Function will return when a signal is received on the done channel.
 func GetAuditMessages(s *NetlinkConnection, cb EventCallback, ec *chan error, done *chan bool, args ...interface{}) {
 	for {
 		select {

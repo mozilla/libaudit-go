@@ -1,5 +1,7 @@
 package libaudit
 
+// sysMapX64 is a mapping between x64 syscall names and their integer values
+// The list is taken from x86_64_table.h of auditd library
 var sysMapX64 = `{
 	"read"                          :   0,
 	"write"                         :   1,
