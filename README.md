@@ -1,10 +1,13 @@
 # Libaudit in Golang
 Golang package (lib) for Linux Audit
 
-Libaudit-go is a go library that provide helper methods to talk to Linux Audit.
-Originally developed for [Audit GO Heka Pluigin](https://github.com/mozilla/audit-go) 
+Libaudit-go is a pure Go client library for dealing directly with linux audit framework.
+The idea is provide a replacement to the existing auditd daemon and its libraries.
+Originally developed for [Audit Go Heka Pluigin](https://github.com/mozilla/audit-go)
 
-See [main.go](https://github.com/mozilla/audit-go/blob/master/main.go#L26) for example implementation of these functions
+To get started see package documentation at [godoc](https://godoc.org/github.com/mozilla/libaudit-go).
+
+See [main.go](https://github.com/mozilla/audit-go/blob/master/main.go) for an example implementation of the client using libaudit-go.
 
 ## Supported Methods (API)
 
@@ -49,7 +52,7 @@ func (s *NetlinkConnection) Receive(bytesize int, block int) ([]NetlinkMessage, 
 
 ##### GetAuditEvents
 
-Start a Audit event monitor
+Starts an Audit event monitor in a go-routine.
 
 ```
 func AuditGetEvents(s *NetlinkConnection, cb EventCallback, ec chan error, args ...interface{})
@@ -86,7 +89,7 @@ type AuditEvent struct {
 
 ##### AuditGetRawEvents
 
-Start a Audit event monitor which emits raw events
+Starts an Audit event monitor which emits raw events in a go-routine
 
 ```golang
 func GetRawAuditEvents(s *NetlinkConnection, cb RawEventCallback, ec chan error, args ...interface{})
@@ -104,25 +107,9 @@ func RawEventCallback(msg string, ce chan error, args ...interface{}) {
 libaudit.GetRawAuditEvents(s, RawEventCallback, errchan)
 ```
 
-##### AuditGetReply
-
-Get the audit system's reply
-
-```
-func AuditGetReply(s *NetlinkConnection, bytesize, block int, seq uint32) error
-```
-
-This function gets the next data packet sent on the audit netlink socket. This function is usually called after sending a command to the audit system. block is of type int which is either: ```GET_REPLY_BLOCKING``` and ```GET_REPLY_NONBLOCKING```.
-
-Example :
-
-```
-err = AuditGetReply(s, syscall.Getpagesize(), 0, wb.Header.Seq)
-```
-
 ##### AuditIsEnabled
 
-This function will return 0 if auditing is NOT enabled and 1 if enabled, and -1 and an error on error.
+This function will return 0 if audit is not enabled and 1 if enabled, and -1 on error.
 
 ```
 func AuditIsEnabled(s *NetlinkConnection) (state int, err error)
@@ -159,8 +146,7 @@ err := libaudit.AuditSetEnabled(s, 1)
 
 ##### AuditSetRateLimit
 
-Set audit rate limit
-
+Sets rate limit for audit messages from kernel
 ```
 func AuditSetRateLimit(s *NetlinkConnection, limit int) error
 ```
@@ -175,7 +161,7 @@ err = libaudit.AuditSetRateLimit(s, 600)
 
 ##### AuditSetBacklogLimit
 
-Set the audit backlog limit
+Sets backlog limit for audit messages from kernel
 
 ```
 func AuditSetBacklogLimit(s *NetlinkConnection, limit int) error
@@ -198,7 +184,7 @@ Set audit daemon process ID
 func AuditSetPid(s *NetlinkConnection, pid uint32 ) error 
 ```
 
-This function tells the kernel what the pid is of the audit daemon
+This function registers the given PID with kernel as the program for receiving audit messages.
 
 
 Example :

@@ -6,7 +6,6 @@ The idea is to provide the same set of API as auditd (linux audit daemon).
 One example of the actual client using the library can be found at https://github.com/mozilla/audit-go.
 NOTE: Currently the library is only applicable for x64 architecture.
 */
-
 package libaudit
 
 import (
