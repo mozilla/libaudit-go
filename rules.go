@@ -459,7 +459,71 @@ func auditAddRuleData(s *NetlinkConnection, rule *auditRuleData, flags int, acti
 	return nil
 }
 
-//SetRules reads configuration file for audit rules and sets them in kernel
+/*
+SetRules reads the configuration file for audit rules and sets them in kernel.
+It expects the config in a json formatted string of following format:
+{
+    "delete": true,
+    "enable": "1",
+    "buffer": "16348",
+    "rate": "500",
+    "file_rules": [
+        {
+            "path": "/etc/audit/",
+            "key": "audit",
+            "permission": "wa"
+        }
+	],
+	"syscall_rules": [
+        {
+            "key": "bypass",
+            "fields": [
+                {
+                    "name": "arch",
+                    "value": 64,
+                    "op": "eq"
+                }
+            ],
+            "syscalls": [
+                "personality"
+            ],
+            "actions": [
+                "always",
+                "exit"
+            ]
+        },
+        {
+            "fields": [
+                {
+                    "name": "dir",
+                    "value": "/usr/lib/nagios/plugins",
+                    "op": "eq"
+                },
+                {
+                    "name": "perm",
+                    "value": "x",
+                    "op": "eq"
+                }
+            ],
+            "actions": [
+                "exit",
+                "never"
+            ]
+		},
+        {
+            "syscalls": [
+                "clone",
+                "fork",
+                "vfork"
+            ],
+            "actions": [
+                "entry",
+                "always"
+            ]
+        }
+	]
+}
+*/
 func SetRules(s *NetlinkConnection, content []byte) error {
 	var (
 		rules interface{}
@@ -842,7 +906,7 @@ done:
 	return result, nil
 }
 
-//AuditSyscallToName takes syscall number and returns the syscall name. Applicable only for x64 arch.
+//AuditSyscallToName takes syscall number and returns the syscall name. Currenlt applicable only for x64 arch.
 func AuditSyscallToName(syscall string) (name string, err error) {
 	syscallMap := reverseMap(headers.SysMapX64)
 	sysNum, err := strconv.Atoi(syscall)

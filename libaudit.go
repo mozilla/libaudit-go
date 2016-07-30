@@ -1,3 +1,12 @@
+/*
+Package libaudit is client library in pure Go for talking with audit framework in the linux kernel.
+It provides API for dealing with audit related tasks like setting audit rules, deleting audit rules etc.
+The idea is to provide the same set of API as auditd (linux audit daemon).
+
+One example of the actual client using the library can be found at https://github.com/mozilla/audit-go.
+NOTE: Currently the library is only applicable for x64 architecture.
+*/
+
 package libaudit
 
 import (
@@ -14,9 +23,11 @@ import (
 
 var sequenceNumber uint32
 
+// NetlinkMessage is the struct type that is used for communicating on netlink sockets.
 type NetlinkMessage syscall.NetlinkMessage
 
-// auditStatus is used for "audit_status" messages
+// auditStatus is the c compatible struct of audit_status (libaudit.h).
+// It is used for passing information involving status of audit services.
 type auditStatus struct {
 	Mask            uint32 /* Bit mask for valid entries */
 	Enabled         uint32 /* 1 = enabled, 0 = disabled */
@@ -45,9 +56,9 @@ func nativeEndian() binary.ByteOrder {
 	return binary.LittleEndian
 }
 
-// ToWireFormat converts a NetlinkMessage to byte stream
+// ToWireFormat converts a NetlinkMessage to byte stream.
 // Recvfrom in go takes only a byte [] to put the data recieved from the kernel that removes the need
-// for having a separate audit_reply Struct for recieving data from kernel.
+// for having a separate audit_reply struct for recieving data from kernel.
 func (rr *NetlinkMessage) ToWireFormat() []byte {
 	b := make([]byte, rr.Header.Len)
 	*(*uint32)(unsafe.Pointer(&b[0:4][0])) = rr.Header.Len
@@ -212,8 +223,8 @@ done:
 	return nil
 }
 
-// AuditSetEnabled enables or disables audit in kernel
-// `enabled` should be 1 for enabling and 0 for disabling
+// AuditSetEnabled enables or disables audit in kernel.
+// Provide `enabled` as 1 for enabling and 0 for disabling.
 func AuditSetEnabled(s *NetlinkConnection, enabled int) error {
 	var (
 		status auditStatus
@@ -242,7 +253,7 @@ func AuditSetEnabled(s *NetlinkConnection, enabled int) error {
 	return nil
 }
 
-// AuditIsEnabled returns 0 if auditing is NOT enabled and
+// AuditIsEnabled returns 0 if audit is not enabled and
 // 1 if enabled, and -1 on failure.
 func AuditIsEnabled(s *NetlinkConnection) (state int, err error) {
 	var status auditStatus
