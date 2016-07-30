@@ -777,51 +777,55 @@ func auditUpdateWatchPerms(rule *auditRuleData, perms int) error {
 	return nil
 }
 
-// ListAllRules lists all audit rules currently loaded in audit kernel
-// and displays them in the standard auditd format as done by auditctl utility
-func ListAllRules(s *NetlinkConnection) error {
+// ListAllRules lists all audit rules currently loaded in audit kernel.
+// It displays them in the standard auditd format as done by auditctl utility.
+// It also returns a list of strings that contain the audit rules (in auditctl format)
+func ListAllRules(s *NetlinkConnection) ([]string, error) {
 	var ruleArray []*auditRuleData
+	var result []string
 	wb := newNetlinkAuditRequest(uint16(AUDIT_LIST_RULES), syscall.AF_NETLINK, 0)
 	if err := s.Send(wb); err != nil {
-		return errors.Wrap(err, "ListAllRules failed")
+		return nil, errors.Wrap(err, "ListAllRules failed")
 	}
 done:
 	for {
 		msgs, err := s.Receive(MAX_AUDIT_MESSAGE_LENGTH, 0)
 		if err != nil {
-			return errors.Wrap(err, "ListAllRules failed")
+			return nil, errors.Wrap(err, "ListAllRules failed")
 		}
 
 		for _, m := range msgs {
 
 			address, err := syscall.Getsockname(s.fd)
 			if err != nil {
-				return errors.Wrap(err, "ListAllRules failed: Getsockname failed")
+				return nil, errors.Wrap(err, "ListAllRules failed: Getsockname failed")
 			}
 			switch v := address.(type) {
 			case *syscall.SockaddrNetlink:
 				if m.Header.Seq != wb.Header.Seq {
-					return fmt.Errorf("ListAllRules: Wrong Seq nr %d, expected %d", m.Header.Seq, wb.Header.Seq)
+					return nil, fmt.Errorf("ListAllRules: Wrong Seq nr %d, expected %d", m.Header.Seq, wb.Header.Seq)
 				}
 				if m.Header.Pid != v.Pid {
-					return fmt.Errorf("ListAllRules: Wrong pid %d, expected %d", m.Header.Pid, v.Pid)
+					return nil, fmt.Errorf("ListAllRules: Wrong pid %d, expected %d", m.Header.Pid, v.Pid)
 				}
 			default:
-				return fmt.Errorf("ListAllRules: socket type unexpected")
+				return nil, fmt.Errorf("ListAllRules: socket type unexpected")
 			}
 
 			if m.Header.Type == syscall.NLMSG_DONE {
-				var result string
+				var out string
 				for _, r := range ruleArray {
-					result += printRule(r)
+					printed := printRule(r)
+					result = append(result, printed)
+					out += (printed + "\n")
 				}
-				fmt.Print(result)
+				fmt.Print(out)
 				break done
 			}
 			if m.Header.Type == syscall.NLMSG_ERROR {
 				e := int32(nativeEndian().Uint32(m.Data[0:4]))
 				if e != 0 {
-					return fmt.Errorf("ListAllRules: error while receiving rules")
+					return nil, fmt.Errorf("ListAllRules: error while receiving rules")
 				}
 			}
 			if m.Header.Type == uint16(AUDIT_LIST_RULES) {
@@ -829,13 +833,13 @@ done:
 				nbuf := bytes.NewBuffer(m.Data)
 				err = struc.Unpack(nbuf, &r)
 				if err != nil {
-					return errors.Wrap(err, "ListAllRules failed")
+					return nil, errors.Wrap(err, "ListAllRules failed")
 				}
 				ruleArray = append(ruleArray, &r)
 			}
 		}
 	}
-	return nil
+	return result, nil
 }
 
 //AuditSyscallToName takes syscall number and returns the syscall name. Applicable only for x64 arch.
@@ -992,7 +996,7 @@ func printRule(rule *auditRuleData) string {
 		}
 
 	}
-	result += "\n"
+	// result += "\n"
 	return result
 }
 
