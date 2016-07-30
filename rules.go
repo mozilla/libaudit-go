@@ -906,7 +906,7 @@ done:
 	return result, nil
 }
 
-//AuditSyscallToName takes syscall number and returns the syscall name. Currenlt applicable only for x64 arch.
+//AuditSyscallToName takes syscall number and returns the syscall name. Currently only applicable for x64 arch.
 func AuditSyscallToName(syscall string) (name string, err error) {
 	syscallMap := reverseMap(headers.SysMapX64)
 	sysNum, err := strconv.Atoi(syscall)

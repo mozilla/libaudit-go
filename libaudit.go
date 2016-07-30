@@ -1,5 +1,5 @@
 /*
-Package libaudit is client library in pure Go for talking with audit framework in the linux kernel.
+Package libaudit is a client library in pure Go for talking with audit framework in the linux kernel.
 It provides API for dealing with audit related tasks like setting audit rules, deleting audit rules etc.
 The idea is to provide the same set of API as auditd (linux audit daemon).
 

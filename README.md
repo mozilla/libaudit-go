@@ -230,43 +230,24 @@ err = libaudit.SetRules(s, content)
 Delete all audit rules.
 
 ```
-func func DeleteAllRules(s *NetlinkConnection) error
+func DeleteAllRules(s *NetlinkConnection) error
 ```
 Example:
 
-```
+```golang
 err := DeleteAllRules(s)
 ```
 
-##### AuditDeleteRuleData
 
-Delete audit rule
+##### ListAllRules
 
-```
-func AuditDeleteRuleData(s *NetlinkConnection, rule *AuditRuleData, flags uint32, action uint32) error
-```
-
-This funciton is used to delete rules that are currently loaded in the kernel. To delete a rule, you must set up the rules identical to the one being deleted. 
+ListAllRules lists all audit rules currently loaded in audit kernel in the same format as shown by auditctl utility.
 
 ```
-TODO - Add an example
+func ListAllRules(s *NetlinkConnection) ([]string, error)
 ```
-
-##### AuditAddRuleData
-
-Add new audit rule
-
-```
-func AuditAddRuleData(s *NetlinkConnection, rule *AuditRuleData, flags int, action int) error
-```
-
 Example:
+
+```golang
+	rulesArray, err := libaudit.ListAllRules(s)
 ```
-TODO - Add an example
-```
-
-
-##### AuditListAllRules
-
-Not yet implemented
-
