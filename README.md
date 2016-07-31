@@ -3,7 +3,7 @@ Golang package (lib) for Linux Audit
 
 Libaudit-go is a pure Go client library for dealing directly with linux audit framework.
 The idea is provide a replacement to the existing auditd daemon and its libraries.
-Originally developed for [Audit Go Heka Pluigin](https://github.com/mozilla/audit-go)
+Originally developed for [Audit Go Heka Plugin](https://github.com/mozilla/audit-go)
 
 To get started see package documentation at [godoc](https://godoc.org/github.com/mozilla/libaudit-go).
 
