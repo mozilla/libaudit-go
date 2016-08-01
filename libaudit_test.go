@@ -127,7 +127,7 @@ func TestSetters(t *testing.T) {
 	cmd.Stdout = cmdOutput
 
 	if err := cmd.Run(); err != nil {
-		t.Errorf("auditctl execution failed")
+		t.Skipf("auditctl execution failed %v, skipping test", err)
 	}
 	var (
 		enabled      string
