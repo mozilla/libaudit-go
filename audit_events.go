@@ -48,6 +48,9 @@ func NewAuditEvent(msg NetlinkMessage) (*AuditEvent, error) {
 // GetAuditEvents receives audit messages from the kernel and parses them to AuditEvent struct.
 // It passes them along the callback function and the error channel is used to indicate any error that happens while
 // receiving the message. Code that receives the message runs inside a go-routine.
+// Please note that error channel is not a buffered one and client should provide a routine on their side that continously
+// empties it, otherwise the call will be blocked for eg at : ec <- fmt.Errorf("error receiving events -%d", err)
+// and the message recpetion will be blocked
 func GetAuditEvents(s *NetlinkConnection, cb EventCallback, ec chan error, args ...interface{}) {
 	go func() {
 		for {
@@ -76,6 +79,9 @@ func GetAuditEvents(s *NetlinkConnection, cb EventCallback, ec chan error, args 
 // GetRawAuditEvents receives raw audit messages from kernel parses them to AuditEvent struct.
 // It passes them along the raw callback function and error channel is to indicate any error that happens while
 // receiving the message. Code that receives the message runs inside a go-routine.
+// Please note that error channel is not a buffered one and client should provide a routine on their side that continously
+// empties it, otherwise the call will be blocked for eg at : ec <- fmt.Errorf("error receiving events -%d", err)
+// and the message recpetion will be blocked
 func GetRawAuditEvents(s *NetlinkConnection, cb RawEventCallback, ec chan error, args ...interface{}) {
 	go func() {
 		for {
@@ -109,6 +115,9 @@ func GetRawAuditEvents(s *NetlinkConnection, cb RawEventCallback, ec chan error,
 // It passes them along the callback cb and the error channel is used to indicate any error
 // that happens while receiving the message.
 // It will return when a signal is received on the done channel.
+// Please note that error channel is not a buffered one and client should provide a routine on their side that continously
+// empties it, otherwise the call will be blocked for eg. at : ec <- fmt.Errorf("error receiving events -%d", err)
+// and the message recpetion will be blocked
 func GetAuditMessages(s *NetlinkConnection, cb EventCallback, ec *chan error, done *chan bool, args ...interface{}) {
 	for {
 		select {

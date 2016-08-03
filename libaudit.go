@@ -86,7 +86,7 @@ func parseAuditNetlinkMessage(b []byte) ([]NetlinkMessage, error) {
 		if err != nil {
 			return nil, errors.Wrap(err, "error while parsing NetlinkMessage")
 		}
-		if len(dbuf) == int(h.Len) {
+		if len(dbuf) == int(h.Len) || dlen == int(h.Len) {
 			// this should never be possible in correct scenarios
 			// but sometimes kernel reponse have length of header == length of data appended
 			// which would lead to trimming of data if we subtract NLMSG_HDRLEN
@@ -127,7 +127,7 @@ func NewNetlinkConnection() (*NetlinkConnection, error) {
 
 	// Check for root user
 	if os.Getuid() != 0 {
-		return nil, fmt.Errorf("not root user, exiting")
+		return nil, fmt.Errorf("not root user")
 	}
 
 	fd, err := syscall.Socket(syscall.AF_NETLINK, syscall.SOCK_RAW, syscall.NETLINK_AUDIT)
@@ -239,7 +239,7 @@ func AuditSetEnabled(s *NetlinkConnection, enabled int) error {
 	}
 
 	wb := newNetlinkAuditRequest(uint16(AUDIT_SET), syscall.AF_NETLINK, int(unsafe.Sizeof(status)))
-	wb.Data = append(wb.Data[:], buff.Bytes()[:]...)
+	wb.Data = append(wb.Data, buff.Bytes()[:]...)
 	if err := s.Send(wb); err != nil {
 		return errors.Wrap(err, "AuditSetEnabled failed")
 	}
@@ -330,7 +330,7 @@ func AuditSetPID(s *NetlinkConnection, pid int) error {
 	}
 
 	wb := newNetlinkAuditRequest(uint16(AUDIT_SET), syscall.AF_NETLINK, int(unsafe.Sizeof(status)))
-	wb.Data = append(wb.Data[:], buff.Bytes()[:]...)
+	wb.Data = append(wb.Data, buff.Bytes()[:]...)
 	if err := s.Send(wb); err != nil {
 		return errors.Wrap(err, "AuditSetPID failed")
 	}
@@ -354,14 +354,14 @@ func AuditSetRateLimit(s *NetlinkConnection, limit int) error {
 	}
 
 	wb := newNetlinkAuditRequest(uint16(AUDIT_SET), syscall.AF_NETLINK, int(unsafe.Sizeof(status)))
-	wb.Data = append(wb.Data[:], buff.Bytes()[:]...)
+	wb.Data = append(wb.Data, buff.Bytes()[:]...)
 	if err := s.Send(wb); err != nil {
 		return errors.Wrap(err, "AuditSetRateLimit failed")
 	}
 
 	err = auditGetReply(s, syscall.Getpagesize(), 0, wb.Header.Seq)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "AuditSetRateLimit failed")
 	}
 	return nil
 
@@ -379,7 +379,7 @@ func AuditSetBacklogLimit(s *NetlinkConnection, limit int) error {
 	}
 
 	wb := newNetlinkAuditRequest(uint16(AUDIT_SET), syscall.AF_NETLINK, int(unsafe.Sizeof(status)))
-	wb.Data = append(wb.Data[:], buff.Bytes()[:]...)
+	wb.Data = append(wb.Data, buff.Bytes()[:]...)
 	if err := s.Send(wb); err != nil {
 		return errors.Wrap(err, "AuditSetBacklogLimit failed")
 	}

@@ -63,7 +63,7 @@ func auditDeleteRuleData(s *NetlinkConnection, rule *auditRuleData, flags uint32
 	// avoiding standard method of unwrapping the struct due to restriction on byte array in auditRuleData
 	// i.e. binary.Write(buff, nativeEndian(), *rule)
 	newwb := newNetlinkAuditRequest(uint16(AUDIT_DEL_RULE), syscall.AF_NETLINK, len(newbuff) /*+int(rule.Buflen)*/)
-	newwb.Data = append(newwb.Data[:], newbuff[:]...)
+	newwb.Data = append(newwb.Data, newbuff[:]...)
 	if err := s.Send(newwb); err != nil {
 		return errors.Wrap(err, "auditDeleteRuleData failed")
 	}
@@ -119,7 +119,7 @@ done:
 				// rules := (*auditRuleData)(unsafe.Pointer(&b[0]))
 
 				newwb := newNetlinkAuditRequest(uint16(AUDIT_DEL_RULE), syscall.AF_NETLINK, len(b) /*+int(rule.Buflen)*/)
-				newwb.Data = append(newwb.Data[:], b[:]...)
+				newwb.Data = append(newwb.Data, b[:]...)
 				if err := s.Send(newwb); err != nil {
 					return errors.Wrap(err, "DeleteAllRules failed")
 				}
@@ -451,7 +451,7 @@ func auditAddRuleData(s *NetlinkConnection, rule *auditRuleData, flags int, acti
 	// buff := new(bytes.Buffer), binary.Write(buff, nativeEndian(), *rule)
 
 	newwb := newNetlinkAuditRequest(uint16(AUDIT_ADD_RULE), syscall.AF_NETLINK, len(newbuff))
-	newwb.Data = append(newwb.Data[:], newbuff[:]...)
+	newwb.Data = append(newwb.Data, newbuff[:]...)
 	var err error
 	if err = s.Send(newwb); err != nil {
 		return errors.Wrap(err, "auditAddRuleData failed")
