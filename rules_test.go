@@ -1,6 +1,9 @@
 package libaudit
 
-import "testing"
+import (
+	"os"
+	"testing"
+)
 
 var jsonRules = `
 {
@@ -117,6 +120,9 @@ var expectedRules = []string{
 }
 
 func TestSetRules(t *testing.T) {
+	if os.Getuid() != 0 {
+		t.Skipf("skipping rules test: not root user")
+	}
 	s, err := NewNetlinkConnection()
 	if err != nil {
 		t.Errorf("failed to avail netlink connection %v", err)

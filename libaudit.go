@@ -40,8 +40,20 @@ type auditStatus struct {
 	BacklogWaitTime uint32 /* message queue wait timeout */
 }
 
+//Netlink is used for specifying the netlink connection types
+type Netlink interface {
+	Send(request *NetlinkMessage) error
+	// Receive requires bytesize which specify the buffer size for incoming message and block which specify the mode for
+	// reception (blocking and nonblocking)
+	Receive(bytesize int, block int) ([]NetlinkMessage, error)
+	// GetPID returns the PID of the program the socket is being used to talk to
+	// in our case we talk to the kernel so it is set to 0
+	GetPID() (int, error)
+}
+
 // NetlinkConnection holds the file descriptor and address for
 // an opened netlink connection
+// It implements the Netlink interface
 type NetlinkConnection struct {
 	fd      int
 	address syscall.SockaddrNetlink
@@ -176,8 +188,18 @@ func (s *NetlinkConnection) Receive(bytesize int, block int) ([]NetlinkMessage, 
 	return parseAuditNetlinkMessage(rb)
 }
 
+// GetPID returns the PID of the program socket is configured to talk to
+func (s *NetlinkConnection) GetPID() (int, error) {
+	address, err := syscall.Getsockname(s.fd)
+	if err != nil {
+		return 0, errors.Wrap(err, "Getsockname failed")
+	}
+	v := address.(*syscall.SockaddrNetlink)
+	return int(v.Pid), nil
+}
+
 // auditGetReply connects to kernel to recieve a reply
-func auditGetReply(s *NetlinkConnection, bytesize, block int, seq uint32) error {
+func auditGetReply(s Netlink, bytesize, block int, seq uint32) error {
 done:
 	for {
 		msgs, err := s.Receive(bytesize, block) //parseAuditNetlinkMessage(rb)
@@ -185,23 +207,16 @@ done:
 			return errors.Wrap(err, "auditGetReply failed")
 		}
 		for _, m := range msgs {
-			address, err := syscall.Getsockname(s.fd)
+			socketPID, err := s.GetPID()
 			if err != nil {
-				return errors.Wrap(err, "auditGetReply: Getsockname failed")
+				return errors.Wrap(err, "auditGetReply: GetPID failed")
 			}
-			switch v := address.(type) {
-			case *syscall.SockaddrNetlink:
-
-				if m.Header.Seq != seq {
-					return fmt.Errorf("auditGetReply: Wrong Seq nr %d, expected %d", m.Header.Seq, seq)
-				}
-				if m.Header.Pid != v.Pid {
-					return fmt.Errorf("auditGetReply: Wrong pid %d, expected %d", m.Header.Pid, v.Pid)
-				}
-			default:
-				return errors.Wrap(syscall.EINVAL, "auditGetReply: socket type unexpected")
+			if m.Header.Seq != seq {
+				return fmt.Errorf("auditGetReply: Wrong Seq nr %d, expected %d", m.Header.Seq, seq)
 			}
-
+			if int(m.Header.Pid) != socketPID {
+				return fmt.Errorf("auditGetReply: Wrong pid %d, expected %d", m.Header.Pid, socketPID)
+			}
 			if m.Header.Type == syscall.NLMSG_DONE {
 				break done
 			}
@@ -224,7 +239,7 @@ done:
 
 // AuditSetEnabled enables or disables audit in kernel.
 // Provide `enabled` as 1 for enabling and 0 for disabling.
-func AuditSetEnabled(s *NetlinkConnection, enabled int) error {
+func AuditSetEnabled(s Netlink, enabled int) error {
 	var (
 		status auditStatus
 		err    error
@@ -254,7 +269,7 @@ func AuditSetEnabled(s *NetlinkConnection, enabled int) error {
 
 // AuditIsEnabled returns 0 if audit is not enabled and
 // 1 if enabled, and -1 on failure.
-func AuditIsEnabled(s *NetlinkConnection) (state int, err error) {
+func AuditIsEnabled(s Netlink) (state int, err error) {
 	var status auditStatus
 
 	wb := newNetlinkAuditRequest(uint16(AUDIT_GET), syscall.AF_NETLINK, 0)
@@ -272,25 +287,17 @@ done:
 		}
 
 		for _, m := range msgs {
-			address, err := syscall.Getsockname(s.fd)
+			socketPID, err := s.GetPID()
 			if err != nil {
-				return -1, errors.Wrap(err, "AuditIsEnabled: Getsockname failed")
+				return -1, errors.Wrap(err, "AuditIsEnabled: GetPID failed")
 			}
+			if m.Header.Seq != uint32(wb.Header.Seq) {
 
-			switch v := address.(type) {
-			case *syscall.SockaddrNetlink:
-				if m.Header.Seq != uint32(wb.Header.Seq) {
-
-					return -1, fmt.Errorf("AuditIsEnabled: Wrong Seq nr %d, expected %d", m.Header.Seq, wb.Header.Seq)
-				}
-				if m.Header.Pid != v.Pid {
-					return -1, fmt.Errorf("AuditIsEnabled: Wrong PID %d, expected %d", m.Header.Pid, v.Pid)
-				}
-
-			default:
-				return -1, errors.Wrap(syscall.EINVAL, "AuditIsEnabled: socket type unexpected")
+				return -1, fmt.Errorf("AuditIsEnabled: Wrong Seq nr %d, expected %d", m.Header.Seq, wb.Header.Seq)
 			}
-
+			if int(m.Header.Pid) != socketPID {
+				return -1, fmt.Errorf("AuditIsEnabled: Wrong PID %d, expected %d", m.Header.Pid, socketPID)
+			}
 			if m.Header.Type == syscall.NLMSG_DONE {
 				break done
 			} else if m.Header.Type == syscall.NLMSG_ERROR {
@@ -319,7 +326,7 @@ done:
 }
 
 // AuditSetPID sends a message to kernel for setting of program PID
-func AuditSetPID(s *NetlinkConnection, pid int) error {
+func AuditSetPID(s Netlink, pid int) error {
 	var status auditStatus
 	status.Mask = AUDIT_STATUS_PID
 	status.Pid = (uint32)(pid)
@@ -343,7 +350,7 @@ func AuditSetPID(s *NetlinkConnection, pid int) error {
 }
 
 // AuditSetRateLimit sets rate limit for audit messages from kernel
-func AuditSetRateLimit(s *NetlinkConnection, limit int) error {
+func AuditSetRateLimit(s Netlink, limit int) error {
 	var status auditStatus
 	status.Mask = AUDIT_STATUS_RATE_LIMIT
 	status.RateLimit = (uint32)(limit)
@@ -368,7 +375,7 @@ func AuditSetRateLimit(s *NetlinkConnection, limit int) error {
 }
 
 // AuditSetBacklogLimit sets backlog limit for audit messages from kernel
-func AuditSetBacklogLimit(s *NetlinkConnection, limit int) error {
+func AuditSetBacklogLimit(s Netlink, limit int) error {
 	var status auditStatus
 	status.Mask = AUDIT_STATUS_BACKLOG_LIMIT
 	status.BacklogLimit = (uint32)(limit)

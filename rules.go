@@ -52,7 +52,7 @@ func (rule *auditRuleData) toWireFormat() []byte {
 }
 
 // auditDeleteRuleData deletes a rule from audit in kernel
-func auditDeleteRuleData(s *NetlinkConnection, rule *auditRuleData, flags uint32, action uint32) error {
+func auditDeleteRuleData(s Netlink, rule *auditRuleData, flags uint32, action uint32) error {
 	if flags == AUDIT_FILTER_ENTRY {
 		return errors.Wrap(errEntryDep, "auditDeleteRuleData failed")
 	}
@@ -71,7 +71,7 @@ func auditDeleteRuleData(s *NetlinkConnection, rule *auditRuleData, flags uint32
 }
 
 // DeleteAllRules deletes all previous audit rules listed in the kernel
-func DeleteAllRules(s *NetlinkConnection) error {
+func DeleteAllRules(s Netlink) error {
 	wb := newNetlinkAuditRequest(uint16(AUDIT_LIST_RULES), syscall.AF_NETLINK, 0)
 	if err := s.Send(wb); err != nil {
 		return errors.Wrap(err, "DeleteAllRules failed")
@@ -87,22 +87,16 @@ done:
 		}
 
 		for _, m := range msgs {
-			address, err := syscall.Getsockname(s.fd)
+			socketPID, err := s.GetPID()
 			if err != nil {
-				return errors.Wrap(err, "DeleteAllRules: Getsockname failed")
+				return errors.Wrap(err, "DeleteAllRules: GetPID failed")
 			}
-			switch v := address.(type) {
-			case *syscall.SockaddrNetlink:
-				if m.Header.Seq != uint32(wb.Header.Seq) {
-					return fmt.Errorf("DeleteAllRules: Wrong Seq nr %d, expected %d", m.Header.Seq, wb.Header.Seq)
-				}
-				if m.Header.Pid != v.Pid {
-					return fmt.Errorf("DeleteAllRules: Wrong PID %d, expected %d", m.Header.Pid, v.Pid)
-				}
-			default:
-				return errors.Wrap(syscall.EINVAL, "DeleteAllRules: socket type unexpected")
+			if m.Header.Seq != uint32(wb.Header.Seq) {
+				return fmt.Errorf("DeleteAllRules: Wrong Seq nr %d, expected %d", m.Header.Seq, wb.Header.Seq)
 			}
-
+			if int(m.Header.Pid) != socketPID {
+				return fmt.Errorf("DeleteAllRules: Wrong PID %d, expected %d", m.Header.Pid, socketPID)
+			}
 			if m.Header.Type == syscall.NLMSG_DONE {
 				break done
 			}
@@ -437,7 +431,7 @@ func setActionAndFilters(actions []interface{}) (int, int) {
 }
 
 //auditAddRuleData sends the prepared auditRuleData struct via the netlink connection to kernel
-func auditAddRuleData(s *NetlinkConnection, rule *auditRuleData, flags int, action int) error {
+func auditAddRuleData(s Netlink, rule *auditRuleData, flags int, action int) error {
 
 	if flags == AUDIT_FILTER_ENTRY {
 		return errors.Wrap(errEntryDep, "auditAddRuleData failed")
@@ -524,7 +518,7 @@ It expects the config in a json formatted string of following format:
 	]
 }
 */
-func SetRules(s *NetlinkConnection, content []byte) error {
+func SetRules(s Netlink, content []byte) error {
 	var (
 		rules interface{}
 		err   error
@@ -844,7 +838,7 @@ func auditUpdateWatchPerms(rule *auditRuleData, perms int) error {
 // ListAllRules lists all audit rules currently loaded in audit kernel.
 // It displays them in the standard auditd format as done by auditctl utility.
 // It also returns a list of strings that contain the audit rules (in auditctl format)
-func ListAllRules(s *NetlinkConnection) ([]string, error) {
+func ListAllRules(s Netlink) ([]string, error) {
 	var ruleArray []*auditRuleData
 	var result []string
 	wb := newNetlinkAuditRequest(uint16(AUDIT_LIST_RULES), syscall.AF_NETLINK, 0)
@@ -859,23 +853,16 @@ done:
 		}
 
 		for _, m := range msgs {
-
-			address, err := syscall.Getsockname(s.fd)
+			socketPID, err := s.GetPID()
 			if err != nil {
-				return nil, errors.Wrap(err, "ListAllRules failed: Getsockname failed")
+				return nil, errors.Wrap(err, "ListAllRules: GetPID failed")
 			}
-			switch v := address.(type) {
-			case *syscall.SockaddrNetlink:
-				if m.Header.Seq != wb.Header.Seq {
-					return nil, fmt.Errorf("ListAllRules: Wrong Seq nr %d, expected %d", m.Header.Seq, wb.Header.Seq)
-				}
-				if m.Header.Pid != v.Pid {
-					return nil, fmt.Errorf("ListAllRules: Wrong pid %d, expected %d", m.Header.Pid, v.Pid)
-				}
-			default:
-				return nil, fmt.Errorf("ListAllRules: socket type unexpected")
+			if m.Header.Seq != wb.Header.Seq {
+				return nil, fmt.Errorf("ListAllRules: Wrong Seq nr %d, expected %d", m.Header.Seq, wb.Header.Seq)
 			}
-
+			if int(m.Header.Pid) != socketPID {
+				return nil, fmt.Errorf("ListAllRules: Wrong pid %d, expected %d", m.Header.Pid, socketPID)
+			}
 			if m.Header.Type == syscall.NLMSG_DONE {
 				var out string
 				for _, r := range ruleArray {
