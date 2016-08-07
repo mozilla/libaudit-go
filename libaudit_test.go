@@ -52,46 +52,9 @@ func TestNetlinkConnection(t *testing.T) {
 	if err = s.Send(wb); err != nil {
 		t.Errorf("TestNetlinkConnection: sending failed %v", err)
 	}
-done:
-	for {
-		msgs, err := s.Receive(MAX_AUDIT_MESSAGE_LENGTH, 0)
-		if err != nil {
-			t.Errorf("TestNetlinkConnection: recv failed %v", err)
-		}
-
-		for _, m := range msgs {
-			address, err := syscall.Getsockname(s.fd)
-			if err != nil {
-				t.Errorf("TestNetlinkConnection: unable to get sockname %v", err)
-			}
-
-			switch v := address.(type) {
-			case *syscall.SockaddrNetlink:
-				if m.Header.Seq != uint32(wb.Header.Seq) {
-					t.Errorf("TestNetlinkConnection: Wrong Seq nr %d, expected %d", m.Header.Seq, wb.Header.Seq)
-				}
-				if m.Header.Pid != v.Pid {
-					t.Errorf("TestNetlinkConnection: Wrong PID %d, expected %d", m.Header.Pid, v.Pid)
-				}
-
-			default:
-				t.Errorf("TestNetlinkConnection: socket type unexpected")
-			}
-
-			if m.Header.Type == syscall.NLMSG_DONE {
-				break done
-			} else if m.Header.Type == syscall.NLMSG_ERROR {
-				e := int32(nativeEndian().Uint32(m.Data[0:4]))
-				if e == 0 {
-					// request ack from kernel
-					continue
-				}
-				break done
-			}
-			if m.Header.Type == uint16(AUDIT_GET) {
-				break done
-			}
-		}
+	err = auditGetReply(s, MAX_AUDIT_MESSAGE_LENGTH, 0, wb.Header.Seq)
+	if err != nil {
+		t.Errorf("TestNetlinkConnection: test failed %v", err)
 	}
 }
 
@@ -101,6 +64,7 @@ type testNetlinkConn struct {
 }
 
 func (t *testNetlinkConn) Send(request *NetlinkMessage) error {
+	// save the incoming message
 	t.actualNetlinkMessage = *request
 	return nil
 }
@@ -117,96 +81,105 @@ func (t *testNetlinkConn) GetPID() (int, error) {
 	return 0, nil
 }
 
+func testSettersEmulated(t *testing.T) {
+	// try testing with emulated socket
+	var (
+		n             testNetlinkConn
+		err           error
+		actualStatus  = 1
+		actualPID     = 8096 //for emulation we use a dummy PID
+		actualRate    = 500
+		actualBackLog = 500
+	)
+	err = AuditSetEnabled(&n, actualStatus)
+	if err != nil {
+		t.Errorf("AuditSetEnabled failed %v", err)
+	}
+	// we are doing the same steps as AuditSetEnabled for preparing netlinkMessage
+	// so this isn't much testing
+	// var x auditStatus
+	// x.Enabled = (uint32)(actualStatus)
+	// x.Mask = AUDIT_STATUS_ENABLED
+	// buff := new(bytes.Buffer)
+	// err = binary.Write(buff, nativeEndian(), x)
+	// if err != nil {
+	// 	t.Errorf("text execution failed: binary write from auditStatus failed")
+	// }
+	// wb := newNetlinkAuditRequest(uint16(AUDIT_SET), syscall.AF_NETLINK, int(unsafe.Sizeof(x)))
+	// wb.Data = append(wb.Data, buff.Bytes()[:]...)
+	// or we can just use the direct repr of the above created result
+	var expected = NetlinkMessage{
+		Header: syscall.NlMsghdr{
+			Len:   56,
+			Type:  1001,
+			Flags: 5,
+			Seq:   1,
+			Pid:   0},
+		Data: []byte{1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+	}
+	if !reflect.DeepEqual(expected, n.actualNetlinkMessage) {
+		t.Errorf("text execution failed: expected status message %v, found status message %v", expected, n.actualNetlinkMessage)
+	}
+	expected = NetlinkMessage{
+		Header: syscall.NlMsghdr{
+			Len:   56,
+			Type:  1001,
+			Flags: 5,
+			Seq:   3,
+			Pid:   0},
+		Data: []byte{8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 244, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+	}
+	err = AuditSetRateLimit(&n, actualRate)
+	if err != nil {
+		t.Errorf("AuditSetRateLimit failed %v", err)
+	}
+	if !reflect.DeepEqual(expected, n.actualNetlinkMessage) {
+		t.Errorf("text execution failed: expected rate message %v, found rate message %v", expected, n.actualNetlinkMessage)
+	}
+	expected = NetlinkMessage{
+		Header: syscall.NlMsghdr{
+			Len:   56,
+			Type:  1001,
+			Flags: 5,
+			Seq:   5,
+			Pid:   0},
+		Data: []byte{16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 244, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+	}
+	err = AuditSetBacklogLimit(&n, actualBackLog)
+	if err != nil {
+		t.Errorf("AuditSetBacklogLimit failed %v", err)
+	}
+	if !reflect.DeepEqual(expected, n.actualNetlinkMessage) {
+		t.Errorf("text execution failed: expected backlog message %v, found backlog message %v", expected, n.actualNetlinkMessage)
+	}
+	expected = NetlinkMessage{
+		Header: syscall.NlMsghdr{
+			Len:   56,
+			Type:  1001,
+			Flags: 5,
+			Seq:   7,
+			Pid:   0},
+		Data: []byte{4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 160, 31, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+	}
+	err = AuditSetPID(&n, actualPID)
+	if err != nil {
+		t.Errorf("AuditSetPID failed %v", err)
+	}
+	if !reflect.DeepEqual(expected, n.actualNetlinkMessage) {
+		t.Errorf("text execution failed: expected backlog message %v, found backlog message %v", expected, n.actualNetlinkMessage)
+	}
+}
 func TestSetters(t *testing.T) {
 	var (
 		s             *NetlinkConnection
 		err           error
 		actualStatus  = 1
-		actualPID     = 8096
+		actualPID     = os.Getpid()
 		actualRate    = 500
 		actualBackLog = 500
 	)
 	if os.Getuid() != 0 {
-		// try testing with emulated socket
-		var n testNetlinkConn
-		err = AuditSetEnabled(&n, actualStatus)
-		if err != nil {
-			t.Errorf("AuditSetEnabled failed %v", err)
-		}
-		// we are doing the same steps as AuditSetEnabled for preparing netlinkMessage
-		// so this isn't much testing
-		// var x auditStatus
-		// x.Enabled = (uint32)(actualStatus)
-		// x.Mask = AUDIT_STATUS_ENABLED
-		// buff := new(bytes.Buffer)
-		// err = binary.Write(buff, nativeEndian(), x)
-		// if err != nil {
-		// 	t.Errorf("text execution failed: binary write from auditStatus failed")
-		// }
-		// wb := newNetlinkAuditRequest(uint16(AUDIT_SET), syscall.AF_NETLINK, int(unsafe.Sizeof(x)))
-		// wb.Data = append(wb.Data, buff.Bytes()[:]...)
-		// or we can just use the direct repr of the above created result
-		var expected = NetlinkMessage{
-			Header: syscall.NlMsghdr{
-				Len:   56,
-				Type:  1001,
-				Flags: 5,
-				Seq:   1,
-				Pid:   0},
-			Data: []byte{1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-		}
-		if !reflect.DeepEqual(expected, n.actualNetlinkMessage) {
-			t.Errorf("text execution failed: expected status message %v, found status message %v", expected, n.actualNetlinkMessage)
-		}
-		expected = NetlinkMessage{
-			Header: syscall.NlMsghdr{
-				Len:   56,
-				Type:  1001,
-				Flags: 5,
-				Seq:   3,
-				Pid:   0},
-			Data: []byte{8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 244, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-		}
-		err = AuditSetRateLimit(&n, actualRate)
-		if err != nil {
-			t.Errorf("AuditSetRateLimit failed %v", err)
-		}
-		if !reflect.DeepEqual(expected, n.actualNetlinkMessage) {
-			t.Errorf("text execution failed: expected rate message %v, found rate message %v", expected, n.actualNetlinkMessage)
-		}
-		expected = NetlinkMessage{
-			Header: syscall.NlMsghdr{
-				Len:   56,
-				Type:  1001,
-				Flags: 5,
-				Seq:   5,
-				Pid:   0},
-			Data: []byte{16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 244, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-		}
-		err = AuditSetBacklogLimit(&n, actualBackLog)
-		if err != nil {
-			t.Errorf("AuditSetBacklogLimit failed %v", err)
-		}
-		if !reflect.DeepEqual(expected, n.actualNetlinkMessage) {
-			t.Errorf("text execution failed: expected backlog message %v, found backlog message %v", expected, n.actualNetlinkMessage)
-		}
-		expected = NetlinkMessage{
-			Header: syscall.NlMsghdr{
-				Len:   56,
-				Type:  1001,
-				Flags: 5,
-				Seq:   7,
-				Pid:   0},
-			Data: []byte{4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 160, 31, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-		}
-		err = AuditSetPID(&n, actualPID)
-		if err != nil {
-			t.Errorf("AuditSetPID failed %v", err)
-		}
-		if !reflect.DeepEqual(expected, n.actualNetlinkMessage) {
-			t.Errorf("text execution failed: expected backlog message %v, found backlog message %v", expected, n.actualNetlinkMessage)
-		}
-
+		testSettersEmulated(t)
 		t.Skipf("skipping netlink socket based tests: not root user")
 	}
 	s, err = NewNetlinkConnection()
@@ -223,8 +196,6 @@ func TestSetters(t *testing.T) {
 	if err != nil {
 		t.Errorf("AuditSetBacklogLimit failed %v", err)
 	}
-	// we reset the actualPID from the dummy one
-	actualPID = os.Getpid()
 
 	err = AuditSetPID(s, actualPID)
 	if err != nil {
