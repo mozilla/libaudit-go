@@ -346,8 +346,11 @@ const (
 	AUDIT_FIRST_KERN_CRYPTO_MSG auditConstant = 1600
 	AUDIT_LAST_KERN_CRYPTO_MSG  auditConstant = 1699
 
-	AUDIT_FIRST_KERN_ANOM_MSG auditConstant = 1700
-	AUDIT_LAST_KERN_ANOM_MSG  auditConstant = 1799
+	// AUDIT_FIRST_KERN_ANOM_MSG auditConstant = 1700
+	AUDIT_LAST_KERN_ANOM_MSG auditConstant = 1799
+	AUDIT_ANOM_PROMISCUOUS   auditConstant = 1700 /* Device changed promiscuous mode */
+	AUDIT_ANOM_ABEND         auditConstant = 1701 /* Process ended abnormally */
+	AUDIT_ANOM_LINK          auditConstant = 1702 /* Suspicious use of file links */
 
 	AUDIT_INTEGRITY_FIRST_MSG auditConstant = 1800
 	AUDIT_TINTEGRITY_LAST_MSG auditConstant = 1899
@@ -358,27 +361,28 @@ const (
 	AUDIT_INTEGRITY_HASH     auditConstant = 1803 /* integrity HASH type */
 	AUDIT_INTEGRITY_PCR      auditConstant = 1804 /* PCR invalidation msgs */
 	AUDIT_INTEGRITY_RULE     auditConstant = 1805 /* Policy rule */
+	AUDIT_KERNEL             auditConstant = 2000 /* Asynchronous audit record. NOT A REQUEST. */
 
-	AUDIT_FIRST_ANOM_MSG         auditConstant = 2100
-	AUDIT_LAST_ANOM_MSG          auditConstant = 2199
-	AUDIT_ANOM_LOGIN_FAILURES    auditConstant = 2100 // Failed login limit reached
-	AUDIT_ANOM_LOGIN_TIME        auditConstant = 2101 // Login attempted at bad time
-	AUDIT_ANOM_LOGIN_SESSIONS    auditConstant = 2102 // Max concurrent sessions reached
-	AUDIT_ANOM_LOGIN_ACCT        auditConstant = 2103 // Login attempted to watched acct
-	AUDIT_ANOM_LOGIN_LOCATION    auditConstant = 2104 // Login from forbidden location
-	AUDIT_ANOM_MAX_DAC           auditConstant = 2105 // Max DAC failures reached
-	AUDIT_ANOM_MAX_MAC           auditConstant = 2106 // Max MAC failures reached
-	AUDIT_ANOM_AMTU_FAIL         auditConstant = 2107 // AMTU failure
-	AUDIT_ANOM_RBAC_FAIL         auditConstant = 2108 // RBAC self test failure
-	AUDIT_ANOM_RBAC_TEGRITY_FAIL auditConstant = 2109 // RBAC file Tegrity failure
-	AUDIT_ANOM_CRYPTO_FAIL       auditConstant = 2110 // Crypto system test failure
-	AUDIT_ANOM_ACCESS_FS         auditConstant = 2111 // Access of file or dir
-	AUDIT_ANOM_EXEC              auditConstant = 2112 // Execution of file
-	AUDIT_ANOM_MK_EXEC           auditConstant = 2113 // Make an executable
-	AUDIT_ANOM_ADD_ACCT          auditConstant = 2114 // Adding an acct
-	AUDIT_ANOM_DEL_ACCT          auditConstant = 2115 // Deleting an acct
-	AUDIT_ANOM_MOD_ACCT          auditConstant = 2116 // Changing an acct
-	AUDIT_ANOM_ROOT_TRANS        auditConstant = 2117 // User became root
+	AUDIT_FIRST_ANOM_MSG           auditConstant = 2100
+	AUDIT_LAST_ANOM_MSG            auditConstant = 2199
+	AUDIT_ANOM_LOGIN_FAILURES      auditConstant = 2100 // Failed login limit reached
+	AUDIT_ANOM_LOGIN_TIME          auditConstant = 2101 // Login attempted at bad time
+	AUDIT_ANOM_LOGIN_SESSIONS      auditConstant = 2102 // Max concurrent sessions reached
+	AUDIT_ANOM_LOGIN_ACCT          auditConstant = 2103 // Login attempted to watched acct
+	AUDIT_ANOM_LOGIN_LOCATION      auditConstant = 2104 // Login from forbidden location
+	AUDIT_ANOM_MAX_DAC             auditConstant = 2105 // Max DAC failures reached
+	AUDIT_ANOM_MAX_MAC             auditConstant = 2106 // Max MAC failures reached
+	AUDIT_ANOM_AMTU_FAIL           auditConstant = 2107 // AMTU failure
+	AUDIT_ANOM_RBAC_FAIL           auditConstant = 2108 // RBAC self test failure
+	AUDIT_ANOM_RBAC_INTEGRITY_FAIL auditConstant = 2109 // RBAC file Tegrity failure
+	AUDIT_ANOM_CRYPTO_FAIL         auditConstant = 2110 // Crypto system test failure
+	AUDIT_ANOM_ACCESS_FS           auditConstant = 2111 // Access of file or dir
+	AUDIT_ANOM_EXEC                auditConstant = 2112 // Execution of file
+	AUDIT_ANOM_MK_EXEC             auditConstant = 2113 // Make an executable
+	AUDIT_ANOM_ADD_ACCT            auditConstant = 2114 // Adding an acct
+	AUDIT_ANOM_DEL_ACCT            auditConstant = 2115 // Deleting an acct
+	AUDIT_ANOM_MOD_ACCT            auditConstant = 2116 // Changing an acct
+	AUDIT_ANOM_ROOT_TRANS          auditConstant = 2117 // User became root
 
 	AUDIT_FIRST_ANOM_RESP        auditConstant = 2200
 	AUDIT_LAST_ANOM_RESP         auditConstant = 2299
@@ -396,20 +400,21 @@ const (
 	AUDIT_RESP_SINGLE            auditConstant = 2211 /* Go to single user mode */
 	AUDIT_RESP_HALT              auditConstant = 2212 /* take the system down */
 
-	AUDIT_FIRST_USER_LSPP_MSG   auditConstant = 2300
-	AUDIT_LAST_USER_LSPP_MSG    auditConstant = 2399
-	AUDIT_USER_ROLE_CHANGE      auditConstant = 2300 /* User changed to a new role */
-	AUDIT_ROLE_ASSIGN           auditConstant = 2301 /* Admin assigned user to role */
-	AUDIT_ROLE_REMOVE           auditConstant = 2302 /* Admin removed user from role */
-	AUDIT_LABEL_OVERRIDE        auditConstant = 2303 /* Admin is overriding a label */
-	AUDIT_LABEL_LEVEL_CHANGE    auditConstant = 2304 /* Object's level was changed */
-	AUDIT_USER_LABELED_EXPORT   auditConstant = 2305 /* Object exported with label */
-	AUDIT_USER_UNLABELED_EXPORT auditConstant = 2306 /* Object exported without label */
-	AUDIT_DEV_ALLOC             auditConstant = 2307 /* Device was allocated */
-	AUDIT_DEV_DEALLOC           auditConstant = 2308 /* Device was deallocated */
-	AUDIT_FS_RELABEL            auditConstant = 2309 /* Filesystem relabeled */
-	AUDIT_USER_MAC_POLICY_LOAD  auditConstant = 2310 /* Userspc daemon loaded policy */
-	AUDIT_ROLE_MODIFY           auditConstant = 2311 /* Admin modified a role */
+	AUDIT_FIRST_USER_LSPP_MSG    auditConstant = 2300
+	AUDIT_LAST_USER_LSPP_MSG     auditConstant = 2399
+	AUDIT_USER_ROLE_CHANGE       auditConstant = 2300 /* User changed to a new role */
+	AUDIT_ROLE_ASSIGN            auditConstant = 2301 /* Admin assigned user to role */
+	AUDIT_ROLE_REMOVE            auditConstant = 2302 /* Admin removed user from role */
+	AUDIT_LABEL_OVERRIDE         auditConstant = 2303 /* Admin is overriding a label */
+	AUDIT_LABEL_LEVEL_CHANGE     auditConstant = 2304 /* Object's level was changed */
+	AUDIT_USER_LABELED_EXPORT    auditConstant = 2305 /* Object exported with label */
+	AUDIT_USER_UNLABELED_EXPORT  auditConstant = 2306 /* Object exported without label */
+	AUDIT_DEV_ALLOC              auditConstant = 2307 /* Device was allocated */
+	AUDIT_DEV_DEALLOC            auditConstant = 2308 /* Device was deallocated */
+	AUDIT_FS_RELABEL             auditConstant = 2309 /* Filesystem relabeled */
+	AUDIT_USER_MAC_POLICY_LOAD   auditConstant = 2310 /* Userspc daemon loaded policy */
+	AUDIT_ROLE_MODIFY            auditConstant = 2311 /* Admin modified a role */
+	AUDIT_USER_MAC_CONFIG_CHANGE auditConstant = 2312 /* Change made to MAC policy */
 
 	AUDIT_FIRST_CRYPTO_MSG         auditConstant = 2400
 	AUDIT_CRYPTO_TEST_USER         auditConstant = 2400 /* Crypto test results */
@@ -419,8 +424,9 @@ const (
 	AUDIT_CRYPTO_KEY_USER          auditConstant = 2404 /* Create,delete,negotiate */
 	AUDIT_CRYPTO_FAILURE_USER      auditConstant = 2405 /* Fail decrypt,encrypt,randomiz */
 	AUDIT_CRYPTO_REPLAY_USER       auditConstant = 2406 /* Crypto replay detected */
-	AUDIT_CRYPTO_SESSION           auditConstant = 2407 /* Record parameters set during
-	   TLS session establishment */
+	AUDIT_CRYPTO_SESSION           auditConstant = 2407 /* Record parameters set during TLS session establishment */
+	AUDIT_CRYPTO_IKE_SA            auditConstant = 2408 /* Record parameters related to IKE SA */
+	AUDIT_CRYPTO_IPSEC_SA          auditConstant = 2409 /* Record parameters related to IPSEC SA */
 
 	AUDIT_LAST_CRYPTO_MSG auditConstant = 2499
 
