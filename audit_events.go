@@ -9,13 +9,13 @@ import (
 )
 
 // EventCallback is the function signature for any function that wants to receive an AuditEvent as soon as
-// it is received from the kernel. Error channel will be used to indicate any error that happens while receiving
+// it is received from the kernel. Error will be set to indicate any error that happens while receiving
 // messages.
-type EventCallback func(*AuditEvent, chan error, ...interface{})
+type EventCallback func(*AuditEvent, error, ...interface{})
 
 // RawEventCallback is similar to EventCallback and provides a function signature but the difference is that the function
 // will receive only the message string which contains the audit event and not the parsed AuditEvent struct.
-type RawEventCallback func(string, chan error, ...interface{})
+type RawEventCallback func(string, error, ...interface{})
 
 // AuditEvent holds a parsed audit message.
 // Serial holds the serial number for the message.
@@ -46,12 +46,10 @@ func NewAuditEvent(msg NetlinkMessage) (*AuditEvent, error) {
 }
 
 // GetAuditEvents receives audit messages from the kernel and parses them to AuditEvent struct.
-// It passes them along the callback function and the error channel is used to indicate any error that happens while
-// receiving the message. Code that receives the message runs inside a go-routine.
-// Please note that error channel is not a buffered one and client should provide a routine on their side that continously
-// empties it, otherwise the call will be blocked for eg at : ec <- fmt.Errorf("error receiving events -%d", err)
-// and the message recpetion will be blocked
-func GetAuditEvents(s *NetlinkConnection, cb EventCallback, ec chan error, args ...interface{}) {
+// It passes them along the callback function and if any error occurs while receiving the message,
+// the same will be passed in the callback as well.
+// Code that receives the message runs inside a go-routine.
+func GetAuditEvents(s Netlink, cb EventCallback, args ...interface{}) {
 	go func() {
 		for {
 			select {
@@ -61,14 +59,11 @@ func GetAuditEvents(s *NetlinkConnection, cb EventCallback, ec chan error, args 
 					if msg.Header.Type == syscall.NLMSG_ERROR {
 						err := int32(nativeEndian().Uint32(msg.Data[0:4]))
 						if err != 0 {
-							ec <- fmt.Errorf("error receiving events -%d", err)
+							cb(nil, fmt.Errorf("error receiving events %d", err), args...)
 						}
 					} else {
 						nae, err := NewAuditEvent(msg)
-						if err != nil {
-							ec <- err
-						}
-						cb(nae, ec, args...)
+						cb(nae, err, args...)
 					}
 				}
 			}
@@ -77,33 +72,34 @@ func GetAuditEvents(s *NetlinkConnection, cb EventCallback, ec chan error, args 
 }
 
 // GetRawAuditEvents receives raw audit messages from kernel parses them to AuditEvent struct.
-// It passes them along the raw callback function and error channel is to indicate any error that happens while
-// receiving the message. Code that receives the message runs inside a go-routine.
-// Please note that error channel is not a buffered one and client should provide a routine on their side that continously
-// empties it, otherwise the call will be blocked for eg at : ec <- fmt.Errorf("error receiving events -%d", err)
-// and the message recpetion will be blocked
-func GetRawAuditEvents(s *NetlinkConnection, cb RawEventCallback, ec chan error, args ...interface{}) {
+// It passes them along the callback function and if any error occurs while receiving the message,
+// the same will be passed in the callback as well.
+// Code that receives the message runs inside a go-routine.
+func GetRawAuditEvents(s Netlink, cb RawEventCallback, args ...interface{}) {
 	go func() {
 		for {
 			select {
 			default:
 				msgs, _ := s.Receive(syscall.NLMSG_HDRLEN+MAX_AUDIT_MESSAGE_LENGTH, 0)
 				for _, msg := range msgs {
-					m := ""
+					var (
+						m   string
+						err error
+					)
 					if msg.Header.Type == syscall.NLMSG_ERROR {
-						err := int32(nativeEndian().Uint32(msg.Data[0:4]))
-						if err != 0 {
-							ec <- fmt.Errorf("error receiving events -%d", err)
+						v := int32(nativeEndian().Uint32(msg.Data[0:4]))
+						if v != 0 {
+							cb(m, fmt.Errorf("error receiving events %d", v), args...)
 						}
 					} else {
 						Type := auditConstant(msg.Header.Type)
 						if Type.String() == "auditConstant("+strconv.Itoa(int(msg.Header.Type))+")" {
-							ec <- errors.New("Unknown Type: " + string(msg.Header.Type))
+							err = errors.New("Unknown Type: " + string(msg.Header.Type))
 						} else {
 							m = "type=" + Type.String()[6:] + " msg=" + string(msg.Data[:]) + "\n"
 						}
 					}
-					cb(m, ec, args...)
+					cb(m, err, args...)
 				}
 			}
 		}
@@ -112,13 +108,10 @@ func GetRawAuditEvents(s *NetlinkConnection, cb RawEventCallback, ec chan error,
 
 // GetAuditMessages is a blocking function (runs in forever for loop) that
 // receives audit messages from kernel and parses them to AuditEvent.
-// It passes them along the callback cb and the error channel is used to indicate any error
-// that happens while receiving the message.
+// It passes them along the callback function and if any error occurs while receiving the message,
+// the same will be passed in the callback as well.
 // It will return when a signal is received on the done channel.
-// Please note that error channel is not a buffered one and client should provide a routine on their side that continously
-// empties it, otherwise the call will be blocked for eg. at : ec <- fmt.Errorf("error receiving events -%d", err)
-// and the message recpetion will be blocked
-func GetAuditMessages(s *NetlinkConnection, cb EventCallback, ec *chan error, done *chan bool, args ...interface{}) {
+func GetAuditMessages(s Netlink, cb EventCallback, done *chan bool, args ...interface{}) {
 	for {
 		select {
 		case <-*done:
@@ -127,16 +120,13 @@ func GetAuditMessages(s *NetlinkConnection, cb EventCallback, ec *chan error, do
 			msgs, _ := s.Receive(syscall.NLMSG_HDRLEN+MAX_AUDIT_MESSAGE_LENGTH, 0)
 			for _, msg := range msgs {
 				if msg.Header.Type == syscall.NLMSG_ERROR {
-					err := int32(nativeEndian().Uint32(msg.Data[0:4]))
-					if err != 0 {
-						*ec <- fmt.Errorf("error receiving events -%d", err)
+					v := int32(nativeEndian().Uint32(msg.Data[0:4]))
+					if v != 0 {
+						cb(nil, fmt.Errorf("error receiving events %d", v), args...)
 					}
 				} else {
 					nae, err := NewAuditEvent(msg)
-					if err != nil {
-						*ec <- err
-					}
-					cb(nae, *ec, args...)
+					cb(nae, err, args...)
 				}
 			}
 		}
