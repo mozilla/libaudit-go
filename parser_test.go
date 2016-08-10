@@ -19,7 +19,7 @@ var auditTests = []struct {
 			Timestamp: "1226874073.147",
 			Type:      "AVC",
 			Data: map[string]string{
-				"path": "/var/www/html/file1 space", "dev": "dm-0", "ino": "284133", "scontext": "unconfined_u:system_r:httpd_t:s0", "tcontext": "unconfined_u:object_r:samba_share_t:s0", "pid": "2465", "seperms": "getattr", "comm": "httpd", "tclass": "file", "seresult": "denied"},
+				"path": `"/var/www/html/file1 space"`, "dev": "dm-0", "ino": "284133", "scontext": "unconfined_u:system_r:httpd_t:s0", "tcontext": "unconfined_u:object_r:samba_share_t:s0", "pid": "2465", "seperms": "getattr", "comm": `"httpd"`, "tclass": "file", "seresult": "denied"},
 		},
 	},
 	{`audit(1464176620.068:1445): auid=4294967295 uid=1000 gid=1000 ses=4294967295 pid=23975 comm="chrome" exe="/opt/google/chrome/chrome" sig=0 arch=c000003e syscall=273 compat=0 ip=0x7f1da6d8b694 code=0x50000`, AUDIT_AVC, nil, true,
@@ -28,7 +28,7 @@ var auditTests = []struct {
 			Timestamp: "1464176620.068",
 			Type:      "AVC",
 			Data: map[string]string{
-				"comm": "chrome", "exe": "/opt/google/chrome/chrome", "arch": "c000003e", "compat": "0", "code": "0x50000", "ses": "4294967295", "uid": "1000", "gid": "1000", "pid": "23975", "sig": "0", "syscall": "273", "ip": "0x7f1da6d8b694", "auid": "4294967295"},
+				"comm": `"chrome"`, "exe": `"/opt/google/chrome/chrome"`, "arch": "c000003e", "compat": "0", "code": "0x50000", "ses": "4294967295", "uid": "1000", "gid": "1000", "pid": "23975", "sig": "0", "syscall": "273", "ip": "0x7f1da6d8b694", "auid": "4294967295"},
 		},
 	},
 	{`audit(1464163771.720:20): arch=c000003e syscall=1 success=yes exit=658651 a0=6 a1=7f26862ea010 a2=a0cdb a3=0 items=0 ppid=712 pid=716 auid=4294967295 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=(none) ses=4294967295 comm="apparmor_parser" exe="/sbin/apparmor_parser" key=(null)`, AUDIT_AVC, nil, true,
@@ -37,7 +37,7 @@ var auditTests = []struct {
 			Timestamp: "1464163771.720",
 			Type:      "AVC",
 			Data: map[string]string{
-				"success": "yes", "a2": "a0cdb", "uid": "0", "sgid": "0", "fsgid": "0", "ses": "4294967295", "exit": "658651", "a0": "6", "ppid": "712", "suid": "0", "key": "(null)", "tty": "(none)", "comm": "apparmor_parser", "arch": "c000003e", "syscall": "1", "a1": "139803436687376", "items": "0", "pid": "716", "fsuid": "0", "exe": "/sbin/apparmor_parser", "a3": "0", "auid": "4294967295", "gid": "0", "euid": "0", "egid": "0"},
+				"success": "yes", "a2": "a0cdb", "uid": "0", "sgid": "0", "fsgid": "0", "ses": "4294967295", "exit": "658651", "a0": "6", "ppid": "712", "suid": "0", "key": "(null)", "tty": "(none)", "comm": `"apparmor_parser"`, "arch": "c000003e", "syscall": "1", "a1": "7f26862ea010", "items": "0", "pid": "716", "fsuid": "0", "exe": `"/sbin/apparmor_parser"`, "a3": "0", "auid": "4294967295", "gid": "0", "euid": "0", "egid": "0"},
 		},
 	},
 	{`audit(1464093935.845:993): pid=4148 uid=0 auid=4294967295 ses=4294967295 msg='op=PAM:setcred acct="root" exe="/usr/bin/sudo" hostname=? addr=? terminal=/dev/pts/18 res=success'`, AUDIT_AVC, nil, true,
@@ -46,7 +46,7 @@ var auditTests = []struct {
 			Timestamp: "1464093935.845",
 			Type:      "AVC",
 			Data: map[string]string{
-				"op": "PAM:setcred", "acct": "root", "hostname": "?", "addr": "?", "res": "success", "uid": "0", "auid": "4294967295", "exe": "/usr/bin/sudo", "terminal": "/dev/pts/18", "pid": "4148", "ses": "4294967295"},
+				"op": "PAM:setcred", "acct": `"root"`, "hostname": "?", "addr": "?", "res": "success", "uid": "0", "auid": "4294967295", "exe": `"/usr/bin/sudo"`, "terminal": "/dev/pts/18", "pid": "4148", "ses": "4294967295"},
 		},
 	},
 	{`audit(1267534395.930:19): user pid=1169 uid=0 auid=4294967295 ses=4294967295 subj=system_u:unconfined_r:unconfined_t msg='avc: denied { read } for request=SELinux:SELinuxGetClientContext comm=X-setest resid=3c00001 restype=<unknown> scontext=unconfined_u:unconfined_r:x_select_paste_t tcontext=unconfined_u:unconfined_r:unconfined_t  tclass=x_resource : exe="/usr/bin/Xorg " sauid=0 hostname=? addr=? terminal=?'`, AUDIT_AVC, nil, true,
@@ -55,7 +55,7 @@ var auditTests = []struct {
 			Timestamp: "1267534395.930",
 			Type:      "AVC",
 			Data: map[string]string{
-				"": " user", "uid": "0", "subj": "system_u:unconfined_r:unconfined_t", "scontext": "unconfined_u:unconfined_r:x_select_paste_t", "ses": "4294967295", "comm": "X-setest", "sauid": "0", "addr": "?", "pid": "1169", "auid": "4294967295", "request": "SELinux:SELinuxGetClientContext", "resid": "3c00001", "restype": "<unknown>", "hostname": "?", "terminal": "?", "seresult": "denied", "seperms": "read", "tcontext": "unconfined_u:unconfined_r:unconfined_t", "tclass": "x_resource :", "exe": "/usr/bin/Xorg "},
+				"": " user", "uid": "0", "subj": "system_u:unconfined_r:unconfined_t", "scontext": "unconfined_u:unconfined_r:x_select_paste_t", "ses": "4294967295", "comm": "X-setest", "sauid": "0", "addr": "?", "pid": "1169", "auid": "4294967295", "request": "SELinux:SELinuxGetClientContext", "resid": "3c00001", "restype": "<unknown>", "hostname": "?", "terminal": "?", "seresult": "denied", "seperms": "read", "tcontext": "unconfined_u:unconfined_r:unconfined_t", "tclass": "x_resource :", "exe": `"/usr/bin/Xorg "`},
 		},
 	},
 	{`audit(1464617439.911:1421): pid=30576 uid=0 auid=4294967295 ses=4294967295 msg='op=PAM:setcred acct="root" exe="/usr/bin/sudo" hostname=? addr=? terminal=/dev/pts/18 res=success'`, AUDIT_AVC, nil, true,
@@ -64,7 +64,7 @@ var auditTests = []struct {
 			Timestamp: "1464617439.911",
 			Type:      "AVC",
 			Data: map[string]string{
-				"pid": "30576", "auid": "4294967295", "exe": "/usr/bin/sudo", "addr": "?", "terminal": "/dev/pts/18", "uid": "0", "ses": "4294967295", "op": "PAM:setcred", "acct": "root", "hostname": "?", "res": "success"},
+				"pid": "30576", "auid": "4294967295", "exe": `"/usr/bin/sudo"`, "addr": "?", "terminal": "/dev/pts/18", "uid": "0", "ses": "4294967295", "op": "PAM:setcred", "acct": `"root"`, "hostname": "?", "res": "success"},
 		},
 	},
 	{`audit(1464617439.911:1422): pid=30576 uid=0 auid=4294967295 ses=4294967295 msg='op=PAM:session_open acct="root" exe="/usr/bin/sudo" hostname=? addr=? terminal=/dev/pts/18 res=success'`, AUDIT_AVC, nil, true,
@@ -73,7 +73,7 @@ var auditTests = []struct {
 			Timestamp: "1464617439.911",
 			Type:      "AVC",
 			Data: map[string]string{
-				"uid": "0", "auid": "4294967295", "ses": "4294967295", "op": "PAM:session_open", "exe": "/usr/bin/sudo", "addr": "?", "terminal": "/dev/pts/18", "pid": "30576", "res": "success", "hostname": "?", "acct": "root"},
+				"uid": "0", "auid": "4294967295", "ses": "4294967295", "op": "PAM:session_open", "exe": `"/usr/bin/sudo"`, "addr": "?", "terminal": "/dev/pts/18", "pid": "30576", "res": "success", "hostname": "?", "acct": `"root"`},
 		},
 	},
 	{`audit(1464617444.219:1425): pid=30579 uid=1000 auid=4294967295 ses=4294967295 msg='cwd="/home/arun/Work/go-ground/src/github.com/arunk-s/parser" cmd=636174202F7661722F6C6F672F61756469742F61756469742E6C6F67 terminal=pts/18 res=success'`, AUDIT_AVC, nil, true,
@@ -82,7 +82,7 @@ var auditTests = []struct {
 			Timestamp: "1464617444.219",
 			Type:      "AVC",
 			Data: map[string]string{
-				"auid": "4294967295", "ses": "4294967295", "cwd": "/home/arun/Work/go-ground/src/github.com/arunk-s/parser", "cmd": "636174202F7661722F6C6F672F61756469742F61756469742E6C6F67", "terminal": "pts/18", "res": "success", "pid": "30579", "uid": "1000"},
+				"auid": "4294967295", "ses": "4294967295", "cwd": `"/home/arun/Work/go-ground/src/github.com/arunk-s/parser"`, "cmd": "636174202F7661722F6C6F672F61756469742F61756469742E6C6F67", "terminal": "pts/18", "res": "success", "pid": "30579", "uid": "1000"},
 		},
 	},
 	{`audit(1464617461.107:1431): pid=30586 uid=0 auid=4294967295 ses=4294967295 msg='op=PAM:setcred acct="root" exe="/usr/bin/sudo" hostname=? addr=? terminal=/dev/pts/18 res=success'`, AUDIT_AVC, nil, true,
@@ -91,7 +91,7 @@ var auditTests = []struct {
 			Timestamp: "1464617461.107",
 			Type:      "AVC",
 			Data: map[string]string{
-				"exe": "/usr/bin/sudo", "hostname": "?", "addr": "?", "terminal": "/dev/pts/18", "res": "success", "pid": "30586", "uid": "0", "auid": "4294967295", "ses": "4294967295", "op": "PAM:setcred", "acct": "root"},
+				"exe": `"/usr/bin/sudo"`, "hostname": "?", "addr": "?", "terminal": "/dev/pts/18", "res": "success", "pid": "30586", "uid": "0", "auid": "4294967295", "ses": "4294967295", "op": "PAM:setcred", "acct": `"root"`},
 		},
 	},
 	{`audit(1464614823.239:1290): pid=1 uid=0 auid=4294967295 ses=4294967295 msg='unit=NetworkManager-dispatcher comm="systemd" exe="/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'`, AUDIT_AVC, nil, true,
@@ -100,7 +100,7 @@ var auditTests = []struct {
 			Timestamp: "1464614823.239",
 			Type:      "AVC",
 			Data: map[string]string{
-				"hostname": "?", "addr": "?", "res": "success", "auid": "4294967295", "ses": "4294967295", "unit": "NetworkManager-dispatcher", "comm": "systemd", "exe": "/lib/systemd/systemd", "pid": "1", "uid": "0", "terminal": "?"},
+				"hostname": "?", "addr": "?", "res": "success", "auid": "4294967295", "ses": "4294967295", "unit": "NetworkManager-dispatcher", "comm": `"systemd"`, "exe": `"/lib/systemd/systemd"`, "pid": "1", "uid": "0", "terminal": "?"},
 		},
 	},
 	{`audit(1464614843.495:1292): pid=1 uid=0 auid=4294967295 ses=4294967295 msg='unit=systemd-rfkill comm="systemd" exe="/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'`, AUDIT_AVC, nil, true,
@@ -109,7 +109,7 @@ var auditTests = []struct {
 			Timestamp: "1464614843.495",
 			Type:      "AVC",
 			Data: map[string]string{
-				"pid": "1", "auid": "4294967295", "ses": "4294967295", "unit": "systemd-rfkill", "comm": "systemd", "exe": "/lib/systemd/systemd", "hostname": "?", "res": "success", "uid": "0", "addr": "?", "terminal": "?"},
+				"pid": "1", "auid": "4294967295", "ses": "4294967295", "unit": "systemd-rfkill", "comm": `"systemd"`, "exe": `"/lib/systemd/systemd"`, "hostname": "?", "res": "success", "uid": "0", "addr": "?", "terminal": "?"},
 		},
 	},
 	{`audit(1464590772.564:302): auid=4294967295 uid=1000 gid=1000 ses=4294967295 pid=5803 comm="chrome" exe="/opt/google/chrome/chrome" sig=0 arch=c000003e syscall=273 compat=0 ip=0x7f3deee65694 code=0x50000`, AUDIT_AVC, nil, true,
@@ -118,7 +118,7 @@ var auditTests = []struct {
 			Timestamp: "1464590772.564",
 			Type:      "AVC",
 			Data: map[string]string{
-				"pid": "5803", "comm": "chrome", "syscall": "273", "ip": "0x7f3deee65694", "gid": "1000", "uid": "1000", "ses": "4294967295", "exe": "/opt/google/chrome/chrome", "sig": "0", "arch": "c000003e", "compat": "0", "code": "0x50000", "auid": "4294967295"},
+				"pid": "5803", "comm": `"chrome"`, "syscall": "273", "ip": "0x7f3deee65694", "gid": "1000", "uid": "1000", "ses": "4294967295", "exe": `"/opt/google/chrome/chrome"`, "sig": "0", "arch": "c000003e", "compat": "0", "code": "0x50000", "auid": "4294967295"},
 		},
 	},
 	{`audit(1464505771.166:388): pid=1 uid=0 auid=4294967295 ses=4294967295'unit=NetworkManager-dispatcher comm="systemd" exe="/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'`, AUDIT_AVC, nil, true,
@@ -127,16 +127,16 @@ var auditTests = []struct {
 			Timestamp: "1464505771.166",
 			Type:      "AVC",
 			Data: map[string]string{
-				"pid": "1", "hostname": "?", "res": "success", "terminal": "?", "uid": "0", "auid": "4294967295", "ses": "4294967295'unit=NetworkManager-dispatcher", "comm": "systemd", "exe": "/lib/systemd/systemd", "addr": "?"},
+				"pid": "1", "hostname": "?", "res": "success", "terminal": "?", "uid": "0", "auid": "4294967295", "ses": "4294967295'unit=NetworkManager-dispatcher", "comm": `"systemd"`, "exe": `"/lib/systemd/systemd"`, "addr": "?"},
 		},
 	},
-	{`audit(1464505794.710:389): auid=4294967295 uid=1000 gid=1000 ses=4294967295 pid=4060 comm="chrome" exe="/opt/googleaudit(1464505808.342:400): auid=4294967295 uid=1000 gid=1000 ses=4294967295 pid=4075 comm="Chrome_libJingl" exe="/opt/google/chrome/chrome" sig=0 arch=c000003e syscall=273 compat=0 ip=0x7fb359e4d694 code=0x50000`, AUDIT_AVC, nil, true,
+	{`audit(1464505794.710:389): auid=4294967295 uid=1000 gid=1000 ses=4294967295 pid=4075 comm="Chrome_libJingl" exe="/opt/google/chrome/chrome" sig=0 arch=c000003e syscall=273 compat=0 ip=0x7fb359e4d694 code=0x50000`, AUDIT_AVC, nil, true,
 		AuditEvent{
 			Serial:    "389",
 			Timestamp: "1464505794.710",
 			Type:      "AVC",
 			Data: map[string]string{
-				"auid": "4294967295", "comm": "Chrome_libJingl", "sig": "0", "arch": "c000003e", "ip": "0x7fb359e4d694", "code": "0x50000", "uid": "1000", "gid": "1000", "ses": "4294967295", "pid": "4075", "exe": "/opt/google/chrome/chrome", "syscall": "273", "compat": "0"},
+				"auid": "4294967295", "comm": `"Chrome_libJingl"`, "sig": "0", "arch": "c000003e", "ip": "0x7fb359e4d694", "code": "0x50000", "uid": "1000", "gid": "1000", "ses": "4294967295", "pid": "4075", "exe": `"/opt/google/chrome/chrome"`, "syscall": "273", "compat": "0"},
 		},
 	},
 	{`audit(1464505808.342:401): auid=4294967295 uid=1000 gid=1000 ses=4294967295 pid=4076 comm="Chrome_libJingl" exe="/opt/google/chrome/chrome" sig=0 arch=c000003e syscall=273 compat=0 ip=0x7fb359e4d694 code=0x50000`, AUDIT_AVC, nil, true,
@@ -145,7 +145,7 @@ var auditTests = []struct {
 			Timestamp: "1464505808.342",
 			Type:      "AVC",
 			Data: map[string]string{
-				"pid": "4076", "comm": "Chrome_libJingl", "exe": "/opt/google/chrome/chrome", "sig": "0", "syscall": "273", "compat": "0", "code": "0x50000", "ses": "4294967295", "uid": "1000", "gid": "1000", "arch": "c000003e", "ip": "0x7fb359e4d694", "auid": "4294967295"},
+				"pid": "4076", "comm": `"Chrome_libJingl"`, "exe": `"/opt/google/chrome/chrome"`, "sig": "0", "syscall": "273", "compat": "0", "code": "0x50000", "ses": "4294967295", "uid": "1000", "gid": "1000", "arch": "c000003e", "ip": "0x7fb359e4d694", "auid": "4294967295"},
 		},
 	},
 	{`audit(1464505810.566:403): auid=4294967295 uid=1000 gid=1000 ses=4294967295 pid=4078 comm="chrome" exe="/opt/google/chrome/chrome" sig=0 arch=c000003e syscall=273 compat=0 ip=0x7fb359e4d694 code=0x50000`, AUDIT_AVC, nil, true,
@@ -154,7 +154,7 @@ var auditTests = []struct {
 			Timestamp: "1464505810.566",
 			Type:      "AVC",
 			Data: map[string]string{
-				"auid": "4294967295", "exe": "/opt/google/chrome/chrome", "sig": "0", "arch": "c000003e", "syscall": "273", "compat": "0", "code": "0x50000", "uid": "1000", "gid": "1000", "ses": "4294967295", "pid": "4078", "comm": "chrome", "ip": "0x7fb359e4d694"},
+				"auid": "4294967295", "exe": `"/opt/google/chrome/chrome"`, "sig": "0", "arch": "c000003e", "syscall": "273", "compat": "0", "code": "0x50000", "uid": "1000", "gid": "1000", "ses": "4294967295", "pid": "4078", "comm": `"chrome"`, "ip": "0x7fb359e4d694"},
 		},
 	},
 	{`audit(1464505927.046:474): pid=1 uid=0 auid=4294967295 ses=4294967295 unit=lm-sensors comm="systemd" exe="/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'`, AUDIT_AVC, nil, true,
@@ -163,7 +163,7 @@ var auditTests = []struct {
 			Timestamp: "1464505927.046",
 			Type:      "AVC",
 			Data: map[string]string{
-				"uid": "0", "exe": "/lib/systemd/systemd", "hostname": "?", "addr": "?", "terminal": "?", "res": "success", "pid": "1", "auid": "4294967295", "ses": "4294967295", "unit": "lm-sensors", "comm": "systemd"},
+				"uid": "0", "exe": `"/lib/systemd/systemd"`, "hostname": "?", "addr": "?", "terminal": "?", "res": "success", "pid": "1", "auid": "4294967295", "ses": "4294967295", "unit": "lm-sensors", "comm": `"systemd"`},
 		},
 	},
 	{`audit(1464505927.314:508): pid=1 uid=0 auid=4294967295 ses=4294967295 unit=rc-local comm="systemd" exe="/lib/systemd/systemd" hostname=? addr=? terminal=? res=success'`, AUDIT_AVC, nil, true,
@@ -172,7 +172,7 @@ var auditTests = []struct {
 			Timestamp: "1464505927.314",
 			Type:      "AVC",
 			Data: map[string]string{
-				"pid": "1", "hostname": "?", "addr": "?", "unit": "rc-local", "comm": "systemd", "exe": "/lib/systemd/systemd", "terminal": "?", "res": "success", "uid": "0", "auid": "4294967295", "ses": "4294967295"},
+				"pid": "1", "hostname": "?", "addr": "?", "unit": "rc-local", "comm": `"systemd"`, "exe": `"/lib/systemd/systemd"`, "terminal": "?", "res": "success", "uid": "0", "auid": "4294967295", "ses": "4294967295"},
 		},
 	},
 	{`audit(1464550921.784:3509): auid=4294967295 uid=1000 gid=1000 ses=4294967295 pid=14869 comm="chrome" exe="/opt/google/chrome/chrome" sig=0 arch=c000003e syscall=273 compat=0 ip=0x7f26b8828694 code=0x50000`, AUDIT_AVC, nil, true,
@@ -181,7 +181,7 @@ var auditTests = []struct {
 			Timestamp: "1464550921.784",
 			Type:      "AVC",
 			Data: map[string]string{
-				"syscall": "273", "compat": "0", "ip": "0x7f26b8828694", "code": "0x50000", "auid": "4294967295", "uid": "1000", "gid": "1000", "sig": "0", "arch": "c000003e", "ses": "4294967295", "pid": "14869", "comm": "chrome", "exe": "/opt/google/chrome/chrome"},
+				"syscall": "273", "compat": "0", "ip": "0x7f26b8828694", "code": "0x50000", "auid": "4294967295", "uid": "1000", "gid": "1000", "sig": "0", "arch": "c000003e", "ses": "4294967295", "pid": "14869", "comm": `"chrome"`, "exe": `"/opt/google/chrome/chrome"`},
 		},
 	},
 	{`audit(1170021493.977:293): avc:  denied  { read write } for  pid=13010 comm="pickup" name="maildrop" dev=hda7 ino=14911367 scontext=system_u:system_r:postfix_pickup_t:s0 tcontext=system_u:object_r:postfix_spool_maildrop_t:s0 tclass=dir`, AUDIT_AVC, nil, true,
@@ -190,7 +190,7 @@ var auditTests = []struct {
 			Timestamp: "1170021493.977",
 			Type:      "AVC",
 			Data: map[string]string{
-				"scontext": "system_u:system_r:postfix_pickup_t:s0", "seresult": "denied", "comm": "pickup", "name": "maildrop", "dev": "hda7", "ino": "14911367", "tcontext": "system_u:object_r:postfix_spool_maildrop_t:s0", "tclass": "dir", "seperms": "read,write", "pid": "13010"},
+				"scontext": "system_u:system_r:postfix_pickup_t:s0", "seresult": "denied", "comm": `"pickup"`, "name": `"maildrop"`, "dev": "hda7", "ino": "14911367", "tcontext": "system_u:object_r:postfix_spool_maildrop_t:s0", "tclass": "dir", "seperms": "read,write", "pid": "13010"},
 		},
 	},
 }

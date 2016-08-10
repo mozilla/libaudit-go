@@ -61,6 +61,9 @@ func parseAuditKeyValue(str string) map[string]string {
 // any intersting looking audit message should be added to parser_test and see how parser performs against it
 func ParseAuditEvent(str string, msgType auditConstant, interpret bool) (*AuditEvent, error) {
 	var r record
+	var event = AuditEvent{
+		Raw: str,
+	}
 	m := make(map[string]string)
 	if strings.HasPrefix(str, "audit(") {
 		str = str[6:]
@@ -189,7 +192,6 @@ func ParseAuditEvent(str string, msgType auditConstant, interpret bool) (*AuditE
 					//return nil, errors.Wrap(err, "parsing a0 failed")
 					r.a0 = -1
 				} else {
-					value = strconv.FormatInt(val, 10)
 					r.a0 = int(val)
 				}
 			}
@@ -199,7 +201,6 @@ func ParseAuditEvent(str string, msgType auditConstant, interpret bool) (*AuditE
 					// return nil, errors.Wrap(err, "parsing a1 failed")
 					r.a1 = -1
 				} else {
-					value = strconv.FormatInt(val, 10)
 					r.a1 = int(val)
 				}
 			}
@@ -226,13 +227,11 @@ func ParseAuditEvent(str string, msgType auditConstant, interpret bool) (*AuditE
 		}
 	}
 
-	return &AuditEvent{
-		Raw:       str,
-		Type:      msgType.String()[6:],
-		Data:      m,
-		Serial:    serial,
-		Timestamp: timestamp,
-	}, nil
+	event.Timestamp = timestamp
+	event.Serial = serial
+	event.Data = m
+	event.Type = msgType.String()[6:]
+	return &event, nil
 
 }
 
@@ -277,14 +276,5 @@ func fixPunctuantions(value *string) {
 			*value = (*value)[:l-1]
 			l--
 		}
-	}
-	if l > 0 && strings.HasSuffix(*value, "\"") {
-		*value = (*value)[:l-1]
-		l--
-	}
-	// remove begining quotes
-	if l > 0 && strings.HasPrefix(*value, "\"") {
-		*value = (*value)[1:]
-		l--
 	}
 }
