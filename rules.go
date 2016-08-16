@@ -895,12 +895,8 @@ done:
 
 //AuditSyscallToName takes syscall number and returns the syscall name. Currently only applicable for x64 arch.
 func AuditSyscallToName(syscall string) (name string, err error) {
-	syscallMap := reverseMap(headers.SysMapX64)
-	sysNum, err := strconv.Atoi(syscall)
-	if err != nil {
-		return "", errors.Wrap(err, "AuditSyscallToName failed")
-	}
-	if val, ok := syscallMap[sysNum]; ok {
+	syscallMap := headers.ReverseSysMapX64
+	if val, ok := syscallMap[syscall]; ok {
 		return val, nil
 	}
 	return "", fmt.Errorf("AuditSyscallToName failed: syscall %v not found", syscall)
