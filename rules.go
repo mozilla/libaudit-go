@@ -520,8 +520,9 @@ It expects the config in a json formatted string of following format:
 */
 func SetRules(s Netlink, content []byte) error {
 	var (
-		rules interface{}
-		err   error
+		rules      interface{}
+		err        error
+		strictPath bool
 	)
 	err = json.Unmarshal(content, &rules)
 	if err != nil {
@@ -532,6 +533,9 @@ func SetRules(s Netlink, content []byte) error {
 
 	if err != nil {
 		return errors.Wrap(err, "SetRules failed")
+	}
+	if strict, ok := m["strict_path_check"]; ok && strict.(bool) {
+		strictPath = true
 	}
 	//TODO: syscallMap should be loaded according to runtime arch
 	syscallMap := headers.SysMapX64
@@ -552,7 +556,7 @@ func SetRules(s Netlink, content []byte) error {
 				action := AUDIT_ALWAYS
 				auditSyscallAdded = true
 
-				err = auditSetupAndAddWatchDir(&ruleData, path.(string))
+				err = auditSetupAndAddWatchDir(&ruleData, path.(string), strictPath)
 				if err != nil {
 					return errors.Wrap(err, "SetRules failed")
 				}
@@ -704,7 +708,7 @@ func checkPath(pathName string) error {
 }
 
 // auditSetupAndAddWatchDir checks directory watch params for setting of fields in auditRuleData
-func auditSetupAndAddWatchDir(rule *auditRuleData, pathName string) error {
+func auditSetupAndAddWatchDir(rule *auditRuleData, pathName string, strictPath bool) error {
 	typeName := uint16(AUDIT_WATCH)
 
 	err := checkPath(pathName)
@@ -713,20 +717,20 @@ func auditSetupAndAddWatchDir(rule *auditRuleData, pathName string) error {
 	}
 
 	// Trim trailing '/' should they exist
-	strings.TrimRight(pathName, "/")
+	pathName = strings.TrimRight(pathName, "/")
 
-	if fileInfo, err := os.Stat(pathName); err != nil {
-		if os.IsNotExist(err) {
+	fileInfo, err := os.Stat(pathName)
+	if err != nil {
+		if os.IsNotExist(err) && strictPath {
 			return fmt.Errorf("auditSetupAndAddWatchDir failed: file at %v does not exist", pathName)
-		}
-
-		if fileInfo.IsDir() {
-			typeName = uint16(AUDIT_DIR)
-		} else {
+		} else if !os.IsNotExist(err) {
+			// report errors which are not due to non-existent file/dir
 			return errors.Wrap(err, "auditSetupAndAddWatchDir failed")
 		}
 	}
-
+	if !os.IsNotExist(err) && fileInfo.IsDir() {
+		typeName = uint16(AUDIT_DIR)
+	}
 	err = auditAddWatchDir(typeName, rule, pathName)
 	if err != nil {
 		return errors.Wrap(err, "auditSetupAndAddWatchDir failed")
