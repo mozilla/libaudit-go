@@ -461,6 +461,7 @@ It expects the config in a json formatted string of following format:
     "enable": "1",
     "buffer": "16348",
     "rate": "500",
+    "strict_path_check": false,
     "file_rules": [
         {
             "path": "/etc/audit/",
