@@ -1,8 +1,13 @@
-GO := GO15VENDOREXPERIMENT=1 go
+GOBIN    := $(shell which go)
+GO       := GO15VENDOREXPERIMENT=1 $(GOBIN)
+BUILDPRE := auditconstant_string.go
 
-test:
-	sudo $(GO) test -v github.com/mozilla/libaudit-go
+test: $(BUILDPRE)
+	sudo $(GO) test -v
 
-constants:
+auditconstant_string.go: audit_constant.go
 	$(GO) get golang.org/x/tools/cmd/stringer
 	$(GO) generate
+
+clean:
+	rm -f $(BUILDPRE)

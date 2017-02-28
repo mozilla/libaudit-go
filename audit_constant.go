@@ -206,7 +206,7 @@ const (
  * 2600 - 2999 future user space (maybe integrity labels and related events)
  */
 
-//go:generate stringer -type=auditConstant
+//go:generate stringer -type=auditConstant audit_constant.go
 type auditConstant uint16
 
 const (
