@@ -101,7 +101,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"os"
 	"sync/atomic"
 	"syscall"
 	"unsafe"
@@ -223,30 +222,24 @@ func newNetlinkAuditRequest(proto uint16, family, sizeofData int) *NetlinkMessag
 	return rr
 }
 
-// NewNetlinkConnection creates a fresh netlink connection
-func NewNetlinkConnection() (*NetlinkConnection, error) {
-
-	// Check for root user
-	if os.Getuid() != 0 {
-		return nil, fmt.Errorf("not root user")
-	}
-
-	fd, err := syscall.Socket(syscall.AF_NETLINK, syscall.SOCK_RAW, syscall.NETLINK_AUDIT)
+// Create a new netlink connection with the kernel audit subsystem and return a
+// NetlinkConnection describing it. The process should ensure it has the required
+// privileges before calling. An error is returned if any error is encountered
+// creating the netlink connection.
+func NewNetlinkConnection() (ret *NetlinkConnection, err error) {
+	ret = &NetlinkConnection{}
+	ret.fd, err = syscall.Socket(syscall.AF_NETLINK, syscall.SOCK_RAW, syscall.NETLINK_AUDIT)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not obtain socket")
+		return
 	}
-	s := &NetlinkConnection{
-		fd: fd,
+	ret.address.Family = syscall.AF_NETLINK
+	ret.address.Groups = 0
+	ret.address.Pid = 0 // 0 for kernel space
+	if err = syscall.Bind(ret.fd, &ret.address); err != nil {
+		syscall.Close(ret.fd)
+		return
 	}
-	s.address.Family = syscall.AF_NETLINK
-	s.address.Groups = 0
-	s.address.Pid = 0 //Kernel space pid is always set to be 0
-
-	if err := syscall.Bind(fd, &s.address); err != nil {
-		syscall.Close(fd)
-		return nil, errors.Wrap(err, "could not bind socket to address")
-	}
-	return s, nil
+	return
 }
 
 // Close is a wrapper for closing netlink socket
