@@ -147,12 +147,12 @@ type NetlinkConnection struct {
 	address syscall.SockaddrNetlink // Netlink sockaddr
 }
 
-// Close is a wrapper for closing netlink socket
+// Close fd associated with netlink connection
 func (s *NetlinkConnection) Close() {
 	syscall.Close(s.fd)
 }
 
-// Send is a wrapper for sending NetlinkMessage across netlink socket
+// Send netlink message using the netlink connection
 func (s *NetlinkConnection) Send(request *NetlinkMessage) error {
 	if err := syscall.Sendto(s.fd, request.ToWireFormat(), 0, &s.address); err != nil {
 		return errors.Wrap(err, "could not send NetlinkMessage")
@@ -160,7 +160,7 @@ func (s *NetlinkConnection) Send(request *NetlinkMessage) error {
 	return nil
 }
 
-// Receive is a wrapper for recieving from netlink socket and return an array of NetlinkMessage
+// Receive any available netlink messages being sent to us by the kernel
 func (s *NetlinkConnection) Receive(bytesize int, block int) ([]NetlinkMessage, error) {
 	rb := make([]byte, bytesize)
 	nr, _, err := syscall.Recvfrom(s.fd, rb, 0|block)
@@ -175,13 +175,18 @@ func (s *NetlinkConnection) Receive(bytesize int, block int) ([]NetlinkMessage, 
 	return parseAuditNetlinkMessage(rb)
 }
 
-// GetPID returns the PID of the program socket is configured to talk to
+// Retrieves port ID of netlink socket peer
 func (s *NetlinkConnection) GetPID() (int, error) {
-	address, err := syscall.Getsockname(s.fd)
+	var (
+		address syscall.Sockaddr
+		v       *syscall.SockaddrNetlink
+		err     error
+	)
+	address, err = syscall.Getsockname(s.fd)
 	if err != nil {
-		return 0, errors.Wrap(err, "Getsockname failed")
+		return 0, err
 	}
-	v := address.(*syscall.SockaddrNetlink)
+	v = address.(*syscall.SockaddrNetlink)
 	return int(v.Pid), nil
 }
 
