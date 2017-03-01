@@ -344,7 +344,6 @@ done:
 				continue
 			}
 			if m.Header.Type == syscall.NLMSG_DONE {
-				ret = append(ret, m)
 				break done
 			}
 			if m.Header.Type == syscall.NLMSG_ERROR {
