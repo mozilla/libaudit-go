@@ -52,7 +52,7 @@ func TestNetlinkConnection(t *testing.T) {
 	if err = s.Send(wb); err != nil {
 		t.Errorf("TestNetlinkConnection: sending failed %v", err)
 	}
-	err = auditGetReply(s, MAX_AUDIT_MESSAGE_LENGTH, 0, wb.Header.Seq)
+	_, err = auditGetReply(s, wb.Header.Seq)
 	if err != nil {
 		t.Errorf("TestNetlinkConnection: test failed %v", err)
 	}

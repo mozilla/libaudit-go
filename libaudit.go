@@ -311,30 +311,40 @@ func NewNetlinkConnection() (ret *NetlinkConnection, err error) {
 	return
 }
 
-// auditGetReply connects to kernel to recieve a reply
-func auditGetReply(s Netlink, bytesize, block int, seq uint32) error {
+// Get a reply to a message from the kernel. The message(s) we are looking for are indicated
+// by passing sequence number seq.
+//
+// Once we recieve the full response any matching messages are returned. Note this function
+// would generally be used to retrieve a response from various AUDIT_SET functions or similar
+// configuration routines, and we do not use this for draining the audit event queue.
+//
+// XXX Right now we just discard any unrelated messages, which is not neccesarily
+// ideal. This could be adapted to handle this better.
+//
+// XXX This function also waits until it gets the correct message, so if for some reason
+// the message does not come through it will not return. This should also be improved.
+func auditGetReply(s Netlink, seq uint32) (ret []NetlinkMessage, err error) {
 done:
 	for {
-		var nbflag bool
-		if block != 0 {
-			nbflag = true
-		}
-		msgs, err := s.Receive(nbflag) //parseAuditNetlinkMessage(rb)
+		msgs, err := s.Receive(false)
 		if err != nil {
-			return errors.Wrap(err, "auditGetReply failed")
+			return ret, err
 		}
 		for _, m := range msgs {
 			socketPID, err := s.GetPID()
 			if err != nil {
-				return errors.Wrap(err, "auditGetReply: GetPID failed")
+				return ret, err
 			}
 			if m.Header.Seq != seq {
-				return fmt.Errorf("auditGetReply: Wrong Seq nr %d, expected %d", m.Header.Seq, seq)
+				// Wasn't the sequence number we are looking for, just discard it
+				continue
 			}
 			if int(m.Header.Pid) != socketPID {
-				return fmt.Errorf("auditGetReply: Wrong pid %d, expected %d", m.Header.Pid, socketPID)
+				// PID didn't match, just discard it
+				continue
 			}
 			if m.Header.Type == syscall.NLMSG_DONE {
+				ret = append(ret, m)
 				break done
 			}
 			if m.Header.Type == syscall.NLMSG_ERROR {
@@ -342,16 +352,13 @@ done:
 				if e == 0 {
 					break done
 				} else {
-					return fmt.Errorf("auditGetReply: error while recieving reply -%d", e)
+					return ret, fmt.Errorf("auditGetReply: error while recieving reply -%d", e)
 				}
 			}
-			// acknowledge AUDIT_GET replies from kernel
-			if m.Header.Type == uint16(AUDIT_GET) {
-				break done
-			}
+			ret = append(ret, m)
 		}
 	}
-	return nil
+	return ret, nil
 }
 
 // Send AUDIT_SET with the associated auditStatus configuration
@@ -366,7 +373,7 @@ func auditSendStatus(s Netlink, status auditStatus) (err error) {
 	if err = s.Send(wb); err != nil {
 		return
 	}
-	err = auditGetReply(s, syscall.Getpagesize(), 0, wb.Header.Seq)
+	_, err = auditGetReply(s, wb.Header.Seq)
 	if err != nil {
 		return errors.Wrap(err, "AuditSetEnabled failed")
 	}
