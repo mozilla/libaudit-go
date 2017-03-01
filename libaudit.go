@@ -154,10 +154,7 @@ func (s *NetlinkConnection) Close() {
 
 // Send netlink message using the netlink connection
 func (s *NetlinkConnection) Send(request *NetlinkMessage) error {
-	if err := syscall.Sendto(s.fd, request.ToWireFormat(), 0, &s.address); err != nil {
-		return errors.Wrap(err, "could not send NetlinkMessage")
-	}
-	return nil
+	return syscall.Sendto(s.fd, request.ToWireFormat(), 0, &s.address)
 }
 
 // Receive any available netlink messages being sent to us by the kernel
