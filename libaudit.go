@@ -133,7 +133,7 @@ type Netlink interface {
 	Send(request *NetlinkMessage) error
 	// Receive requires bytesize which specify the buffer size for incoming message and block which specify the mode for
 	// reception (blocking and nonblocking)
-	Receive(bytesize int, block int) ([]NetlinkMessage, error)
+	Receive(nonblocking bool) ([]NetlinkMessage, error)
 	// GetPID returns the PID of the program the socket is being used to talk to
 	// in our case we talk to the kernel so it is set to 0
 	GetPID() (int, error)
@@ -158,18 +158,19 @@ func (s *NetlinkConnection) Send(request *NetlinkMessage) error {
 }
 
 // Receive any available netlink messages being sent to us by the kernel
-func (s *NetlinkConnection) Receive(bytesize int, block int) ([]NetlinkMessage, error) {
-	rb := make([]byte, bytesize)
-	nr, _, err := syscall.Recvfrom(s.fd, rb, 0|block)
-
+func (s *NetlinkConnection) Receive(nonblocking bool) ([]NetlinkMessage, error) {
+	var (
+		flags = 0
+	)
+	if nonblocking {
+		flags |= syscall.MSG_DONTWAIT
+	}
+	buf := make([]byte, MAX_AUDIT_MESSAGE_LENGTH+syscall.NLMSG_HDRLEN)
+	nr, _, err := syscall.Recvfrom(s.fd, buf, flags)
 	if err != nil {
-		return nil, errors.Wrap(err, "recvfrom failed")
+		return nil, err
 	}
-	if nr < syscall.NLMSG_HDRLEN {
-		return nil, errors.Wrap(err, "message length shorter than expected")
-	}
-	rb = rb[:nr]
-	return parseAuditNetlinkMessage(rb)
+	return parseAuditNetlinkMessage(buf[:nr])
 }
 
 // Retrieves port ID of netlink socket peer
@@ -286,7 +287,11 @@ func NewNetlinkConnection() (ret *NetlinkConnection, err error) {
 func auditGetReply(s Netlink, bytesize, block int, seq uint32) error {
 done:
 	for {
-		msgs, err := s.Receive(bytesize, block) //parseAuditNetlinkMessage(rb)
+		var nbflag bool
+		if block != 0 {
+			nbflag = true
+		}
+		msgs, err := s.Receive(nbflag) //parseAuditNetlinkMessage(rb)
 		if err != nil {
 			return errors.Wrap(err, "auditGetReply failed")
 		}
@@ -365,7 +370,7 @@ done:
 	for {
 		// MSG_DONTWAIT has implications on systems with low memory and CPU
 		// msgs, err := s.Receive(MAX_AUDIT_MESSAGE_LENGTH, syscall.MSG_DONTWAIT)
-		msgs, err := s.Receive(MAX_AUDIT_MESSAGE_LENGTH, 0)
+		msgs, err := s.Receive(false)
 		if err != nil {
 			return -1, errors.Wrap(err, "AuditIsEnabled failed")
 		}

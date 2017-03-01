@@ -69,7 +69,7 @@ func (t *testNetlinkConn) Send(request *NetlinkMessage) error {
 	return nil
 }
 
-func (t *testNetlinkConn) Receive(bytesize int, block int) ([]NetlinkMessage, error) {
+func (t *testNetlinkConn) Receive(nonblocking bool) ([]NetlinkMessage, error) {
 	var v []NetlinkMessage
 	m := newNetlinkAuditRequest(uint16(AUDIT_GET), syscall.AF_NETLINK, 0)
 	m.Header.Seq = t.actualNetlinkMessage.Header.Seq

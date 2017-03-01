@@ -81,7 +81,7 @@ done:
 	for {
 		// Avoid DONTWAIT due to implications on systems with low resources
 		// msgs, err := s.Receive(MAX_AUDIT_MESSAGE_LENGTH, syscall.MSG_DONTWAIT)
-		msgs, err := s.Receive(MAX_AUDIT_MESSAGE_LENGTH, 0)
+		msgs, err := s.Receive(false)
 		if err != nil {
 			return errors.Wrap(err, "DeleteAllRules failed")
 		}
@@ -852,7 +852,7 @@ func ListAllRules(s Netlink) ([]string, error) {
 	}
 done:
 	for {
-		msgs, err := s.Receive(MAX_AUDIT_MESSAGE_LENGTH, 0)
+		msgs, err := s.Receive(false)
 		if err != nil {
 			return nil, errors.Wrap(err, "ListAllRules failed")
 		}
