@@ -215,43 +215,69 @@ func nlmAlignOf(msglen int) int {
 	return (msglen + syscall.NLMSG_ALIGNTO - 1) & ^(syscall.NLMSG_ALIGNTO - 1)
 }
 
-// Parse a byte stream to an array of NetlinkMessage structs
-func parseAuditNetlinkMessage(b []byte) ([]NetlinkMessage, error) {
-
-	var (
-		msgs []NetlinkMessage
-		m    NetlinkMessage
-	)
-	for len(b) >= syscall.NLMSG_HDRLEN {
-		h, dbuf, dlen, err := netlinkMessageHeaderAndData(b)
+// Process an incoming netlink message from the socket, and return a slice of
+// NetlinkMessage types, or an error if an error is encountered.
+//
+// XXX This function attempts to handle incoming messages with NLM_F_MULTI. This
+// may not be required for audit messages, but the kernel does reference
+// NLM_F_MULTI in kernel/audit.c.
+func parseAuditNetlinkMessage(b []byte) (ret []NetlinkMessage, err error) {
+	for len(b) != 0 {
+		multi := false
+		var (
+			m NetlinkMessage
+		)
+		m.Header.Len, b, err = netlinkPopuint32(b)
+		// Determine our alignment size given the reported header length
+		alignbounds := nlmAlignOf(int(m.Header.Len))
+		padding := alignbounds - int(m.Header.Len)
+		if len(b) < alignbounds-4 {
+			return ret, fmt.Errorf("short read on audit message, expected %v bytes had %v",
+				alignbounds, len(b)+4)
+		}
+		// If we get here, we have enough data for the entire message
+		m.Header.Type, b, err = netlinkPopuint16(b)
 		if err != nil {
-			return nil, errors.Wrap(err, "error while parsing NetlinkMessage")
+			return ret, err
 		}
-		if len(dbuf) == int(h.Len) || dlen == int(h.Len) {
-			// this should never be possible in correct scenarios
-			// but sometimes kernel reponse have length of header == length of data appended
-			// which would lead to trimming of data if we subtract NLMSG_HDRLEN
-			// therefore following workaround
-			m = NetlinkMessage{Header: *h, Data: dbuf[:int(h.Len)]}
-		} else {
-			m = NetlinkMessage{Header: *h, Data: dbuf[:int(h.Len)-syscall.NLMSG_HDRLEN]}
+		m.Header.Flags, b, err = netlinkPopuint16(b)
+		if err != nil {
+			return ret, err
 		}
-
-		msgs = append(msgs, m)
-		b = b[dlen:]
+		if (m.Header.Flags & syscall.NLM_F_MULTI) != 0 {
+			multi = true
+		}
+		m.Header.Seq, b, err = netlinkPopuint32(b)
+		if err != nil {
+			return ret, err
+		}
+		m.Header.Pid, b, err = netlinkPopuint32(b)
+		if err != nil {
+			return ret, err
+		}
+		datalen := m.Header.Len - syscall.NLMSG_HDRLEN
+		m.Data = b[:datalen]
+		b = b[int(datalen)+padding:]
+		ret = append(ret, m)
+		if !multi {
+			break
+		}
 	}
-
-	return msgs, nil
+	return ret, nil
 }
 
-// Internal Function, uses unsafe pointer conversions for separating Netlink Header and the Data appended with it
-func netlinkMessageHeaderAndData(b []byte) (*syscall.NlMsghdr, []byte, int, error) {
-
-	h := (*syscall.NlMsghdr)(unsafe.Pointer(&b[0]))
-	if int(h.Len) < syscall.NLMSG_HDRLEN || int(h.Len) > len(b) {
-		return nil, nil, 0, fmt.Errorf("Nlmsghdr header length unexpected %v, actual packet length %v", h.Len, len(b))
+func netlinkPopuint16(b []byte) (uint16, []byte, error) {
+	if len(b) < 2 {
+		return 0, b, fmt.Errorf("not enough bytes for uint16")
 	}
-	return h, b[syscall.NLMSG_HDRLEN:], nlmAlignOf(int(h.Len)), nil
+	return binary.LittleEndian.Uint16(b[:2]), b[2:], nil
+}
+
+func netlinkPopuint32(b []byte) (uint32, []byte, error) {
+	if len(b) < 4 {
+		return 0, b, fmt.Errorf("not enough bytes for uint32")
+	}
+	return binary.LittleEndian.Uint32(b[:4]), b[4:], nil
 }
 
 func newNetlinkAuditRequest(proto uint16, family, sizeofData int) *NetlinkMessage {
