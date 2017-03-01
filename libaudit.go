@@ -147,6 +147,44 @@ type NetlinkConnection struct {
 	address syscall.SockaddrNetlink // Netlink sockaddr
 }
 
+// Close is a wrapper for closing netlink socket
+func (s *NetlinkConnection) Close() {
+	syscall.Close(s.fd)
+}
+
+// Send is a wrapper for sending NetlinkMessage across netlink socket
+func (s *NetlinkConnection) Send(request *NetlinkMessage) error {
+	if err := syscall.Sendto(s.fd, request.ToWireFormat(), 0, &s.address); err != nil {
+		return errors.Wrap(err, "could not send NetlinkMessage")
+	}
+	return nil
+}
+
+// Receive is a wrapper for recieving from netlink socket and return an array of NetlinkMessage
+func (s *NetlinkConnection) Receive(bytesize int, block int) ([]NetlinkMessage, error) {
+	rb := make([]byte, bytesize)
+	nr, _, err := syscall.Recvfrom(s.fd, rb, 0|block)
+
+	if err != nil {
+		return nil, errors.Wrap(err, "recvfrom failed")
+	}
+	if nr < syscall.NLMSG_HDRLEN {
+		return nil, errors.Wrap(err, "message length shorter than expected")
+	}
+	rb = rb[:nr]
+	return parseAuditNetlinkMessage(rb)
+}
+
+// GetPID returns the PID of the program socket is configured to talk to
+func (s *NetlinkConnection) GetPID() (int, error) {
+	address, err := syscall.Getsockname(s.fd)
+	if err != nil {
+		return 0, errors.Wrap(err, "Getsockname failed")
+	}
+	v := address.(*syscall.SockaddrNetlink)
+	return int(v.Pid), nil
+}
+
 func nativeEndian() binary.ByteOrder {
 	var x uint32 = 0x01020304
 	if *(*byte)(unsafe.Pointer(&x)) == 0x01 {
@@ -240,44 +278,6 @@ func NewNetlinkConnection() (ret *NetlinkConnection, err error) {
 		return
 	}
 	return
-}
-
-// Close is a wrapper for closing netlink socket
-func (s *NetlinkConnection) Close() {
-	syscall.Close(s.fd)
-}
-
-// Send is a wrapper for sending NetlinkMessage across netlink socket
-func (s *NetlinkConnection) Send(request *NetlinkMessage) error {
-	if err := syscall.Sendto(s.fd, request.ToWireFormat(), 0, &s.address); err != nil {
-		return errors.Wrap(err, "could not send NetlinkMessage")
-	}
-	return nil
-}
-
-// Receive is a wrapper for recieving from netlink socket and return an array of NetlinkMessage
-func (s *NetlinkConnection) Receive(bytesize int, block int) ([]NetlinkMessage, error) {
-	rb := make([]byte, bytesize)
-	nr, _, err := syscall.Recvfrom(s.fd, rb, 0|block)
-
-	if err != nil {
-		return nil, errors.Wrap(err, "recvfrom failed")
-	}
-	if nr < syscall.NLMSG_HDRLEN {
-		return nil, errors.Wrap(err, "message length shorter than expected")
-	}
-	rb = rb[:nr]
-	return parseAuditNetlinkMessage(rb)
-}
-
-// GetPID returns the PID of the program socket is configured to talk to
-func (s *NetlinkConnection) GetPID() (int, error) {
-	address, err := syscall.Getsockname(s.fd)
-	if err != nil {
-		return 0, errors.Wrap(err, "Getsockname failed")
-	}
-	v := address.(*syscall.SockaddrNetlink)
-	return int(v.Pid), nil
 }
 
 // auditGetReply connects to kernel to recieve a reply
