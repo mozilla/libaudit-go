@@ -86,12 +86,11 @@ func testSettersEmulated(t *testing.T) {
 	var (
 		n             testNetlinkConn
 		err           error
-		actualStatus  = 1
 		actualPID     = 8096 //for emulation we use a dummy PID
 		actualRate    = 500
 		actualBackLog = 500
 	)
-	err = AuditSetEnabled(&n, actualStatus)
+	err = AuditSetEnabled(&n, true)
 	if err != nil {
 		t.Errorf("AuditSetEnabled failed %v", err)
 	}
@@ -184,7 +183,7 @@ func TestSetters(t *testing.T) {
 	}
 	s, err = NewNetlinkConnection()
 	defer s.Close()
-	err = AuditSetEnabled(s, actualStatus)
+	err = AuditSetEnabled(s, true)
 	if err != nil {
 		t.Errorf("AuditSetEnabled failed %v", err)
 	}
