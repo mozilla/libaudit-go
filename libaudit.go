@@ -140,12 +140,12 @@ type Netlink interface {
 	GetPID() (int, error)
 }
 
-// NetlinkConnection holds the file descriptor and address for
-// an opened netlink connection
-// It implements the Netlink interface
+// NetlinkConnection describes a netlink interface with the kernel.
+//
+// Programs should call NewNetlinkConnection() to create a new instance.
 type NetlinkConnection struct {
-	fd      int
-	address syscall.SockaddrNetlink
+	fd      int                     // File descriptor used for communication
+	address syscall.SockaddrNetlink // Netlink sockaddr
 }
 
 func nativeEndian() binary.ByteOrder {
