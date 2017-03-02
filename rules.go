@@ -70,53 +70,27 @@ func auditDeleteRuleData(s Netlink, rule *auditRuleData, flags uint32, action ui
 	return nil
 }
 
-// DeleteAllRules deletes all previous audit rules listed in the kernel
+// Purge all audit rules currently in use in the audit system
 func DeleteAllRules(s Netlink) error {
 	wb := newNetlinkAuditRequest(uint16(AUDIT_LIST_RULES), syscall.AF_NETLINK, 0)
 	if err := s.Send(wb); err != nil {
-		return errors.Wrap(err, "DeleteAllRules failed")
+		return err
 	}
 
-done:
-	for {
-		// Avoid DONTWAIT due to implications on systems with low resources
-		// msgs, err := s.Receive(MAX_AUDIT_MESSAGE_LENGTH, syscall.MSG_DONTWAIT)
-		msgs, err := s.Receive(false)
-		if err != nil {
-			return errors.Wrap(err, "DeleteAllRules failed")
-		}
-
-		for _, m := range msgs {
-			socketPID, err := s.GetPID()
+	msgs, err := auditGetReply(s, wb.Header.Seq, false)
+	if err != nil {
+		return err
+	}
+	for _, m := range msgs {
+		if m.Header.Type == uint16(AUDIT_LIST_RULES) {
+			delwb := newNetlinkAuditRequest(uint16(AUDIT_DEL_RULE), syscall.AF_NETLINK, len(m.Data))
+			delwb.Data = m.Data
+			if err = s.Send(delwb); err != nil {
+				return err
+			}
+			_, err := auditGetReply(s, delwb.Header.Seq, true) // Drain ACK
 			if err != nil {
-				return errors.Wrap(err, "DeleteAllRules: GetPID failed")
-			}
-			if m.Header.Seq != uint32(wb.Header.Seq) {
-				return fmt.Errorf("DeleteAllRules: Wrong Seq nr %d, expected %d", m.Header.Seq, wb.Header.Seq)
-			}
-			if int(m.Header.Pid) != socketPID {
-				return fmt.Errorf("DeleteAllRules: Wrong PID %d, expected %d", m.Header.Pid, socketPID)
-			}
-			if m.Header.Type == syscall.NLMSG_DONE {
-				break done
-			}
-			if m.Header.Type == syscall.NLMSG_ERROR {
-				e := int32(nativeEndian().Uint32(m.Data[0:4]))
-				if e != 0 {
-					return fmt.Errorf("DeleteAllRules: error receiving rules -%d", e)
-				}
-			}
-			if m.Header.Type == uint16(AUDIT_LIST_RULES) {
-				b := m.Data[:]
-				//Avoid conversion to auditRuleData, we just need to pass the recvd rule
-				//as a Buffer in a newly packed rule to delete it
-				// rules := (*auditRuleData)(unsafe.Pointer(&b[0]))
-
-				newwb := newNetlinkAuditRequest(uint16(AUDIT_DEL_RULE), syscall.AF_NETLINK, len(b) /*+int(rule.Buflen)*/)
-				newwb.Data = append(newwb.Data, b[:]...)
-				if err := s.Send(newwb); err != nil {
-					return errors.Wrap(err, "DeleteAllRules failed")
-				}
+				return err
 			}
 		}
 	}
