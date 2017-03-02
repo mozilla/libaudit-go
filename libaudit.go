@@ -108,7 +108,13 @@ import (
 	"github.com/pkg/errors"
 )
 
+// The sequence number used for requests from us to the kernel in netlink messages,
+// just increments.
 var sequenceNumber uint32
+
+func nextSequence() uint32 {
+	return atomic.AddUint32(&sequenceNumber, 1)
+}
 
 // NetlinkMessage is the struct type that is used for communicating on netlink sockets.
 type NetlinkMessage syscall.NetlinkMessage
@@ -283,12 +289,13 @@ func netlinkPopuint32(b []byte) (uint32, []byte, error) {
 	return binary.LittleEndian.Uint32(b[:4]), b[4:], nil
 }
 
+// Initialize the header section as preparation for sending a new netlink message.
 func newNetlinkAuditRequest(proto uint16, family, sizeofData int) *NetlinkMessage {
 	rr := &NetlinkMessage{}
 	rr.Header.Len = uint32(syscall.NLMSG_HDRLEN + sizeofData)
 	rr.Header.Type = proto
 	rr.Header.Flags = syscall.NLM_F_REQUEST | syscall.NLM_F_ACK
-	rr.Header.Seq = atomic.AddUint32(&sequenceNumber, 1) //Autoincrementing Sequence
+	rr.Header.Seq = nextSequence()
 	return rr
 }
 
