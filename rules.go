@@ -20,6 +20,34 @@ import (
 
 var rulesRetrieved auditRuleData
 
+// Describes a set of audit rules; we load these from a JSON file
+type auditRules struct {
+	FileRules       []auditFileRule    `json:"file_rules"`
+	SyscallRules    []auditSyscallRule `json:"syscall_rules"`
+	StrictPathCheck bool               `json:"strict_path_check"`
+	Delete          bool               `json:"delete"`
+	Enable          string             `json:"enable"`
+	Buffer          string             `json:"buffer"`
+	Rate            string             `json:"rate"`
+}
+
+type auditFileRule struct {
+	Path       string `json:"path"`
+	Key        string `json:"key"`
+	Permission string `json:"permission"`
+}
+
+type auditSyscallRule struct {
+	Key    string `json:"key"`
+	Fields []struct {
+		Name  string      `json:"name"`
+		Value interface{} `json:"value"` // Can be a string or int
+		Op    string      `json:"op"`
+	} `json:"fields"`
+	Syscalls []string `json:"syscalls"`
+	Actions  []string `json:"actions"`
+}
+
 // auditRuleData stores rule information
 // replication of c struct audit_rule_data
 type auditRuleData struct {
@@ -378,7 +406,7 @@ func auditRuleFieldPairData(rule *auditRuleData, fieldval interface{}, opval uin
 
 var errEntryDep = errors.New("use of entry filter is deprecated")
 
-func setActionAndFilters(actions []interface{}) (int, int) {
+func setActionAndFilters(actions []string) (int, int) {
 	action := -1
 	filter := AUDIT_FILTER_UNSET
 
@@ -495,159 +523,96 @@ It expects the config in a json formatted string of following format:
 */
 func SetRules(s Netlink, content []byte) error {
 	var (
-		rules      interface{}
-		err        error
-		strictPath bool
+		rules auditRules
+		err   error
 	)
 	err = json.Unmarshal(content, &rules)
 	if err != nil {
-		return errors.Wrap(err, "SetRules failed")
-	}
-
-	m := rules.(map[string]interface{})
-
-	if err != nil {
-		return errors.Wrap(err, "SetRules failed")
-	}
-	if strict, ok := m["strict_path_check"]; ok && strict.(bool) {
-		strictPath = true
+		return err
 	}
 	//TODO: syscallMap should be loaded according to runtime arch
 	syscallMap := headers.SysMapX64
-	for k, v := range m {
-		auditSyscallAdded = false
-		switch k {
-		case "file_rules":
-			vi := v.([]interface{})
-			for ruleNo := range vi {
-				rule := vi[ruleNo].(map[string]interface{})
-				path, ok := rule["path"]
-				if path == "" || !ok {
-					return errors.Wrap(err, "SetRules failed: watch option needs a path")
-				}
-				var ruleData auditRuleData
-				ruleData.Buf = make([]byte, 0)
-				add := AUDIT_FILTER_EXIT
-				action := AUDIT_ALWAYS
-				auditSyscallAdded = true
+	for _, x := range rules.FileRules {
+		var ruleData auditRuleData
+		ruleData.Buf = make([]byte, 0)
 
-				err = auditSetupAndAddWatchDir(&ruleData, path.(string), strictPath)
-				if err != nil {
-					return errors.Wrap(err, "SetRules failed")
-				}
-				perms, ok := rule["permission"]
-				if ok {
-					err = auditSetupAndUpdatePerms(&ruleData, perms.(string))
-					if err != nil {
-						return errors.Wrap(err, "SetRules failed")
-					}
-				}
+		auditSyscallAdded = true
+		err = auditSetupAndAddWatchDir(&ruleData, x.Path, rules.StrictPathCheck)
+		if err != nil {
+			return err
+		}
+		err = auditSetupAndUpdatePerms(&ruleData, x.Permission)
+		if err != nil {
+			return err
+		}
+		err = auditRuleFieldPairData(&ruleData, x.Key, AUDIT_EQUAL, "key", AUDIT_FILTER_UNSET)
+		if err != nil {
+			return err
+		}
+		err = auditAddRuleData(s, &ruleData, AUDIT_FILTER_EXIT, AUDIT_ALWAYS)
+		if err != nil {
+			return err
+		}
+	}
+	for _, x := range rules.SyscallRules {
+		var ruleData auditRuleData
+		ruleData.Buf = make([]byte, 0)
+		for _, y := range x.Syscalls {
+			ival, ok := syscallMap[y]
+			if !ok {
+				return fmt.Errorf("invalid syscall %v", y)
+			}
+			err = auditRuleSyscallData(&ruleData, ival)
+			if err != nil {
+				return err
+			}
+		}
 
-				key, ok := rule["key"]
-				if ok {
-					err = auditRuleFieldPairData(&ruleData, key, AUDIT_EQUAL, "key", AUDIT_FILTER_UNSET) // &AUDIT_BIT_MASK
-					if err != nil {
-						return errors.Wrap(err, "SetRules failed")
-					}
-				}
+		// Apply action on syscall by separating the filters (exit) from actions (always)
+		action, filter := setActionAndFilters(x.Actions)
 
-				err = auditAddRuleData(s, &ruleData, add, action)
-				if err != nil {
-					return errors.Wrap(err, "SetRules failed")
-				}
+		for _, y := range x.Fields {
+			var opval uint32
 
+			switch y.Op {
+			case "nt_eq":
+				opval = AUDIT_NOT_EQUAL
+			case "gt_or_eq":
+				opval = AUDIT_GREATER_THAN_OR_EQUAL
+			case "lt_or_eq":
+				opval = AUDIT_LESS_THAN_OR_EQUAL
+			case "and_eq":
+				opval = AUDIT_BIT_TEST
+			case "eq":
+				opval = AUDIT_EQUAL
+			case "gt":
+				opval = AUDIT_GREATER_THAN
+			case "lt":
+				opval = AUDIT_LESS_THAN
+			case "and":
+				opval = AUDIT_BIT_MASK
 			}
 
-		case "syscall_rules":
-			vi := v.([]interface{})
-			for sruleNo := range vi {
-				srule := vi[sruleNo].(map[string]interface{})
-				var (
-					ruleData         auditRuleData
-					syscallsNotFound string
-				)
-				ruleData.Buf = make([]byte, 0)
-				// Process syscalls
-				syscalls, ok := srule["syscalls"].([]interface{})
-				if ok {
-					for _, syscall := range syscalls {
-						syscall, ok := syscall.(string)
-						if !ok {
-							return fmt.Errorf("SetRules failed: unexpected syscall name %v", syscall)
-						}
-						if ival, ok := syscallMap[syscall]; ok {
-							err = auditRuleSyscallData(&ruleData, ival)
-							if err == nil {
-								auditSyscallAdded = true
-							} else {
-								return errors.Wrap(err, "SetRules failed")
-							}
-						} else {
-							syscallsNotFound += " " + syscall
-						}
-					}
-				}
-				if auditSyscallAdded != true {
-					return fmt.Errorf("SetRules failed: one or more syscalls not found: %v", syscallsNotFound)
-				}
-
-				// Process action
-				actions := srule["actions"].([]interface{})
-
-				//Apply action on syscall by separating the filters (exit) from actions (always)
-				action, filter := setActionAndFilters(actions)
-
-				// Process fields
-				fields, ok := srule["fields"].([]interface{})
-				if ok {
-					for _, field := range fields {
-						fieldval := field.(map[string]interface{})["value"]
-						op := field.(map[string]interface{})["op"]
-						fieldname := field.(map[string]interface{})["name"]
-						var opval uint32
-						if op == "nt_eq" {
-							opval = AUDIT_NOT_EQUAL
-						} else if op == "gt_or_eq" {
-							opval = AUDIT_GREATER_THAN_OR_EQUAL
-						} else if op == "lt_or_eq" {
-							opval = AUDIT_LESS_THAN_OR_EQUAL
-						} else if op == "and_eq" {
-							opval = AUDIT_BIT_TEST
-						} else if op == "eq" {
-							opval = AUDIT_EQUAL
-						} else if op == "gt" {
-							opval = AUDIT_GREATER_THAN
-						} else if op == "lt" {
-							opval = AUDIT_LESS_THAN
-						} else if op == "and" {
-							opval = AUDIT_BIT_MASK
-						}
-
-						//Take appropriate action according to filters provided
-						err = auditRuleFieldPairData(&ruleData, fieldval, opval, fieldname.(string), filter) // &AUDIT_BIT_MASK
-						if err != nil {
-							return errors.Wrap(err, "SetRules failed")
-						}
-					}
-				}
-
-				key, ok := srule["key"]
-				if ok {
-					err = auditRuleFieldPairData(&ruleData, key, AUDIT_EQUAL, "key", AUDIT_FILTER_UNSET) // &AUDIT_BIT_MASK
-					if err != nil {
-						return errors.Wrap(err, "SetRules failed")
-					}
-				}
-
-				if filter != AUDIT_FILTER_UNSET {
-					err = auditAddRuleData(s, &ruleData, filter, action)
-					if err != nil {
-						return errors.Wrap(err, "SetRules failed")
-					}
-				} else {
-					return fmt.Errorf("SetRules failed: filters not set or invalid: %v , %v ", actions[0].(string), actions[1].(string))
-				}
+			err = auditRuleFieldPairData(&ruleData, y.Value, opval, y.Name, filter)
+			if err != nil {
+				return err
 			}
+		}
+
+		if x.Key != "" {
+			err = auditRuleFieldPairData(&ruleData, x.Key, AUDIT_EQUAL, "key", AUDIT_FILTER_UNSET)
+			if err != nil {
+				return err
+			}
+		}
+
+		if filter != AUDIT_FILTER_UNSET {
+			err = auditAddRuleData(s, &ruleData, filter, action)
+			if err != nil {
+				return err
+			}
+		} else {
+			return fmt.Errorf("filters not set or invalid")
 		}
 	}
 	return nil
