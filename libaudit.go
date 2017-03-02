@@ -220,9 +220,10 @@ func nlmAlignOf(msglen int) int {
 // Process an incoming netlink message from the socket, and return a slice of
 // NetlinkMessage types, or an error if an error is encountered.
 //
-// XXX This function attempts to handle incoming messages with NLM_F_MULTI. This
-// may not be required for audit messages, but the kernel does reference
-// NLM_F_MULTI in kernel/audit.c.
+// This function handles incoming messages with NLM_F_MULTI; in the case of
+// a multipart message, ret will contain all netlink messages which are part
+// of the kernel message. If it is not a multipart message, ret will simply
+// contain a single message.
 func parseAuditNetlinkMessage(b []byte) (ret []NetlinkMessage, err error) {
 	for len(b) != 0 {
 		multi := false
@@ -323,9 +324,10 @@ func NewNetlinkConnection() (ret *NetlinkConnection, err error) {
 //
 // XXX This function also waits until it gets the correct message, so if for some reason
 // the message does not come through it will not return. This should also be improved.
-func auditGetReply(s Netlink, seq uint32) (ret []NetlinkMessage, err error) {
+func auditGetReply(s Netlink, seq uint32, chkAck bool) (ret []NetlinkMessage, err error) {
 done:
 	for {
+		dbrk := false
 		msgs, err := s.Receive(false)
 		if err != nil {
 			return ret, err
@@ -349,12 +351,28 @@ done:
 			if m.Header.Type == syscall.NLMSG_ERROR {
 				e := int32(nativeEndian().Uint32(m.Data[0:4]))
 				if e == 0 {
-					break done
+					// ACK response from the kernel; if chkAck is true
+					// we just return as there is nothing left to do
+					if chkAck {
+						break done
+					}
+					// Otherwise, keep going so we can get the response
+					// we want
+					continue
 				} else {
 					return ret, fmt.Errorf("auditGetReply: error while recieving reply -%d", e)
 				}
 			}
 			ret = append(ret, m)
+			if (m.Header.Flags & syscall.NLM_F_MULTI) == 0 {
+				// If it's not a multipart message, once we get one valid
+				// message just return
+				dbrk = true
+				break
+			}
+		}
+		if dbrk {
+			break
 		}
 	}
 	return ret, nil
@@ -372,7 +390,7 @@ func auditSendStatus(s Netlink, status auditStatus) (err error) {
 	if err = s.Send(wb); err != nil {
 		return
 	}
-	_, err = auditGetReply(s, wb.Header.Seq)
+	_, err = auditGetReply(s, wb.Header.Seq, true)
 	if err != nil {
 		return errors.Wrap(err, "AuditSetEnabled failed")
 	}
@@ -391,62 +409,36 @@ func AuditSetEnabled(s Netlink, enabled bool) (err error) {
 	return auditSendStatus(s, status)
 }
 
-// AuditIsEnabled returns 0 if audit is not enabled and
-// 1 if enabled, and -1 on failure.
-func AuditIsEnabled(s Netlink) (state int, err error) {
+// Returns true if the auditing subsystem is enabled in the kernel
+func AuditIsEnabled(s Netlink) (bool, error) {
 	var status auditStatus
 
 	wb := newNetlinkAuditRequest(uint16(AUDIT_GET), syscall.AF_NETLINK, 0)
-	if err = s.Send(wb); err != nil {
-		return -1, errors.Wrap(err, "AuditIsEnabled failed")
+	if err := s.Send(wb); err != nil {
+		return false, err
 	}
 
-done:
-	for {
-		// MSG_DONTWAIT has implications on systems with low memory and CPU
-		// msgs, err := s.Receive(MAX_AUDIT_MESSAGE_LENGTH, syscall.MSG_DONTWAIT)
-		msgs, err := s.Receive(false)
-		if err != nil {
-			return -1, errors.Wrap(err, "AuditIsEnabled failed")
-		}
-
-		for _, m := range msgs {
-			socketPID, err := s.GetPID()
-			if err != nil {
-				return -1, errors.Wrap(err, "AuditIsEnabled: GetPID failed")
-			}
-			if m.Header.Seq != uint32(wb.Header.Seq) {
-
-				return -1, fmt.Errorf("AuditIsEnabled: Wrong Seq nr %d, expected %d", m.Header.Seq, wb.Header.Seq)
-			}
-			if int(m.Header.Pid) != socketPID {
-				return -1, fmt.Errorf("AuditIsEnabled: Wrong PID %d, expected %d", m.Header.Pid, socketPID)
-			}
-			if m.Header.Type == syscall.NLMSG_DONE {
-				break done
-			} else if m.Header.Type == syscall.NLMSG_ERROR {
-				e := int32(nativeEndian().Uint32(m.Data[0:4]))
-				if e == 0 {
-					// request ack from kernel
-					continue
-				}
-				break done
-
-			}
-
-			if m.Header.Type == uint16(AUDIT_GET) {
-				//Convert the data part written to auditStatus struct
-				buf := bytes.NewBuffer(m.Data[:])
-				err = binary.Read(buf, nativeEndian(), &status)
-				if err != nil {
-					return -1, errors.Wrap(err, "AuditIsEnabled: binary read into auditStatus failed")
-				}
-				state = int(status.Enabled)
-				return state, nil
-			}
-		}
+	msgs, err := auditGetReply(s, wb.Header.Seq, false)
+	if err != nil {
+		return false, err
 	}
-	return -1, nil
+	if len(msgs) != 1 {
+		return false, fmt.Errorf("unexpected number of responses from kernel for status request")
+	}
+	m := msgs[0]
+	if m.Header.Type != uint16(AUDIT_GET) {
+		return false, fmt.Errorf("status request response type was invalid")
+	}
+	// Convert the response to auditStatus
+	buf := bytes.NewBuffer(m.Data)
+	err = binary.Read(buf, nativeEndian(), &status)
+	if err != nil {
+		return false, err
+	}
+	if status.Enabled == 1 {
+		return true, nil
+	}
+	return false, nil
 }
 
 // Set PID for audit daemon in kernel (audit_set_pid(3))

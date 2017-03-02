@@ -52,7 +52,7 @@ func TestNetlinkConnection(t *testing.T) {
 	if err = s.Send(wb); err != nil {
 		t.Errorf("TestNetlinkConnection: sending failed %v", err)
 	}
-	_, err = auditGetReply(s, wb.Header.Seq)
+	_, err = auditGetReply(s, wb.Header.Seq, true)
 	if err != nil {
 		t.Errorf("TestNetlinkConnection: test failed %v", err)
 	}
@@ -186,6 +186,13 @@ func TestSetters(t *testing.T) {
 	err = AuditSetEnabled(s, true)
 	if err != nil {
 		t.Errorf("AuditSetEnabled failed %v", err)
+	}
+	auditstatus, err := AuditIsEnabled(s)
+	if err != nil {
+		t.Errorf("AuditIsEnabled failed %v", err)
+	}
+	if !auditstatus {
+		t.Errorf("AuditIsEnabled returned false")
 	}
 	err = AuditSetRateLimit(s, actualRate)
 	if err != nil {
