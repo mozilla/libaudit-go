@@ -134,15 +134,11 @@ type auditStatus struct {
 	BacklogWaitTime uint32 /* message queue wait timeout */
 }
 
-//Netlink is used for specifying the netlink connection types
+// Interface abstracting netlink IO functions; generally used with NetlinkConnection
 type Netlink interface {
-	Send(request *NetlinkMessage) error
-	// Receive requires bytesize which specify the buffer size for incoming message and block which specify the mode for
-	// reception (blocking and nonblocking)
-	Receive(nonblocking bool) ([]NetlinkMessage, error)
-	// GetPID returns the PID of the program the socket is being used to talk to
-	// in our case we talk to the kernel so it is set to 0
-	GetPID() (int, error)
+	Send(request *NetlinkMessage) error                 // Send a NetlinkMessage
+	Receive(nonblocking bool) ([]NetlinkMessage, error) // Receive netlink message(s) from the kernel
+	GetPID() (int, error)                               // Get netlink peer PID
 }
 
 // NetlinkConnection describes a netlink interface with the kernel.
@@ -203,18 +199,42 @@ func nativeEndian() binary.ByteOrder {
 	return binary.LittleEndian
 }
 
-// ToWireFormat converts a NetlinkMessage to byte stream.
-// Recvfrom in go takes only a byte [] to put the data recieved from the kernel that removes the need
-// for having a separate audit_reply struct for recieving data from kernel.
+// Convert a NetlinkMessage to a byte stream suitable to send to the kernel
 func (rr *NetlinkMessage) ToWireFormat() []byte {
-	b := make([]byte, rr.Header.Len)
-	*(*uint32)(unsafe.Pointer(&b[0:4][0])) = rr.Header.Len
-	*(*uint16)(unsafe.Pointer(&b[4:6][0])) = rr.Header.Type
-	*(*uint16)(unsafe.Pointer(&b[6:8][0])) = rr.Header.Flags
-	*(*uint32)(unsafe.Pointer(&b[8:12][0])) = rr.Header.Seq
-	*(*uint32)(unsafe.Pointer(&b[12:16][0])) = rr.Header.Pid
-	b = append(b[:16], rr.Data[:]...) //b[:16] is crucial for aligning the header and data properly.
-	return b
+	buf := new(bytes.Buffer)
+	pbytes := nlmAlignOf(int(rr.Header.Len)) - int(rr.Header.Len)
+	err := binary.Write(buf, nativeEndian(), rr.Header.Len)
+	if err != nil {
+		return nil
+	}
+	err = binary.Write(buf, nativeEndian(), rr.Header.Type)
+	if err != nil {
+		return nil
+	}
+	err = binary.Write(buf, nativeEndian(), rr.Header.Flags)
+	if err != nil {
+		return nil
+	}
+	err = binary.Write(buf, nativeEndian(), rr.Header.Seq)
+	if err != nil {
+		return nil
+	}
+	err = binary.Write(buf, nativeEndian(), rr.Header.Pid)
+	if err != nil {
+		return nil
+	}
+	err = binary.Write(buf, nativeEndian(), rr.Data)
+	if err != nil {
+		return nil
+	}
+	if pbytes > 0 {
+		pbuf := make([]byte, pbytes)
+		_, err = buf.Write(pbuf)
+		if err != nil {
+			return nil
+		}
+	}
+	return buf.Bytes()
 }
 
 // Round the length of a netlink message up to align it properly.
