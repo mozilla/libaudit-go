@@ -194,8 +194,7 @@ func (s *NetlinkConnection) GetPID() (int, error) {
 	return int(v.Pid), nil
 }
 
-// Determine the byte order for the platform, used to order data being
-// written to the kernel
+// Determine host byte order
 func nativeEndian() binary.ByteOrder {
 	var x uint32 = 0x01020304
 	if *(*byte)(unsafe.Pointer(&x)) == 0x01 {
@@ -275,18 +274,20 @@ func parseAuditNetlinkMessage(b []byte) (ret []NetlinkMessage, err error) {
 	return ret, nil
 }
 
+// Pop a uint16 off the front of slice b, and return the new buffer.
 func netlinkPopuint16(b []byte) (uint16, []byte, error) {
 	if len(b) < 2 {
 		return 0, b, fmt.Errorf("not enough bytes for uint16")
 	}
-	return binary.LittleEndian.Uint16(b[:2]), b[2:], nil
+	return nativeEndian().Uint16(b[:2]), b[2:], nil
 }
 
+// Pop a uint32 off the front of slice b, and return the new buffer.
 func netlinkPopuint32(b []byte) (uint32, []byte, error) {
 	if len(b) < 4 {
 		return 0, b, fmt.Errorf("not enough bytes for uint32")
 	}
-	return binary.LittleEndian.Uint32(b[:4]), b[4:], nil
+	return nativeEndian().Uint32(b[:4]), b[4:], nil
 }
 
 // Initialize the header section as preparation for sending a new netlink message.
