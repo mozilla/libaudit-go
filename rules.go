@@ -167,11 +167,10 @@ func auditNameToFtype(name string, value *int) error {
 }
 
 var (
-	errMaxField = errors.New("max fields for rule exceeded")
-	errNoStr    = errors.New("no support for string values")
-	errUnset    = errors.New("unable to set value")
-	errNoSys    = errors.New("no prior syscall added")
-	errMaxLen   = errors.New("max Rule length exceeded")
+	errNoStr  = errors.New("no support for string values")
+	errUnset  = errors.New("unable to set value")
+	errNoSys  = errors.New("no prior syscall added")
+	errMaxLen = errors.New("max Rule length exceeded")
 )
 
 // Collection of values required for auditRuleFieldPairData()
@@ -191,7 +190,7 @@ func auditRuleFieldPairData(rule *auditRuleData, fpd *fieldPairData) error {
 	)
 
 	if rule.FieldCount >= (AUDIT_MAX_FIELDS - 1) {
-		return errors.Wrap(errMaxField, "auditRuleFieldPairData failed")
+		return fmt.Errorf("max fields for rule exceeded")
 	}
 
 	var fieldid uint32
@@ -202,11 +201,10 @@ func auditRuleFieldPairData(rule *auditRuleData, fpd *fieldPairData) error {
 		}
 	}
 	if fieldid == 0 {
-		return fmt.Errorf("auditRuleFieldPairData failed: unknown field %v", fpd.fieldname)
+		return fmt.Errorf("unknown field %v", fpd.fieldname)
 	}
-
 	if fpd.flags == AUDIT_FILTER_EXCLUDE && fieldid != AUDIT_MSGTYPE {
-		return fmt.Errorf("auditRuleFieldPairData failed: only msgtype field can be used with exclude filter")
+		return fmt.Errorf("exclude filter only valid with AUDIT_MSGTYPE")
 	}
 	rule.Fields[rule.FieldCount] = fieldid
 	rule.Fieldflags[rule.FieldCount] = fpd.opval
@@ -221,74 +219,67 @@ func auditRuleFieldPairData(rule *auditRuleData, fpd *fieldPairData) error {
 			} else {
 				user, err := user.Lookup(val)
 				if err != nil {
-					return errors.Wrap(err, "auditRuleFieldPairData failed: unknown user")
+					return errors.Wrapf(err, "unknown user %v", user)
 				}
 				userID, err := strconv.Atoi(user.Uid)
 				if err != nil {
-					return errors.Wrap(err, "auditRuleFieldPairData failed")
+					return fmt.Errorf("bad uid %v", userID)
 				}
 				rule.Values[rule.FieldCount] = (uint32)(userID)
 			}
 		} else {
-			return errors.Wrap(errUnset, fmt.Sprintf("auditRuleFieldPairData failed to set: %v", fpd.fieldval))
+			return fmt.Errorf("field value has unusable type, %v", fpd.fieldval)
 		}
 
 	case AUDIT_GID, AUDIT_EGID, AUDIT_SGID, AUDIT_FSGID:
-		//IF DIGITS THEN
 		if val, isInt := fpd.fieldval.(float64); isInt {
 			rule.Values[rule.FieldCount] = (uint32)(val)
 		} else if _, isString := fpd.fieldval.(string); isString {
-			return errors.Wrap(errNoStr, "auditRuleFieldPairData failed")
-			//TODO: audit_name_to_gid(string, sint*val)
+			// TODO: use of group names is unsupported
+			return fmt.Errorf("group name translation is unsupported, %v", fpd.fieldval)
 		} else {
-			return errors.Wrap(errUnset, fmt.Sprintf("auditRuleFieldPairData failed to set: %v", fpd.fieldval))
+			return fmt.Errorf("field value has unusable type, %v", fpd.fieldval)
 		}
 
 	case AUDIT_EXIT:
-
 		if fpd.flags != AUDIT_FILTER_EXIT {
-			return fmt.Errorf("auditRuleFieldPairData failed: %v can only be used with exit filter list", fpd.fieldname)
+			return fmt.Errorf("%v can only be used with exit filter list", fpd.fieldname)
 		}
 		if val, isInt := fpd.fieldval.(float64); isInt {
 			rule.Values[rule.FieldCount] = (uint32)(val)
 		} else if _, isString := fpd.fieldval.(string); isString {
-			// TODO: audit_name_to_errno
-			return errors.Wrap(errNoStr, "auditRuleFieldPairData failed")
+			return fmt.Errorf("string values unsupported for field type")
 		} else {
-			return errors.Wrap(errUnset, fmt.Sprintf("auditRuleFieldPairData failed to set: %v", fpd.fieldval))
+			return fmt.Errorf("field value has unusable type, %v", fpd.fieldval)
 		}
 
 	case AUDIT_MSGTYPE:
-
 		if fpd.flags != AUDIT_FILTER_EXCLUDE && fpd.flags != AUDIT_FILTER_USER {
-			return fmt.Errorf("auditRuleFieldPairData: msgtype field can only be used with exclude filter list")
+			return fmt.Errorf("msgtype field can only be used with exclude filter list")
 		}
 		if val, isInt := fpd.fieldval.(float64); isInt {
 			rule.Values[rule.FieldCount] = (uint32)(val)
 		} else if _, isString := fpd.fieldval.(string); isString {
-			// TODO: Add reverse mappings from msgType to audit constants (msg_typetab.h)
-			return errors.Wrap(errNoStr, "auditRuleFieldPairData failed")
+			return fmt.Errorf("string values unsupported for field type")
 		} else {
-			return errors.Wrap(errUnset, fmt.Sprintf("auditRuleFieldPairData failed to set: %v", fpd.fieldval))
+			return fmt.Errorf("field value has unusable type, %v", fpd.fieldval)
 		}
 
-	//Strings
-	case AUDIT_OBJ_USER, AUDIT_OBJ_ROLE, AUDIT_OBJ_TYPE, AUDIT_OBJ_LEV_LOW, AUDIT_OBJ_LEV_HIGH, AUDIT_WATCH, AUDIT_DIR:
-		/* Watch & object filtering is invalid on anything
-		 * but exit */
-
+	case AUDIT_OBJ_USER, AUDIT_OBJ_ROLE, AUDIT_OBJ_TYPE, AUDIT_OBJ_LEV_LOW, AUDIT_OBJ_LEV_HIGH,
+		AUDIT_WATCH, AUDIT_DIR:
+		// Watch & object filtering is invalid on anything but exit
 		if fpd.flags != AUDIT_FILTER_EXIT {
-			return fmt.Errorf("auditRuleFieldPairData failed: %v can only be used with exit filter list", fpd.fieldname)
+			return fmt.Errorf("%v can only be used with exit filter list", fpd.fieldname)
 		}
 		if fieldid == AUDIT_WATCH || fieldid == AUDIT_DIR {
 			auditPermAdded = true
 		}
+		fallthrough
 
-		fallthrough //IMP
 	case AUDIT_SUBJ_USER, AUDIT_SUBJ_ROLE, AUDIT_SUBJ_TYPE, AUDIT_SUBJ_SEN, AUDIT_SUBJ_CLR, AUDIT_FILTERKEY:
-		//If And only if a syscall is added or a permisission is added then this field should be set
+		// If and only if a syscall is added or a permission is added then this field should be set
 		if fieldid == AUDIT_FILTERKEY && !(fpd.syscallAdded || auditPermAdded) {
-			return errors.Wrap(errNoSys, "auditRuleFieldPairData failed: Key field needs a watch or syscall given prior to it")
+			return fmt.Errorf("key field needs a watch or syscall given prior to it")
 		}
 		if val, isString := fpd.fieldval.(string); isString {
 			valbyte := []byte(val)
