@@ -48,8 +48,7 @@ type auditSyscallRule struct {
 	Actions  []string `json:"actions"`
 }
 
-// auditRuleData stores rule information
-// replication of c struct audit_rule_data
+// Kernel representation of audit_rule_data
 type auditRuleData struct {
 	Flags      uint32                     `struc:"uint32,little"` // AUDIT_PER_{TASK,CALL}, AUDIT_PREPEND
 	Action     uint32                     `struc:"uint32,little"` // AUDIT_NEVER, AUDIT_POSSIBLE, AUDIT_ALWAYS
@@ -62,8 +61,8 @@ type auditRuleData struct {
 	Buf        []byte                     `struc:"[]byte,little"`            // string fields buffer
 }
 
-// toWireFormat converts a auditRuleData to byte stream
-// relies on unsafe conversions
+// Convert auditRuleData to a byte stream suitable for attachment in a netlink
+// message
 func (rule *auditRuleData) toWireFormat() []byte {
 	buf := new(bytes.Buffer)
 	err := binary.Write(buf, nativeEndian(), rule.Flags)
@@ -103,25 +102,6 @@ func (rule *auditRuleData) toWireFormat() []byte {
 		return nil
 	}
 	return buf.Bytes()
-}
-
-// auditDeleteRuleData deletes a rule from audit in kernel
-func auditDeleteRuleData(s Netlink, rule *auditRuleData, flags uint32, action uint32) error {
-	if flags == AUDIT_FILTER_ENTRY {
-		return fmt.Errorf("use of entry filter is deprecated")
-	}
-	rule.Flags = flags
-	rule.Action = action
-
-	newbuff := rule.toWireFormat()
-	// avoiding standard method of unwrapping the struct due to restriction on byte array in auditRuleData
-	// i.e. binary.Write(buff, nativeEndian(), *rule)
-	newwb := newNetlinkAuditRequest(uint16(AUDIT_DEL_RULE), syscall.AF_NETLINK, len(newbuff) /*+int(rule.Buflen)*/)
-	newwb.Data = append(newwb.Data, newbuff[:]...)
-	if err := s.Send(newwb); err != nil {
-		return errors.Wrap(err, "auditDeleteRuleData failed")
-	}
-	return nil
 }
 
 // Purge all audit rules currently in use in the audit system
