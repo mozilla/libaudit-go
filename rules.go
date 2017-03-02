@@ -131,9 +131,6 @@ func DeleteAllRules(s Netlink) error {
 	return nil
 }
 
-var auditPermAdded bool
-var auditSyscallAdded bool
-
 func auditWord(nr int) uint32 {
 	word := (uint32)((nr) / 32)
 	return (uint32)(word)
@@ -177,9 +174,21 @@ var (
 	errMaxLen   = errors.New("max Rule length exceeded")
 )
 
+// Collection of values required for auditRuleFieldPairData()
+type fieldPairData struct {
+	fieldval     interface{}
+	opval        uint32
+	fieldname    string
+	flags        int
+	syscallAdded bool
+}
+
 // auditRuleFieldPairData process the passed auditRuleData struct for passing to kernel
-// according to passed fieldnames and flags
-func auditRuleFieldPairData(rule *auditRuleData, fieldval interface{}, opval uint32, fieldname string, flags int) error {
+// according to passedfpd.fieldnames and flags
+func auditRuleFieldPairData(rule *auditRuleData, fpd *fieldPairData) error {
+	var (
+		auditPermAdded bool
+	)
 
 	if rule.FieldCount >= (AUDIT_MAX_FIELDS - 1) {
 		return errors.Wrap(errMaxField, "auditRuleFieldPairData failed")
@@ -187,26 +196,26 @@ func auditRuleFieldPairData(rule *auditRuleData, fieldval interface{}, opval uin
 
 	var fieldid uint32
 	for k, v := range headers.FieldMap {
-		if k == fieldname {
+		if k == fpd.fieldname {
 			fieldid = uint32(v)
 			break
 		}
 	}
 	if fieldid == 0 {
-		return fmt.Errorf("auditRuleFieldPairData failed: unknown field %v", fieldname)
+		return fmt.Errorf("auditRuleFieldPairData failed: unknown field %v", fpd.fieldname)
 	}
 
-	if flags == AUDIT_FILTER_EXCLUDE && fieldid != AUDIT_MSGTYPE {
+	if fpd.flags == AUDIT_FILTER_EXCLUDE && fieldid != AUDIT_MSGTYPE {
 		return fmt.Errorf("auditRuleFieldPairData failed: only msgtype field can be used with exclude filter")
 	}
 	rule.Fields[rule.FieldCount] = fieldid
-	rule.Fieldflags[rule.FieldCount] = opval
+	rule.Fieldflags[rule.FieldCount] = fpd.opval
 
 	switch fieldid {
 	case AUDIT_UID, AUDIT_EUID, AUDIT_SUID, AUDIT_FSUID, AUDIT_LOGINUID, AUDIT_OBJ_UID, AUDIT_OBJ_GID:
-		if val, isInt := fieldval.(float64); isInt {
+		if val, isInt := fpd.fieldval.(float64); isInt {
 			rule.Values[rule.FieldCount] = (uint32)(val)
-		} else if val, isString := fieldval.(string); isString {
+		} else if val, isString := fpd.fieldval.(string); isString {
 			if val == "unset" {
 				rule.Values[rule.FieldCount] = 4294967295
 			} else {
@@ -221,46 +230,46 @@ func auditRuleFieldPairData(rule *auditRuleData, fieldval interface{}, opval uin
 				rule.Values[rule.FieldCount] = (uint32)(userID)
 			}
 		} else {
-			return errors.Wrap(errUnset, fmt.Sprintf("auditRuleFieldPairData failed to set: %v", fieldval))
+			return errors.Wrap(errUnset, fmt.Sprintf("auditRuleFieldPairData failed to set: %v", fpd.fieldval))
 		}
 
 	case AUDIT_GID, AUDIT_EGID, AUDIT_SGID, AUDIT_FSGID:
 		//IF DIGITS THEN
-		if val, isInt := fieldval.(float64); isInt {
+		if val, isInt := fpd.fieldval.(float64); isInt {
 			rule.Values[rule.FieldCount] = (uint32)(val)
-		} else if _, isString := fieldval.(string); isString {
+		} else if _, isString := fpd.fieldval.(string); isString {
 			return errors.Wrap(errNoStr, "auditRuleFieldPairData failed")
 			//TODO: audit_name_to_gid(string, sint*val)
 		} else {
-			return errors.Wrap(errUnset, fmt.Sprintf("auditRuleFieldPairData failed to set: %v", fieldval))
+			return errors.Wrap(errUnset, fmt.Sprintf("auditRuleFieldPairData failed to set: %v", fpd.fieldval))
 		}
 
 	case AUDIT_EXIT:
 
-		if flags != AUDIT_FILTER_EXIT {
-			return fmt.Errorf("auditRuleFieldPairData failed: %v can only be used with exit filter list", fieldname)
+		if fpd.flags != AUDIT_FILTER_EXIT {
+			return fmt.Errorf("auditRuleFieldPairData failed: %v can only be used with exit filter list", fpd.fieldname)
 		}
-		if val, isInt := fieldval.(float64); isInt {
+		if val, isInt := fpd.fieldval.(float64); isInt {
 			rule.Values[rule.FieldCount] = (uint32)(val)
-		} else if _, isString := fieldval.(string); isString {
+		} else if _, isString := fpd.fieldval.(string); isString {
 			// TODO: audit_name_to_errno
 			return errors.Wrap(errNoStr, "auditRuleFieldPairData failed")
 		} else {
-			return errors.Wrap(errUnset, fmt.Sprintf("auditRuleFieldPairData failed to set: %v", fieldval))
+			return errors.Wrap(errUnset, fmt.Sprintf("auditRuleFieldPairData failed to set: %v", fpd.fieldval))
 		}
 
 	case AUDIT_MSGTYPE:
 
-		if flags != AUDIT_FILTER_EXCLUDE && flags != AUDIT_FILTER_USER {
+		if fpd.flags != AUDIT_FILTER_EXCLUDE && fpd.flags != AUDIT_FILTER_USER {
 			return fmt.Errorf("auditRuleFieldPairData: msgtype field can only be used with exclude filter list")
 		}
-		if val, isInt := fieldval.(float64); isInt {
+		if val, isInt := fpd.fieldval.(float64); isInt {
 			rule.Values[rule.FieldCount] = (uint32)(val)
-		} else if _, isString := fieldval.(string); isString {
+		} else if _, isString := fpd.fieldval.(string); isString {
 			// TODO: Add reverse mappings from msgType to audit constants (msg_typetab.h)
 			return errors.Wrap(errNoStr, "auditRuleFieldPairData failed")
 		} else {
-			return errors.Wrap(errUnset, fmt.Sprintf("auditRuleFieldPairData failed to set: %v", fieldval))
+			return errors.Wrap(errUnset, fmt.Sprintf("auditRuleFieldPairData failed to set: %v", fpd.fieldval))
 		}
 
 	//Strings
@@ -268,8 +277,8 @@ func auditRuleFieldPairData(rule *auditRuleData, fieldval interface{}, opval uin
 		/* Watch & object filtering is invalid on anything
 		 * but exit */
 
-		if flags != AUDIT_FILTER_EXIT {
-			return fmt.Errorf("auditRuleFieldPairData failed: %v can only be used with exit filter list", fieldname)
+		if fpd.flags != AUDIT_FILTER_EXIT {
+			return fmt.Errorf("auditRuleFieldPairData failed: %v can only be used with exit filter list", fpd.fieldname)
 		}
 		if fieldid == AUDIT_WATCH || fieldid == AUDIT_DIR {
 			auditPermAdded = true
@@ -278,10 +287,10 @@ func auditRuleFieldPairData(rule *auditRuleData, fieldval interface{}, opval uin
 		fallthrough //IMP
 	case AUDIT_SUBJ_USER, AUDIT_SUBJ_ROLE, AUDIT_SUBJ_TYPE, AUDIT_SUBJ_SEN, AUDIT_SUBJ_CLR, AUDIT_FILTERKEY:
 		//If And only if a syscall is added or a permisission is added then this field should be set
-		if fieldid == AUDIT_FILTERKEY && !(auditSyscallAdded || auditPermAdded) {
+		if fieldid == AUDIT_FILTERKEY && !(fpd.syscallAdded || auditPermAdded) {
 			return errors.Wrap(errNoSys, "auditRuleFieldPairData failed: Key field needs a watch or syscall given prior to it")
 		}
-		if val, isString := fieldval.(string); isString {
+		if val, isString := fpd.fieldval.(string); isString {
 			valbyte := []byte(val)
 			vlen := len(valbyte)
 			if fieldid == AUDIT_FILTERKEY && vlen > AUDIT_MAX_KEY_LEN {
@@ -297,33 +306,33 @@ func auditRuleFieldPairData(rule *auditRuleData, fieldval interface{}, opval uin
 			rule.Buf = append(rule.Buf, valbyte[:]...)
 			// log.Println(int(unsafe.Sizeof(*rule)), *rule)
 		} else {
-			return fmt.Errorf("auditRuleFieldPairData failed: string expected, found %v", fieldval)
+			return fmt.Errorf("auditRuleFieldPairData failed: string expected, found %v", fpd.fieldval)
 		}
 
 	case AUDIT_ARCH:
-		if auditSyscallAdded == false {
+		if fpd.syscallAdded == false {
 			return errors.Wrap(errNoSys, "auditRuleFieldPairData failed: arch should be mention before syscalls")
 		}
-		if !(opval == AUDIT_NOT_EQUAL || opval == AUDIT_EQUAL) {
+		if !(fpd.opval == AUDIT_NOT_EQUAL || fpd.opval == AUDIT_EQUAL) {
 			return fmt.Errorf("auditRuleFieldPairData failed: arch only takes = or != operators")
 		}
 		// IMP NOTE: Considering X64 machines only
-		if _, isInt := fieldval.(float64); isInt {
+		if _, isInt := fpd.fieldval.(float64); isInt {
 			rule.Values[rule.FieldCount] = AUDIT_ARCH_X86_64
-		} else if _, isString := fieldval.(string); isString {
+		} else if _, isString := fpd.fieldval.(string); isString {
 			return errors.Wrap(errNoStr, "auditRuleFieldPairData failed")
 		} else {
-			return errors.Wrap(errUnset, fmt.Sprintf("auditRuleFieldPairData failed to set: %v", fieldval))
+			return errors.Wrap(errUnset, fmt.Sprintf("auditRuleFieldPairData failed to set: %v", fpd.fieldval))
 		}
 
 	case AUDIT_PERM:
 		//Decide on various error types
-		if flags != AUDIT_FILTER_EXIT {
-			return fmt.Errorf("auditRuleFieldPairData failed: %v can only be used with exit filter list", fieldname)
-		} else if opval != AUDIT_EQUAL {
-			return fmt.Errorf("auditRuleFieldPairData failed: %v only takes = or != operators", fieldname)
+		if fpd.flags != AUDIT_FILTER_EXIT {
+			return fmt.Errorf("auditRuleFieldPairData failed: %v can only be used with exit filter list", fpd.fieldname)
+		} else if fpd.opval != AUDIT_EQUAL {
+			return fmt.Errorf("auditRuleFieldPairData failed: %v only takes = or != operators", fpd.fieldname)
 		} else {
-			if val, isString := fieldval.(string); isString {
+			if val, isString := fpd.fieldval.(string); isString {
 
 				var i, vallen int
 				vallen = len(val)
@@ -351,9 +360,9 @@ func auditRuleFieldPairData(rule *auditRuleData, fieldval interface{}, opval uin
 			}
 		}
 	case AUDIT_FILETYPE:
-		if val, isString := fieldval.(string); isString {
-			if !(flags == AUDIT_FILTER_EXIT) && flags == AUDIT_FILTER_ENTRY {
-				return fmt.Errorf("auditRuleFieldPairData failed: %v can only be used with exit and entry filter list", fieldname)
+		if val, isString := fpd.fieldval.(string); isString {
+			if !(fpd.flags == AUDIT_FILTER_EXIT) && fpd.flags == AUDIT_FILTER_ENTRY {
+				return fmt.Errorf("auditRuleFieldPairData failed: %v can only be used with exit and entry filter list", fpd.fieldname)
 			}
 			var fileval int
 			err := auditNameToFtype(val, &fileval)
@@ -362,37 +371,37 @@ func auditRuleFieldPairData(rule *auditRuleData, fieldval interface{}, opval uin
 			}
 			rule.Values[rule.FieldCount] = uint32(fileval)
 			if (int)(rule.Values[rule.FieldCount]) < 0 {
-				return fmt.Errorf("auditRuleFieldPairData failed: unknown file type %v", fieldname)
+				return fmt.Errorf("auditRuleFieldPairData failed: unknown file type %v", fpd.fieldname)
 			}
 		} else {
-			return fmt.Errorf("auditRuleFieldPairData failed: expected string but filetype found %v", fieldval)
+			return fmt.Errorf("auditRuleFieldPairData failed: expected string but filetype found %v", fpd.fieldval)
 		}
 
 	case AUDIT_ARG0, AUDIT_ARG1, AUDIT_ARG2, AUDIT_ARG3:
-		if val, isInt := fieldval.(float64); isInt {
+		if val, isInt := fpd.fieldval.(float64); isInt {
 			rule.Values[rule.FieldCount] = (uint32)(val)
-		} else if _, isString := fieldval.(string); isString {
-			return errors.Wrap(errNoStr, fmt.Sprintf("auditRuleFieldPairData failed: %v should be a number", fieldname))
+		} else if _, isString := fpd.fieldval.(string); isString {
+			return errors.Wrap(errNoStr, fmt.Sprintf("auditRuleFieldPairData failed: %v should be a number", fpd.fieldname))
 		} else {
-			return errors.Wrap(errUnset, fmt.Sprintf("auditRuleFieldPairData failed to set: %v", fieldval))
+			return errors.Wrap(errUnset, fmt.Sprintf("auditRuleFieldPairData failed to set: %v", fpd.fieldval))
 		}
 	case AUDIT_DEVMAJOR, AUDIT_INODE, AUDIT_SUCCESS:
-		if flags != AUDIT_FILTER_EXIT {
-			return fmt.Errorf("auditRuleFieldPairData failed: %v can only be used with exit filter list", fieldname)
+		if fpd.flags != AUDIT_FILTER_EXIT {
+			return fmt.Errorf("auditRuleFieldPairData failed: %v can only be used with exit filter list", fpd.fieldname)
 		}
 		fallthrough
 	default:
 		if fieldid == AUDIT_INODE {
-			if !(opval == AUDIT_NOT_EQUAL || opval == AUDIT_EQUAL) {
-				return fmt.Errorf("auditRuleFieldPairData failed: %v only takes = or != operators", fieldname)
+			if !(fpd.opval == AUDIT_NOT_EQUAL || fpd.opval == AUDIT_EQUAL) {
+				return fmt.Errorf("auditRuleFieldPairData failed: %v only takes = or != operators", fpd.fieldname)
 			}
 		}
 
-		if fieldid == AUDIT_PPID && !(flags == AUDIT_FILTER_EXIT || flags == AUDIT_FILTER_ENTRY) {
-			return fmt.Errorf("auditRuleFieldPairData failed: %v can only be used with exit and entry filter list", fieldname)
+		if fieldid == AUDIT_PPID && !(fpd.flags == AUDIT_FILTER_EXIT || fpd.flags == AUDIT_FILTER_ENTRY) {
+			return fmt.Errorf("auditRuleFieldPairData failed: %v can only be used with exit and entry filter list", fpd.fieldname)
 		}
 
-		if val, isInt := fieldval.(float64); isInt {
+		if val, isInt := fpd.fieldval.(float64); isInt {
 
 			if fieldid == AUDIT_INODE {
 				// c version uses strtoul (in case of INODE)
@@ -403,7 +412,7 @@ func auditRuleFieldPairData(rule *auditRuleData, fieldval interface{}, opval uin
 			}
 
 		} else {
-			return errors.Wrap(errUnset, fmt.Sprintf("auditRuleFieldPairData failed to set: %v should be a number", fieldval))
+			return errors.Wrap(errUnset, fmt.Sprintf("auditRuleFieldPairData failed to set: %v should be a number", fpd.fieldval))
 		}
 	}
 	rule.FieldCount++
@@ -540,7 +549,6 @@ func SetRules(s Netlink, content []byte) error {
 		var ruleData auditRuleData
 		ruleData.Buf = make([]byte, 0)
 
-		auditSyscallAdded = true
 		err = auditSetupAndAddWatchDir(&ruleData, x.Path, rules.StrictPathCheck)
 		if err != nil {
 			return err
@@ -549,7 +557,14 @@ func SetRules(s Netlink, content []byte) error {
 		if err != nil {
 			return err
 		}
-		err = auditRuleFieldPairData(&ruleData, x.Key, AUDIT_EQUAL, "key", AUDIT_FILTER_UNSET)
+		fpd := fieldPairData{
+			fieldval:     x.Key,
+			opval:        AUDIT_EQUAL,
+			fieldname:    "key",
+			flags:        AUDIT_FILTER_UNSET,
+			syscallAdded: true,
+		}
+		err = auditRuleFieldPairData(&ruleData, &fpd)
 		if err != nil {
 			return err
 		}
@@ -559,7 +574,10 @@ func SetRules(s Netlink, content []byte) error {
 		}
 	}
 	for _, x := range rules.SyscallRules {
-		var ruleData auditRuleData
+		var (
+			ruleData          auditRuleData
+			auditSyscallAdded = false
+		)
 		ruleData.Buf = make([]byte, 0)
 		for _, y := range x.Syscalls {
 			ival, ok := syscallMap[y]
@@ -570,6 +588,7 @@ func SetRules(s Netlink, content []byte) error {
 			if err != nil {
 				return err
 			}
+			auditSyscallAdded = true
 		}
 
 		// Apply action on syscall by separating the filters (exit) from actions (always)
@@ -597,14 +616,28 @@ func SetRules(s Netlink, content []byte) error {
 				opval = AUDIT_BIT_MASK
 			}
 
-			err = auditRuleFieldPairData(&ruleData, y.Value, opval, y.Name, filter)
+			fpd := fieldPairData{
+				fieldval:     y.Value,
+				opval:        opval,
+				fieldname:    y.Name,
+				flags:        filter,
+				syscallAdded: auditSyscallAdded,
+			}
+			err = auditRuleFieldPairData(&ruleData, &fpd)
 			if err != nil {
 				return err
 			}
 		}
 
 		if x.Key != "" {
-			err = auditRuleFieldPairData(&ruleData, x.Key, AUDIT_EQUAL, "key", AUDIT_FILTER_UNSET)
+			fpd := fieldPairData{
+				fieldval:     x.Key,
+				opval:        AUDIT_EQUAL,
+				fieldname:    "key",
+				flags:        AUDIT_FILTER_UNSET,
+				syscallAdded: auditSyscallAdded,
+			}
+			err = auditRuleFieldPairData(&ruleData, &fpd)
 			if err != nil {
 				return err
 			}
