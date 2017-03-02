@@ -82,7 +82,7 @@ func (rule *auditRuleData) toWireFormat() []byte {
 // auditDeleteRuleData deletes a rule from audit in kernel
 func auditDeleteRuleData(s Netlink, rule *auditRuleData, flags uint32, action uint32) error {
 	if flags == AUDIT_FILTER_ENTRY {
-		return errors.Wrap(errEntryDep, "auditDeleteRuleData failed")
+		return fmt.Errorf("use of entry filter is deprecated")
 	}
 	rule.Flags = flags
 	rule.Action = action
@@ -404,8 +404,6 @@ func auditRuleFieldPairData(rule *auditRuleData, fieldval interface{}, opval uin
 	return nil
 }
 
-var errEntryDep = errors.New("use of entry filter is deprecated")
-
 func setActionAndFilters(actions []string) (int, int) {
 	action := -1
 	filter := AUDIT_FILTER_UNSET
@@ -432,25 +430,25 @@ func setActionAndFilters(actions []string) (int, int) {
 	return action, filter
 }
 
-//auditAddRuleData sends the prepared auditRuleData struct via the netlink connection to kernel
+// Send prepared auditRuleData to the kernel (loads audit rules)
 func auditAddRuleData(s Netlink, rule *auditRuleData, flags int, action int) error {
-
 	if flags == AUDIT_FILTER_ENTRY {
-		return errors.Wrap(errEntryDep, "auditAddRuleData failed")
+		return fmt.Errorf("use of entry filter is deprecated")
 	}
 
 	rule.Flags = uint32(flags)
 	rule.Action = uint32(action)
-	// Using unsafe for conversion
-	newbuff := rule.toWireFormat()
-	// standard method avoided as it require the 0 byte array to be fixed size array
-	// buff := new(bytes.Buffer), binary.Write(buff, nativeEndian(), *rule)
+	buf := rule.toWireFormat()
 
-	newwb := newNetlinkAuditRequest(uint16(AUDIT_ADD_RULE), syscall.AF_NETLINK, len(newbuff))
-	newwb.Data = append(newwb.Data, newbuff[:]...)
-	var err error
-	if err = s.Send(newwb); err != nil {
-		return errors.Wrap(err, "auditAddRuleData failed")
+	wb := newNetlinkAuditRequest(uint16(AUDIT_ADD_RULE), syscall.AF_NETLINK, len(buf))
+	wb.Data = buf
+	err := s.Send(wb)
+	if err != nil {
+		return err
+	}
+	_, err = auditGetReply(s, wb.Header.Seq, true) // Drain ACK
+	if err != nil {
+		return err
 	}
 	return nil
 }
@@ -530,7 +528,7 @@ func SetRules(s Netlink, content []byte) error {
 	if err != nil {
 		return err
 	}
-	//TODO: syscallMap should be loaded according to runtime arch
+	// TODO: syscallMap should be loaded according to runtime arch
 	syscallMap := headers.SysMapX64
 	for _, x := range rules.FileRules {
 		var ruleData auditRuleData
