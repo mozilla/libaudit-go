@@ -850,50 +850,24 @@ func ListAllRules(s Netlink) ([]string, error) {
 	if err := s.Send(wb); err != nil {
 		return nil, errors.Wrap(err, "ListAllRules failed")
 	}
-done:
-	for {
-		msgs, err := s.Receive(false)
-		if err != nil {
-			return nil, errors.Wrap(err, "ListAllRules failed")
-		}
-
-		for _, m := range msgs {
-			socketPID, err := s.GetPID()
+	msgs, err := auditGetReply(s, wb.Header.Seq, false)
+	if err != nil {
+		return nil, err
+	}
+	for _, m := range msgs {
+		if m.Header.Type == uint16(AUDIT_LIST_RULES) {
+			var r auditRuleData
+			nbuf := bytes.NewBuffer(m.Data)
+			err = struc.Unpack(nbuf, &r)
 			if err != nil {
-				return nil, errors.Wrap(err, "ListAllRules: GetPID failed")
+				return nil, errors.Wrap(err, "ListAllRules failed")
 			}
-			if m.Header.Seq != wb.Header.Seq {
-				return nil, fmt.Errorf("ListAllRules: Wrong Seq nr %d, expected %d", m.Header.Seq, wb.Header.Seq)
-			}
-			if int(m.Header.Pid) != socketPID {
-				return nil, fmt.Errorf("ListAllRules: Wrong pid %d, expected %d", m.Header.Pid, socketPID)
-			}
-			if m.Header.Type == syscall.NLMSG_DONE {
-				var out string
-				for _, r := range ruleArray {
-					printed := printRule(r)
-					result = append(result, printed)
-					out += (printed + "\n")
-				}
-				fmt.Print(out)
-				break done
-			}
-			if m.Header.Type == syscall.NLMSG_ERROR {
-				e := int32(nativeEndian().Uint32(m.Data[0:4]))
-				if e != 0 {
-					return nil, fmt.Errorf("ListAllRules: error while receiving rules")
-				}
-			}
-			if m.Header.Type == uint16(AUDIT_LIST_RULES) {
-				var r auditRuleData
-				nbuf := bytes.NewBuffer(m.Data)
-				err = struc.Unpack(nbuf, &r)
-				if err != nil {
-					return nil, errors.Wrap(err, "ListAllRules failed")
-				}
-				ruleArray = append(ruleArray, &r)
-			}
+			ruleArray = append(ruleArray, &r)
 		}
+	}
+	for _, r := range ruleArray {
+		printed := printRule(r)
+		result = append(result, printed)
 	}
 	return result, nil
 }
