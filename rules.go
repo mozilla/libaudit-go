@@ -2,6 +2,7 @@ package libaudit
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -11,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"unsafe"
 
 	"github.com/lunixbochs/struc"
 	"github.com/mozilla/libaudit-go/headers"
@@ -65,18 +65,44 @@ type auditRuleData struct {
 // toWireFormat converts a auditRuleData to byte stream
 // relies on unsafe conversions
 func (rule *auditRuleData) toWireFormat() []byte {
-
-	newbuff := make([]byte, int(unsafe.Sizeof(*rule))-int(unsafe.Sizeof(rule.Buf))+int(rule.Buflen))
-	*(*uint32)(unsafe.Pointer(&newbuff[0:4][0])) = rule.Flags
-	*(*uint32)(unsafe.Pointer(&newbuff[4:8][0])) = rule.Action
-	*(*uint32)(unsafe.Pointer(&newbuff[8:12][0])) = rule.FieldCount
-	*(*[AUDIT_BITMASK_SIZE]uint32)(unsafe.Pointer(&newbuff[12:268][0])) = rule.Mask
-	*(*[AUDIT_MAX_FIELDS]uint32)(unsafe.Pointer(&newbuff[268:524][0])) = rule.Fields
-	*(*[AUDIT_MAX_FIELDS]uint32)(unsafe.Pointer(&newbuff[524:780][0])) = rule.Values
-	*(*[AUDIT_MAX_FIELDS]uint32)(unsafe.Pointer(&newbuff[780:1036][0])) = rule.Fieldflags
-	*(*uint32)(unsafe.Pointer(&newbuff[1036:1040][0])) = rule.Buflen
-	copy(newbuff[1040:1040+rule.Buflen], rule.Buf[:])
-	return newbuff
+	buf := new(bytes.Buffer)
+	err := binary.Write(buf, nativeEndian(), rule.Flags)
+	if err != nil {
+		return nil
+	}
+	err = binary.Write(buf, nativeEndian(), rule.Action)
+	if err != nil {
+		return nil
+	}
+	err = binary.Write(buf, nativeEndian(), rule.FieldCount)
+	if err != nil {
+		return nil
+	}
+	err = binary.Write(buf, nativeEndian(), rule.Mask)
+	if err != nil {
+		return nil
+	}
+	err = binary.Write(buf, nativeEndian(), rule.Fields)
+	if err != nil {
+		return nil
+	}
+	err = binary.Write(buf, nativeEndian(), rule.Values)
+	if err != nil {
+		return nil
+	}
+	err = binary.Write(buf, nativeEndian(), rule.Fieldflags)
+	if err != nil {
+		return nil
+	}
+	err = binary.Write(buf, nativeEndian(), rule.Buflen)
+	if err != nil {
+		return nil
+	}
+	err = binary.Write(buf, nativeEndian(), rule.Buf)
+	if err != nil {
+		return nil
+	}
+	return buf.Bytes()
 }
 
 // auditDeleteRuleData deletes a rule from audit in kernel
