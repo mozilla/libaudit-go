@@ -319,6 +319,10 @@ func NewNetlinkConnection() (ret *NetlinkConnection, err error) {
 // would generally be used to retrieve a response from various AUDIT_SET functions or similar
 // configuration routines, and we do not use this for draining the audit event queue.
 //
+// chkAck should be set to true if the response we are expecting is just an ACK packet back
+// from netlink. If chkAck is false, the function will also retrieve other types of messages
+// related to the specified sequence number (like the response messages related to a query).
+//
 // XXX Right now we just discard any unrelated messages, which is not neccesarily
 // ideal. This could be adapted to handle this better.
 //
