@@ -285,51 +285,47 @@ func auditRuleFieldPairData(rule *auditRuleData, fpd *fieldPairData) error {
 			valbyte := []byte(val)
 			vlen := len(valbyte)
 			if fieldid == AUDIT_FILTERKEY && vlen > AUDIT_MAX_KEY_LEN {
-				return errors.Wrap(errMaxLen, "auditRuleFieldPairData failed")
+				return fmt.Errorf("max rule length exceeded")
 			} else if vlen > PATH_MAX {
-				return errors.Wrap(errMaxLen, "auditRuleFieldPairData failed")
+				return fmt.Errorf("max rule length exceeded")
 			}
 			rule.Values[rule.FieldCount] = (uint32)(vlen)
 			rule.Buflen = rule.Buflen + (uint32)(vlen)
-			// log.Println(unsafe.Sizeof(*rule), vlen)
-			//Now append the key value with the rule buffer space
-			//May need to reallocate memory to rule.Buf i.e. the 0 size byte array, append will take care of that
 			rule.Buf = append(rule.Buf, valbyte[:]...)
-			// log.Println(int(unsafe.Sizeof(*rule)), *rule)
 		} else {
-			return fmt.Errorf("auditRuleFieldPairData failed: string expected, found %v", fpd.fieldval)
+			return fmt.Errorf("field value has unusable type, %v", fpd.fieldval)
 		}
 
 	case AUDIT_ARCH:
 		if fpd.syscallAdded == false {
-			return errors.Wrap(errNoSys, "auditRuleFieldPairData failed: arch should be mention before syscalls")
+			return fmt.Errorf("arch should be mentioned before syscall")
 		}
 		if !(fpd.opval == AUDIT_NOT_EQUAL || fpd.opval == AUDIT_EQUAL) {
-			return fmt.Errorf("auditRuleFieldPairData failed: arch only takes = or != operators")
+			return fmt.Errorf("arch must have = or != operator")
 		}
-		// IMP NOTE: Considering X64 machines only
+		// XXX Considers X64 only
 		if _, isInt := fpd.fieldval.(float64); isInt {
 			rule.Values[rule.FieldCount] = AUDIT_ARCH_X86_64
 		} else if _, isString := fpd.fieldval.(string); isString {
-			return errors.Wrap(errNoStr, "auditRuleFieldPairData failed")
+			return fmt.Errorf("string values unsupported for field type")
 		} else {
-			return errors.Wrap(errUnset, fmt.Sprintf("auditRuleFieldPairData failed to set: %v", fpd.fieldval))
+			return fmt.Errorf("field value has unusable type, %v", fpd.fieldval)
 		}
 
 	case AUDIT_PERM:
-		//Decide on various error types
 		if fpd.flags != AUDIT_FILTER_EXIT {
-			return fmt.Errorf("auditRuleFieldPairData failed: %v can only be used with exit filter list", fpd.fieldname)
+			return fmt.Errorf("%v can only be used with exit filter list", fpd.fieldname)
 		} else if fpd.opval != AUDIT_EQUAL {
-			return fmt.Errorf("auditRuleFieldPairData failed: %v only takes = or != operators", fpd.fieldname)
+			return fmt.Errorf("%v only takes = or != operators", fpd.fieldname)
 		} else {
 			if val, isString := fpd.fieldval.(string); isString {
-
-				var i, vallen int
+				var (
+					i, vallen int
+					permval   uint32
+				)
 				vallen = len(val)
-				var permval uint32
 				if vallen > 4 {
-					return errors.Wrap(errMaxLen, "auditRuleFieldPairData failed")
+					return fmt.Errorf("vallen too large")
 				}
 				lowerval := strings.ToLower(val)
 				for i = 0; i < vallen; i++ {
@@ -343,57 +339,59 @@ func auditRuleFieldPairData(rule *auditRuleData, fpd *fieldPairData) error {
 					case 'a':
 						permval |= AUDIT_PERM_ATTR
 					default:
-						return fmt.Errorf("auditRuleFieldPairData failed: permission can only contain  'rwxa'")
+						return fmt.Errorf("permission can only contain rwxa")
 					}
 				}
 				rule.Values[rule.FieldCount] = permval
 				auditPermAdded = true
 			}
 		}
+
 	case AUDIT_FILETYPE:
 		if val, isString := fpd.fieldval.(string); isString {
 			if !(fpd.flags == AUDIT_FILTER_EXIT) && fpd.flags == AUDIT_FILTER_ENTRY {
-				return fmt.Errorf("auditRuleFieldPairData failed: %v can only be used with exit and entry filter list", fpd.fieldname)
+				return fmt.Errorf("%v can only be used with exit and entry filter list", fpd.fieldname)
 			}
 			var fileval int
 			err := auditNameToFtype(val, &fileval)
 			if err != nil {
-				return errors.Wrap(err, "auditRuleFieldPairData failed")
+				return err
 			}
 			rule.Values[rule.FieldCount] = uint32(fileval)
 			if (int)(rule.Values[rule.FieldCount]) < 0 {
-				return fmt.Errorf("auditRuleFieldPairData failed: unknown file type %v", fpd.fieldname)
+				return fmt.Errorf("unknown file type %v", fpd.fieldname)
 			}
 		} else {
-			return fmt.Errorf("auditRuleFieldPairData failed: expected string but filetype found %v", fpd.fieldval)
+			return fmt.Errorf("expected string but filetype found %v", fpd.fieldval)
 		}
 
 	case AUDIT_ARG0, AUDIT_ARG1, AUDIT_ARG2, AUDIT_ARG3:
 		if val, isInt := fpd.fieldval.(float64); isInt {
 			rule.Values[rule.FieldCount] = (uint32)(val)
 		} else if _, isString := fpd.fieldval.(string); isString {
-			return errors.Wrap(errNoStr, fmt.Sprintf("auditRuleFieldPairData failed: %v should be a number", fpd.fieldname))
+			return fmt.Errorf("%v should be a number", fpd.fieldname)
 		} else {
-			return errors.Wrap(errUnset, fmt.Sprintf("auditRuleFieldPairData failed to set: %v", fpd.fieldval))
+			return fmt.Errorf("field value has unusable type, %v", fpd.fieldval)
 		}
+
 	case AUDIT_DEVMAJOR, AUDIT_INODE, AUDIT_SUCCESS:
 		if fpd.flags != AUDIT_FILTER_EXIT {
-			return fmt.Errorf("auditRuleFieldPairData failed: %v can only be used with exit filter list", fpd.fieldname)
+			return fmt.Errorf("%v can only be used with exit filter list", fpd.fieldname)
 		}
 		fallthrough
+
 	default:
 		if fieldid == AUDIT_INODE {
 			if !(fpd.opval == AUDIT_NOT_EQUAL || fpd.opval == AUDIT_EQUAL) {
-				return fmt.Errorf("auditRuleFieldPairData failed: %v only takes = or != operators", fpd.fieldname)
+				return fmt.Errorf("%v only takes = or != operators", fpd.fieldname)
 			}
 		}
 
 		if fieldid == AUDIT_PPID && !(fpd.flags == AUDIT_FILTER_EXIT || fpd.flags == AUDIT_FILTER_ENTRY) {
-			return fmt.Errorf("auditRuleFieldPairData failed: %v can only be used with exit and entry filter list", fpd.fieldname)
+			return fmt.Errorf("%v can only be used with exit and entry filter list", fpd.fieldname)
 		}
 
 		if val, isInt := fpd.fieldval.(float64); isInt {
-
 			if fieldid == AUDIT_INODE {
 				// c version uses strtoul (in case of INODE)
 				rule.Values[rule.FieldCount] = (uint32)(val)
@@ -401,9 +399,8 @@ func auditRuleFieldPairData(rule *auditRuleData, fpd *fieldPairData) error {
 				// c version uses strtol
 				rule.Values[rule.FieldCount] = (uint32)(val)
 			}
-
 		} else {
-			return errors.Wrap(errUnset, fmt.Sprintf("auditRuleFieldPairData failed to set: %v should be a number", fpd.fieldval))
+			return fmt.Errorf("%v should be a number", fpd.fieldval)
 		}
 	}
 	rule.FieldCount++
