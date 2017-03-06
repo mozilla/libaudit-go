@@ -545,16 +545,19 @@ func SetRules(s Netlink, content []byte) error {
 		if err != nil {
 			return err
 		}
-		fpd := fieldPairData{
-			fieldval:     x.Key,
-			opval:        AUDIT_EQUAL,
-			fieldname:    "key",
-			flags:        AUDIT_FILTER_UNSET,
-			syscallAdded: true,
-		}
-		err = auditRuleFieldPairData(&ruleData, &fpd)
-		if err != nil {
-			return err
+		// The key value is optional for a file rule
+		if x.Key != "" {
+			fpd := fieldPairData{
+				fieldval:     x.Key,
+				opval:        AUDIT_EQUAL,
+				fieldname:    "key",
+				flags:        AUDIT_FILTER_UNSET,
+				syscallAdded: true,
+			}
+			err = auditRuleFieldPairData(&ruleData, &fpd)
+			if err != nil {
+				return err
+			}
 		}
 		err = auditAddRuleData(s, &ruleData, AUDIT_FILTER_EXIT, AUDIT_ALWAYS)
 		if err != nil {
