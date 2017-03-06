@@ -132,7 +132,7 @@ func (t *testRulesNetlinkConn) Send(request *NetlinkMessage) error {
 	return nil
 }
 
-func (t *testRulesNetlinkConn) Receive(bytesize int, block int) ([]NetlinkMessage, error) {
+func (t *testRulesNetlinkConn) Receive(nonblocking bool) ([]NetlinkMessage, error) {
 	var v []NetlinkMessage
 	m := newNetlinkAuditRequest(syscall.NLMSG_DONE, syscall.AF_NETLINK, 0)
 	m.Header.Seq = t.actualNetlinkMessage.Header.Seq
@@ -155,7 +155,7 @@ func (t *testListRulesNetlinkConn) Send(request *NetlinkMessage) error {
 	return nil
 }
 
-func (t *testListRulesNetlinkConn) Receive(bytesize int, block int) ([]NetlinkMessage, error) {
+func (t *testListRulesNetlinkConn) Receive(blocking bool) ([]NetlinkMessage, error) {
 	var v []NetlinkMessage
 	// if rule has not been sent once, send it to ListAllRules
 	if !t.sent {

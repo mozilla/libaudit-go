@@ -52,7 +52,7 @@ func TestNetlinkConnection(t *testing.T) {
 	if err = s.Send(wb); err != nil {
 		t.Errorf("TestNetlinkConnection: sending failed %v", err)
 	}
-	err = auditGetReply(s, MAX_AUDIT_MESSAGE_LENGTH, 0, wb.Header.Seq)
+	_, err = auditGetReply(s, wb.Header.Seq, true)
 	if err != nil {
 		t.Errorf("TestNetlinkConnection: test failed %v", err)
 	}
@@ -69,7 +69,7 @@ func (t *testNetlinkConn) Send(request *NetlinkMessage) error {
 	return nil
 }
 
-func (t *testNetlinkConn) Receive(bytesize int, block int) ([]NetlinkMessage, error) {
+func (t *testNetlinkConn) Receive(nonblocking bool) ([]NetlinkMessage, error) {
 	var v []NetlinkMessage
 	m := newNetlinkAuditRequest(uint16(AUDIT_GET), syscall.AF_NETLINK, 0)
 	m.Header.Seq = t.actualNetlinkMessage.Header.Seq
@@ -86,12 +86,11 @@ func testSettersEmulated(t *testing.T) {
 	var (
 		n             testNetlinkConn
 		err           error
-		actualStatus  = 1
 		actualPID     = 8096 //for emulation we use a dummy PID
 		actualRate    = 500
 		actualBackLog = 500
 	)
-	err = AuditSetEnabled(&n, actualStatus)
+	err = AuditSetEnabled(&n, true)
 	if err != nil {
 		t.Errorf("AuditSetEnabled failed %v", err)
 	}
@@ -184,9 +183,16 @@ func TestSetters(t *testing.T) {
 	}
 	s, err = NewNetlinkConnection()
 	defer s.Close()
-	err = AuditSetEnabled(s, actualStatus)
+	err = AuditSetEnabled(s, true)
 	if err != nil {
 		t.Errorf("AuditSetEnabled failed %v", err)
+	}
+	auditstatus, err := AuditIsEnabled(s)
+	if err != nil {
+		t.Errorf("AuditIsEnabled failed %v", err)
+	}
+	if !auditstatus {
+		t.Errorf("AuditIsEnabled returned false")
 	}
 	err = AuditSetRateLimit(s, actualRate)
 	if err != nil {

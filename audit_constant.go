@@ -5,6 +5,10 @@
 package libaudit
 
 const (
+	AUDIT_STATUS_SIZE = 40 // Size of auditStatus
+)
+
+const (
 	MAX_AUDIT_MESSAGE_LENGTH = 8970
 	AUDIT_MAX_FIELDS         = 64
 	AUDIT_BITMASK_SIZE       = 64
@@ -206,7 +210,7 @@ const (
  * 2600 - 2999 future user space (maybe integrity labels and related events)
  */
 
-//go:generate stringer -type=auditConstant
+//go:generate stringer -type=auditConstant audit_constant.go
 type auditConstant uint16
 
 const (
