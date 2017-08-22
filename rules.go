@@ -65,39 +65,39 @@ type auditRuleData struct {
 // message
 func (rule *auditRuleData) toWireFormat() []byte {
 	buf := new(bytes.Buffer)
-	err := binary.Write(buf, nativeEndian(), rule.Flags)
+	err := binary.Write(buf, hostEndian, rule.Flags)
 	if err != nil {
 		return nil
 	}
-	err = binary.Write(buf, nativeEndian(), rule.Action)
+	err = binary.Write(buf, hostEndian, rule.Action)
 	if err != nil {
 		return nil
 	}
-	err = binary.Write(buf, nativeEndian(), rule.FieldCount)
+	err = binary.Write(buf, hostEndian, rule.FieldCount)
 	if err != nil {
 		return nil
 	}
-	err = binary.Write(buf, nativeEndian(), rule.Mask)
+	err = binary.Write(buf, hostEndian, rule.Mask)
 	if err != nil {
 		return nil
 	}
-	err = binary.Write(buf, nativeEndian(), rule.Fields)
+	err = binary.Write(buf, hostEndian, rule.Fields)
 	if err != nil {
 		return nil
 	}
-	err = binary.Write(buf, nativeEndian(), rule.Values)
+	err = binary.Write(buf, hostEndian, rule.Values)
 	if err != nil {
 		return nil
 	}
-	err = binary.Write(buf, nativeEndian(), rule.Fieldflags)
+	err = binary.Write(buf, hostEndian, rule.Fieldflags)
 	if err != nil {
 		return nil
 	}
-	err = binary.Write(buf, nativeEndian(), rule.Buflen)
+	err = binary.Write(buf, hostEndian, rule.Buflen)
 	if err != nil {
 		return nil
 	}
-	err = binary.Write(buf, nativeEndian(), rule.Buf)
+	err = binary.Write(buf, hostEndian, rule.Buf)
 	if err != nil {
 		return nil
 	}

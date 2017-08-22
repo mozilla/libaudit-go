@@ -2,7 +2,6 @@ package libaudit
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
 	"os"
 	"os/exec"
@@ -19,7 +18,7 @@ func TestWireFormat(t *testing.T) {
 	rr.Header.Flags = syscall.NLM_F_REQUEST | syscall.NLM_F_ACK
 	rr.Header.Seq = 2
 	data := make([]byte, 4)
-	binary.LittleEndian.PutUint32(data, 12)
+	hostEndian.PutUint32(data, 12)
 	rr.Data = append(rr.Data[:], data[:]...)
 	var result = []byte{20, 0, 0, 0, 16, 0, 5, 0, 2, 0, 0, 0, 0, 0, 0, 0, 12, 0, 0, 0}
 	var expected = rr.ToWireFormat()

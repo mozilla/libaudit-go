@@ -57,7 +57,7 @@ func GetAuditEvents(s Netlink, cb EventCallback, args ...interface{}) {
 				msgs, _ := s.Receive(false)
 				for _, msg := range msgs {
 					if msg.Header.Type == syscall.NLMSG_ERROR {
-						err := int32(nativeEndian().Uint32(msg.Data[0:4]))
+						err := int32(hostEndian.Uint32(msg.Data[0:4]))
 						if err != 0 {
 							cb(nil, fmt.Errorf("error receiving events %d", err), args...)
 						}
@@ -87,7 +87,7 @@ func GetRawAuditEvents(s Netlink, cb RawEventCallback, args ...interface{}) {
 						err error
 					)
 					if msg.Header.Type == syscall.NLMSG_ERROR {
-						v := int32(nativeEndian().Uint32(msg.Data[0:4]))
+						v := int32(hostEndian.Uint32(msg.Data[0:4]))
 						if v != 0 {
 							cb(m, fmt.Errorf("error receiving events %d", v), args...)
 						}
@@ -120,7 +120,7 @@ func GetAuditMessages(s Netlink, cb EventCallback, done *chan bool, args ...inte
 			msgs, _ := s.Receive(false)
 			for _, msg := range msgs {
 				if msg.Header.Type == syscall.NLMSG_ERROR {
-					v := int32(nativeEndian().Uint32(msg.Data[0:4]))
+					v := int32(hostEndian.Uint32(msg.Data[0:4]))
 					if v != 0 {
 						cb(nil, fmt.Errorf("error receiving events %d", v), args...)
 					}

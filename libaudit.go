@@ -112,6 +112,13 @@ import (
 // just increments.
 var sequenceNumber uint32
 
+// hostEndian is initialized to the byte order of the system
+var hostEndian binary.ByteOrder
+
+func init() {
+	hostEndian = nativeEndian()
+}
+
 func nextSequence() uint32 {
 	return atomic.AddUint32(&sequenceNumber, 1)
 }
@@ -190,7 +197,7 @@ func (s *NetlinkConnection) GetPID() (int, error) {
 	return int(v.Pid), nil
 }
 
-// Determine host byte order
+// nastiveEndian determines the byte order for the system
 func nativeEndian() binary.ByteOrder {
 	var x uint32 = 0x01020304
 	if *(*byte)(unsafe.Pointer(&x)) == 0x01 {
@@ -203,27 +210,27 @@ func nativeEndian() binary.ByteOrder {
 func (rr *NetlinkMessage) ToWireFormat() []byte {
 	buf := new(bytes.Buffer)
 	pbytes := nlmAlignOf(int(rr.Header.Len)) - int(rr.Header.Len)
-	err := binary.Write(buf, nativeEndian(), rr.Header.Len)
+	err := binary.Write(buf, hostEndian, rr.Header.Len)
 	if err != nil {
 		return nil
 	}
-	err = binary.Write(buf, nativeEndian(), rr.Header.Type)
+	err = binary.Write(buf, hostEndian, rr.Header.Type)
 	if err != nil {
 		return nil
 	}
-	err = binary.Write(buf, nativeEndian(), rr.Header.Flags)
+	err = binary.Write(buf, hostEndian, rr.Header.Flags)
 	if err != nil {
 		return nil
 	}
-	err = binary.Write(buf, nativeEndian(), rr.Header.Seq)
+	err = binary.Write(buf, hostEndian, rr.Header.Seq)
 	if err != nil {
 		return nil
 	}
-	err = binary.Write(buf, nativeEndian(), rr.Header.Pid)
+	err = binary.Write(buf, hostEndian, rr.Header.Pid)
 	if err != nil {
 		return nil
 	}
-	err = binary.Write(buf, nativeEndian(), rr.Data)
+	err = binary.Write(buf, hostEndian, rr.Data)
 	if err != nil {
 		return nil
 	}
@@ -299,7 +306,7 @@ func netlinkPopuint16(b []byte) (uint16, []byte, error) {
 	if len(b) < 2 {
 		return 0, b, fmt.Errorf("not enough bytes for uint16")
 	}
-	return nativeEndian().Uint16(b[:2]), b[2:], nil
+	return hostEndian.Uint16(b[:2]), b[2:], nil
 }
 
 // Pop a uint32 off the front of slice b, and return the new buffer.
@@ -307,7 +314,7 @@ func netlinkPopuint32(b []byte) (uint32, []byte, error) {
 	if len(b) < 4 {
 		return 0, b, fmt.Errorf("not enough bytes for uint32")
 	}
-	return nativeEndian().Uint32(b[:4]), b[4:], nil
+	return hostEndian.Uint32(b[:4]), b[4:], nil
 }
 
 // Initialize the header section as preparation for sending a new netlink message.
@@ -381,7 +388,7 @@ done:
 				break done
 			}
 			if m.Header.Type == syscall.NLMSG_ERROR {
-				e := int32(nativeEndian().Uint32(m.Data[0:4]))
+				e := int32(hostEndian.Uint32(m.Data[0:4]))
 				if e == 0 {
 					// ACK response from the kernel; if chkAck is true
 					// we just return as there is nothing left to do
@@ -413,7 +420,7 @@ done:
 // Send AUDIT_SET with the associated auditStatus configuration
 func auditSendStatus(s Netlink, status auditStatus) (err error) {
 	buf := new(bytes.Buffer)
-	err = binary.Write(buf, nativeEndian(), status)
+	err = binary.Write(buf, hostEndian, status)
 	if err != nil {
 		return
 	}
@@ -463,7 +470,7 @@ func AuditIsEnabled(s Netlink) (bool, error) {
 	}
 	// Convert the response to auditStatus
 	buf := bytes.NewBuffer(m.Data)
-	err = binary.Read(buf, nativeEndian(), &status)
+	err = binary.Read(buf, hostEndian, &status)
 	if err != nil {
 		return false, err
 	}
