@@ -1,14 +1,16 @@
 package libaudit
 
 import (
+	"bufio"
 	"bytes"
-	"fmt"
+	"math/rand"
 	"os"
 	"os/exec"
-	"reflect"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 )
 
 func TestWireFormat(t *testing.T) {
@@ -17,39 +19,30 @@ func TestWireFormat(t *testing.T) {
 	rr.Header.Type = syscall.AF_NETLINK
 	rr.Header.Flags = syscall.NLM_F_REQUEST | syscall.NLM_F_ACK
 	rr.Header.Seq = 2
+
 	data := make([]byte, 4)
 	hostEndian.PutUint32(data, 12)
 	rr.Data = append(rr.Data[:], data[:]...)
-	var result = []byte{20, 0, 0, 0, 16, 0, 5, 0, 2, 0, 0, 0, 0, 0, 0, 0, 12, 0, 0, 0}
-	var expected = rr.ToWireFormat()
-	if !reflect.DeepEqual(result, expected) {
-		t.Errorf("ToWireFormat(): expected %v, found %v", result, expected)
+
+	expected := []byte{20, 0, 0, 0, 16, 0, 5, 0, 2, 0, 0, 0, 0, 0, 0, 0, 12, 0, 0, 0}
+	result := rr.ToWireFormat()
+	if bytes.Compare(expected, result) != 0 {
+		t.Fatalf("ToWireFormat: resulting bytes unexpected")
 	}
-
-	// we currently are avoiding testing repacking byte stream into struct
-	// as we don't have a single correct way to repack (kernel side allows a lot of cases which needs to be managed on our side)
-	// re, err := parseAuditNetlinkMessage(result)
-	// if err != nil {
-	// 	t.Errorf("parseAuditNetlinkMessage failed: %v", err)
-	// }
-
-	// if !reflect.DeepEqual(rr, re[0]) {
-	// 	t.Errorf("parseAuditNetlinkMessage: expected %v , found %v", rr, re[0])
-	// }
 }
 
 func TestNetlinkConnection(t *testing.T) {
 	if os.Getuid() != 0 {
-		t.Skipf("skipping netlink support test: not root user")
+		t.Skipf("skipping test, not root user")
 	}
 	s, err := NewNetlinkConnection()
 	if err != nil {
-		t.Errorf("NewNetlinkConnection failed %v", err)
+		t.Fatalf("NewNetlinkConnection: %v", err)
 	}
 	defer s.Close()
 	wb := newNetlinkAuditRequest(uint16(AUDIT_GET), syscall.AF_NETLINK, 0)
 	if err = s.Send(wb); err != nil {
-		t.Errorf("TestNetlinkConnection: sending failed %v", err)
+		t.Errorf("Send: %v", err)
 	}
 	_, err = auditGetReply(s, wb.Header.Seq, true)
 	if err != nil {
@@ -58,85 +51,89 @@ func TestNetlinkConnection(t *testing.T) {
 }
 
 func TestSetters(t *testing.T) {
+	rand.Seed(time.Now().Unix())
 	var (
-		s             *NetlinkConnection
-		err           error
-		actualStatus  = 1
-		actualPID     = os.Getpid()
-		actualRate    = 500
-		actualBackLog = 500
+		s         *NetlinkConnection
+		pid       = os.Getpid()
+		ratelimit = 20 + rand.Intn(480)
+		backlog   = 20 + rand.Intn(480)
 	)
 	if os.Getuid() != 0 {
-		testSettersEmulated(t)
-		t.Skipf("skipping netlink socket based tests: not root user")
+		t.Skipf("skipping test, not root user")
 	}
-	s, err = NewNetlinkConnection()
+	s, err := NewNetlinkConnection()
+	if err != nil {
+		t.Fatalf("NewNetlinkConnection: %v", err)
+	}
 	defer s.Close()
 	err = AuditSetEnabled(s, true)
 	if err != nil {
-		t.Errorf("AuditSetEnabled failed %v", err)
+		t.Fatalf("AuditSetEnabled: %v", err)
 	}
 	auditstatus, err := AuditIsEnabled(s)
 	if err != nil {
-		t.Errorf("AuditIsEnabled failed %v", err)
+		t.Fatalf("AuditIsEnabled: %v", err)
 	}
 	if !auditstatus {
-		t.Errorf("AuditIsEnabled returned false")
+		t.Fatalf("AuditIsEnabled returned false")
 	}
-	err = AuditSetRateLimit(s, actualRate)
+	err = AuditSetRateLimit(s, ratelimit)
 	if err != nil {
-		t.Errorf("AuditSetRateLimit failed %v", err)
+		t.Fatalf("AuditSetRateLimit: %v", err)
 	}
-	err = AuditSetBacklogLimit(s, actualBackLog)
+	err = AuditSetBacklogLimit(s, backlog)
 	if err != nil {
-		t.Errorf("AuditSetBacklogLimit failed %v", err)
+		t.Fatalf("AuditSetBacklogLimit: %v", err)
+	}
+	err = AuditSetPID(s, pid)
+	if err != nil {
+		t.Fatalf("AuditSetPID: %v", err)
 	}
 
-	err = AuditSetPID(s, actualPID)
-	if err != nil {
-		t.Errorf("AuditSetPID failed %v", err)
-	}
-	// now we run `auditctl -s` and match the returned status, rate limit,
-	// backlog limit and pid from the kernel with the passed args. we rely on the format `auditctl`
-	// emits its output for parsing the values. If `auditctl` changes the format, the collection
-	// will need to rewritten.(specifically at https://fedorahosted.org/audit/browser/trunk/src/auditctl-listing.c audit_print_reply)
-
+	// Use the external auditctl program to obtain the set values, and compare to what we
+	// expect
 	cmd := exec.Command("auditctl", "-s")
 	cmdOutput := &bytes.Buffer{}
 	cmd.Stdout = cmdOutput
-
 	if err := cmd.Run(); err != nil {
-		t.Skipf("auditctl execution failed %v, skipping test", err)
-	}
-	var (
-		enabled      string
-		rateLimit    string
-		backLogLimit string
-		pid          string
-		result       string
-	)
-	result = cmdOutput.String()
-	resultStr := strings.Split(result, "\n")
-	strip := strings.Split(resultStr[0], " ")
-	enabled = strip[1]
-	strip = strings.Split(resultStr[2], " ")
-	pid = strip[1]
-	strip = strings.Split(resultStr[3], " ")
-	rateLimit = strip[1]
-	strip = strings.Split(resultStr[4], " ")
-	backLogLimit = strip[1]
-
-	if enabled != fmt.Sprintf("%d", actualStatus) {
-		t.Errorf("expected status %v, found status %v", actualStatus, enabled)
-	}
-	if backLogLimit != fmt.Sprintf("%d", actualBackLog) {
-		t.Errorf("expected back_log_limit %v, found back_log_limit %v", actualBackLog, backLogLimit)
-	}
-	if pid != fmt.Sprintf("%d", actualPID) {
-		t.Errorf("expected pid %v, found pid %v", actualPID, pid)
-	}
-	if rateLimit != fmt.Sprintf("%d", actualRate) {
-		t.Errorf("expected rate %v, found rate %v", actualRate, rateLimit)
+		t.Fatalf("exec auditctl: %v", err)
 	}
 
+	scanner := bufio.NewScanner(cmdOutput)
+	for scanner.Scan() {
+		args := strings.Split(scanner.Text(), " ")
+		if len(args) < 2 {
+			t.Fatalf("auditctl: malformed output %q", scanner.Text())
+		}
+		switch args[0] {
+		case "enabled":
+			if args[1] != "1" {
+				t.Fatalf("enabled should have been 1")
+			}
+		case "pid":
+			v, err := strconv.Atoi(args[1])
+			if err != nil {
+				t.Fatalf("pid argument was not an integer")
+			}
+			if v != pid {
+				t.Fatalf("pid should have been %v, was %v", pid, v)
+			}
+		case "rate_limit":
+			v, err := strconv.Atoi(args[1])
+			if err != nil {
+				t.Fatalf("rate_limit argument was not an integer")
+			}
+			if v != ratelimit {
+				t.Fatalf("ratelimit should have been %v, was %v", ratelimit, v)
+			}
+		case "backlog_limit":
+			v, err := strconv.Atoi(args[1])
+			if err != nil {
+				t.Fatalf("backlog_limit argument was not an integer")
+			}
+			if v != backlog {
+				t.Fatalf("backlog_limit should have been %v, was %v", backlog, v)
+			}
+		}
+	}
 }
