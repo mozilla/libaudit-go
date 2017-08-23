@@ -1,100 +1,13 @@
-/*
-Package libaudit is a client library in pure Go for talking with audit framework in the linux kernel.
-It provides API for dealing with audit related tasks like setting audit rules, deleting audit rules etc.
-The idea is to provide the same set of API as auditd (linux audit daemon).
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-NOTE: Currently the library is only applicable for x64 architecture.
-
-Example usage of the library:
-
-	package main
-
-	import (
-		"fmt"
-		"ioutil"
-		"syscall"
-		"time"
-		"github.com/mozilla/libaudit-go"
-	)
-
-	func main() {
-		s, err := libaudit.NewNetlinkConnection()
-		if err != nil {
-			fmt.Printf("%v\n", err)
-			return
-		}
-		defer s.Close()
-		// enable audit in kernel
-		err = libaudit.AuditSetEnabled(s, 1)
-		if err != nil {
-			fmt.Printf("%v\n", err)
-			return
-		}
-		// check if audit is enabled
-		status, err := libaudit.AuditIsEnabled(s)
-		if err == nil && status == 1 {
-			fmt.Printf("Enabled Audit\n")
-		} else if err == nil && status == 0 {
-			fmt.Prinft("Audit Not Enabled\n")
-			return
-		} else {
-			fmt.Printf("%v\n", err)
-			return
-		}
-		// set the maximum number of messages
-		// that the kernel will send per second
-		err = libaudit.AuditSetRateLimit(s, 450)
-		if err != nil {
-			fmt.Printf("%v\n", err)
-			return
-		}
-		// set max limit audit message queue
-		err = libaudit.AuditSetBacklogLimit(s, 16438)
-		if err != nil {
-			fmt.Printf("%v\n", err)
-			return
-		}
-		// register current pid with audit
-		err = libaudit.AuditSetPID(s, syscall.Getpid())
-		if err != nil {
-			fmt.Printf("%v\n", err)
-			return
-		}
-		// delete all rules that are previously present in kernel
-		err = libaudit.DeleteAllRules(s)
-		if err != nil {
-			fmt.Printf("%v\n", err)
-			return
-		}
-		// set audit rules
-		// specify rules in JSON format (for example see: https://github.com/arunk-s/gsoc16/blob/master/audit.rules.json)
-		out, _ := ioutil.ReadFile("audit.rules.json")
-		err = libaudit.SetRules(s, out)
-		if err != nil {
-			fmt.Printf("%v\n", err)
-			return
-		}
-		// create a channel to indicate libaudit to stop collecting messages
-		done := make(chan, bool)
-		// spawn a go routine that will stop the collection after 5 seconds
-		go func(){
-			time.Sleep(time.Second*5)
-			done <- true
-		}()
-		// collect messages and handle them in a function
-		libaudit.GetAuditMessages(s, callback, &done)
-	}
-
-	// provide a function to handle the messages
-	func callback(msg *libaudit.AuditEvent, ce error, args ...interface{}) {
-		if ce != nil {
-			fmt.Printf("%v\n", ce)
-		} else if msg != nil {
-			// AuditEvent struct holds all message details including a map of audit fields => values
-			fmt.Println(msg.Raw)
-		}
-	}
-*/
+// Package libaudit is a client library used for interfacing with the Linux kernel auditing framework. It
+// provides an API for executing audit related tasks such as setting audit rules, changing the auditing
+// configuration, and processing incoming audit events.
+//
+// The intent for this package is to provide a means for an application to take the role of auditd, for
+// consumption and analysis of audit events in your go program.
 package libaudit
 
 import (
@@ -104,13 +17,18 @@ import (
 	"sync/atomic"
 	"syscall"
 	"unsafe"
-
-	"github.com/pkg/errors"
 )
 
 // The sequence number used for requests from us to the kernel in netlink messages,
 // just increments.
 var sequenceNumber uint32
+
+// hostEndian is initialized to the byte order of the system
+var hostEndian binary.ByteOrder
+
+func init() {
+	hostEndian = nativeEndian()
+}
 
 func nextSequence() uint32 {
 	return atomic.AddUint32(&sequenceNumber, 1)
@@ -119,8 +37,9 @@ func nextSequence() uint32 {
 // NetlinkMessage is the struct type that is used for communicating on netlink sockets.
 type NetlinkMessage syscall.NetlinkMessage
 
-// auditStatus is the c compatible struct of audit_status (libaudit.h).
-// It is used for passing information involving status of audit services.
+// auditStatus represents the c struct audit_status (libaudit.h). It is used for passing
+// information related to the status of the auditing services between the kernel and
+// userspace.
 type auditStatus struct {
 	Mask            uint32 /* Bit mask for valid entries */
 	Enabled         uint32 /* 1 = enabled, 0 = disabled */
@@ -134,7 +53,7 @@ type auditStatus struct {
 	BacklogWaitTime uint32 /* message queue wait timeout */
 }
 
-// Interface abstracting netlink IO functions; generally used with NetlinkConnection
+// Netlink is an abstracting netlink IO functions; generally used with NetlinkConnection
 type Netlink interface {
 	Send(request *NetlinkMessage) error                 // Send a NetlinkMessage
 	Receive(nonblocking bool) ([]NetlinkMessage, error) // Receive netlink message(s) from the kernel
@@ -149,17 +68,17 @@ type NetlinkConnection struct {
 	address syscall.SockaddrNetlink // Netlink sockaddr
 }
 
-// Close fd associated with netlink connection
+// Close closes the Netlink connection.
 func (s *NetlinkConnection) Close() {
 	syscall.Close(s.fd)
 }
 
-// Send netlink message using the netlink connection
+// Send sends NetlinkMessage request using an allocated NetlinkConnection.
 func (s *NetlinkConnection) Send(request *NetlinkMessage) error {
 	return syscall.Sendto(s.fd, request.ToWireFormat(), 0, &s.address)
 }
 
-// Receive any available netlink messages being sent to us by the kernel
+// Receive returns any available netlink messages being sent to us by the kernel.
 func (s *NetlinkConnection) Receive(nonblocking bool) ([]NetlinkMessage, error) {
 	var (
 		flags = 0
@@ -175,7 +94,7 @@ func (s *NetlinkConnection) Receive(nonblocking bool) ([]NetlinkMessage, error) 
 	return parseAuditNetlinkMessage(buf[:nr])
 }
 
-// Retrieves port ID of netlink socket peer
+// GetPID returns the netlink port ID of the netlink socket peer.
 func (s *NetlinkConnection) GetPID() (int, error) {
 	var (
 		address syscall.Sockaddr
@@ -190,7 +109,7 @@ func (s *NetlinkConnection) GetPID() (int, error) {
 	return int(v.Pid), nil
 }
 
-// Determine host byte order
+// nativeEndian determines the byte order for the system
 func nativeEndian() binary.ByteOrder {
 	var x uint32 = 0x01020304
 	if *(*byte)(unsafe.Pointer(&x)) == 0x01 {
@@ -199,31 +118,32 @@ func nativeEndian() binary.ByteOrder {
 	return binary.LittleEndian
 }
 
-// Convert a NetlinkMessage to a byte stream suitable to send to the kernel
+// ToWireFormat converts a given NetlinkMessage to a byte stream suitable to be sent to
+// the kernel.
 func (rr *NetlinkMessage) ToWireFormat() []byte {
 	buf := new(bytes.Buffer)
 	pbytes := nlmAlignOf(int(rr.Header.Len)) - int(rr.Header.Len)
-	err := binary.Write(buf, nativeEndian(), rr.Header.Len)
+	err := binary.Write(buf, hostEndian, rr.Header.Len)
 	if err != nil {
 		return nil
 	}
-	err = binary.Write(buf, nativeEndian(), rr.Header.Type)
+	err = binary.Write(buf, hostEndian, rr.Header.Type)
 	if err != nil {
 		return nil
 	}
-	err = binary.Write(buf, nativeEndian(), rr.Header.Flags)
+	err = binary.Write(buf, hostEndian, rr.Header.Flags)
 	if err != nil {
 		return nil
 	}
-	err = binary.Write(buf, nativeEndian(), rr.Header.Seq)
+	err = binary.Write(buf, hostEndian, rr.Header.Seq)
 	if err != nil {
 		return nil
 	}
-	err = binary.Write(buf, nativeEndian(), rr.Header.Pid)
+	err = binary.Write(buf, hostEndian, rr.Header.Pid)
 	if err != nil {
 		return nil
 	}
-	err = binary.Write(buf, nativeEndian(), rr.Data)
+	err = binary.Write(buf, hostEndian, rr.Data)
 	if err != nil {
 		return nil
 	}
@@ -237,13 +157,13 @@ func (rr *NetlinkMessage) ToWireFormat() []byte {
 	return buf.Bytes()
 }
 
-// Round the length of a netlink message up to align it properly.
+// nlmAlignOf rounds the length of a netlink message up to align it properly.
 func nlmAlignOf(msglen int) int {
 	return (msglen + syscall.NLMSG_ALIGNTO - 1) & ^(syscall.NLMSG_ALIGNTO - 1)
 }
 
-// Process an incoming netlink message from the socket, and return a slice of
-// NetlinkMessage types, or an error if an error is encountered.
+// parseAuditNetlinkMessage processes an incoming netlink message from the socket,
+// and returns a slice of NetlinkMessage types, or an error if an error is encountered.
 //
 // This function handles incoming messages with NLM_F_MULTI; in the case of
 // a multipart message, ret will contain all netlink messages which are part
@@ -256,9 +176,14 @@ func parseAuditNetlinkMessage(b []byte) (ret []NetlinkMessage, err error) {
 			m NetlinkMessage
 		)
 		m.Header.Len, b, err = netlinkPopuint32(b)
+		if err != nil {
+			return
+		}
 		// Determine our alignment size given the reported header length
 		alignbounds := nlmAlignOf(int(m.Header.Len))
 		padding := alignbounds - int(m.Header.Len)
+		// Subtract 4 from alignbounds here to account for already having popped 4 bytes
+		// off the input buffer
 		if len(b) < alignbounds-4 {
 			return ret, fmt.Errorf("short read on audit message, expected %v bytes had %v",
 				alignbounds, len(b)+4)
@@ -294,23 +219,24 @@ func parseAuditNetlinkMessage(b []byte) (ret []NetlinkMessage, err error) {
 	return ret, nil
 }
 
-// Pop a uint16 off the front of slice b, and return the new buffer.
+// netlinkPopuint16 pops a uint16 off the front of b, returning the value and the new buffer
 func netlinkPopuint16(b []byte) (uint16, []byte, error) {
 	if len(b) < 2 {
 		return 0, b, fmt.Errorf("not enough bytes for uint16")
 	}
-	return nativeEndian().Uint16(b[:2]), b[2:], nil
+	return hostEndian.Uint16(b[:2]), b[2:], nil
 }
 
-// Pop a uint32 off the front of slice b, and return the new buffer.
+// netlinkPopuint32 pops a uint32 off the front of b, returning the value and the new buffer
 func netlinkPopuint32(b []byte) (uint32, []byte, error) {
 	if len(b) < 4 {
 		return 0, b, fmt.Errorf("not enough bytes for uint32")
 	}
-	return nativeEndian().Uint32(b[:4]), b[4:], nil
+	return hostEndian.Uint32(b[:4]), b[4:], nil
 }
 
-// Initialize the header section as preparation for sending a new netlink message.
+// newNetlinkAuditRequest initializes the header section as preparation for sending a new
+// netlink message.
 func newNetlinkAuditRequest(proto uint16, family, sizeofData int) *NetlinkMessage {
 	rr := &NetlinkMessage{}
 	rr.Header.Len = uint32(syscall.NLMSG_HDRLEN + sizeofData)
@@ -320,9 +246,9 @@ func newNetlinkAuditRequest(proto uint16, family, sizeofData int) *NetlinkMessag
 	return rr
 }
 
-// Create a new netlink connection with the kernel audit subsystem and return a
-// NetlinkConnection describing it. The process should ensure it has the required
-// privileges before calling. An error is returned if any error is encountered
+// NewNetlinkConnection creates a new netlink connection with the kernel audit subsystem
+// and returns a NetlinkConnection describing it. The process should ensure it has the
+// required privileges before calling. An error is returned if any error is encountered
 // creating the netlink connection.
 func NewNetlinkConnection() (ret *NetlinkConnection, err error) {
 	ret = &NetlinkConnection{}
@@ -340,8 +266,8 @@ func NewNetlinkConnection() (ret *NetlinkConnection, err error) {
 	return
 }
 
-// Get a reply to a message from the kernel. The message(s) we are looking for are indicated
-// by passing sequence number seq.
+// auditGetReply gets a reply to a message from the kernel. The message(s) we are looking for are
+// indicated by passing sequence number seq.
 //
 // Once we recieve the full response any matching messages are returned. Note this function
 // would generally be used to retrieve a response from various AUDIT_SET functions or similar
@@ -381,7 +307,7 @@ done:
 				break done
 			}
 			if m.Header.Type == syscall.NLMSG_ERROR {
-				e := int32(nativeEndian().Uint32(m.Data[0:4]))
+				e := int32(hostEndian.Uint32(m.Data[0:4]))
 				if e == 0 {
 					// ACK response from the kernel; if chkAck is true
 					// we just return as there is nothing left to do
@@ -392,7 +318,7 @@ done:
 					// we want
 					continue
 				} else {
-					return ret, fmt.Errorf("auditGetReply: error while recieving reply -%d", e)
+					return ret, fmt.Errorf("error while recieving reply %v", e)
 				}
 			}
 			ret = append(ret, m)
@@ -410,10 +336,10 @@ done:
 	return ret, nil
 }
 
-// Send AUDIT_SET with the associated auditStatus configuration
+// auditSendStatus sends AUDIT_SET with the associated auditStatus configuration
 func auditSendStatus(s Netlink, status auditStatus) (err error) {
 	buf := new(bytes.Buffer)
-	err = binary.Write(buf, nativeEndian(), status)
+	err = binary.Write(buf, hostEndian, status)
 	if err != nil {
 		return
 	}
@@ -424,12 +350,12 @@ func auditSendStatus(s Netlink, status auditStatus) (err error) {
 	}
 	_, err = auditGetReply(s, wb.Header.Seq, true)
 	if err != nil {
-		return errors.Wrap(err, "AuditSetEnabled failed")
+		return
 	}
 	return nil
 }
 
-// Enable or disable auditing in the kernel
+// AuditSetEnabled enables or disables auditing in the kernel.
 func AuditSetEnabled(s Netlink, enabled bool) (err error) {
 	var status auditStatus
 	if enabled {
@@ -441,7 +367,7 @@ func AuditSetEnabled(s Netlink, enabled bool) (err error) {
 	return auditSendStatus(s, status)
 }
 
-// Returns true if the auditing subsystem is enabled in the kernel
+// AuditIsEnabled returns true if auditing is enabled in the kernel.
 func AuditIsEnabled(s Netlink) (bool, error) {
 	var status auditStatus
 
@@ -463,7 +389,7 @@ func AuditIsEnabled(s Netlink) (bool, error) {
 	}
 	// Convert the response to auditStatus
 	buf := bytes.NewBuffer(m.Data)
-	err = binary.Read(buf, nativeEndian(), &status)
+	err = binary.Read(buf, hostEndian, &status)
 	if err != nil {
 		return false, err
 	}
@@ -473,7 +399,7 @@ func AuditIsEnabled(s Netlink) (bool, error) {
 	return false, nil
 }
 
-// Set PID for audit daemon in kernel (audit_set_pid(3))
+// AuditSetPID sets the PID for the audit daemon in the kernel (audit_set_pid(3))
 func AuditSetPID(s Netlink, pid int) error {
 	var status auditStatus
 	status.Mask = AUDIT_STATUS_PID
