@@ -22,8 +22,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-var rulesRetrieved auditRuleData
-
 // auditRules describes a set of audit rules in JSON format
 type auditRules struct {
 	RawRules        interface{} `json:"audit_rules"`
