@@ -796,13 +796,13 @@ func ListAllRules(s Netlink) (ret []string, err error) {
 	return
 }
 
-//AuditSyscallToName takes syscall number and returns the syscall name. Currently only applicable for x64 arch.
-func AuditSyscallToName(syscall string) (name string, err error) {
+// syscallToName takes syscall number and returns the syscall name.
+func syscallToName(syscall string) (string, error) {
 	syscallMap := headers.ReverseSysMapX64
 	if val, ok := syscallMap[syscall]; ok {
 		return val, nil
 	}
-	return "", fmt.Errorf("AuditSyscallToName failed: syscall %v not found", syscall)
+	return "", fmt.Errorf("syscall %v not found", syscall)
 
 }
 
@@ -1041,7 +1041,7 @@ func printSyscallRule(rule *auditRuleData) (string, int, int, bool) {
 		word := auditWord(i)
 		bit := auditBit(i)
 		if (rule.Mask[word] & bit) > 0 {
-			n, err := AuditSyscallToName(fmt.Sprintf("%d", i))
+			n, err := syscallToName(fmt.Sprintf("%d", i))
 			if len(name) == 0 {
 				name += fmt.Sprintf(" -S ")
 			}

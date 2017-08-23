@@ -290,7 +290,7 @@ func printGID(fieldValue string) (string, error) {
 
 func printSyscall(fieldValue string) (string, error) {
 	//NOTE: considering only x64 machines
-	name, err := AuditSyscallToName(fieldValue)
+	name, err := syscallToName(fieldValue)
 	if err != nil {
 		return "", errors.Wrap(err, "syscall parsing failed")
 	}
@@ -645,7 +645,7 @@ func printSuccess(fieldValue string) (string, error) {
 
 func printA0(fieldValue string, sysNum string) (string, error) {
 	// TODO: currently only considering only x64 machines
-	name, err := AuditSyscallToName(sysNum)
+	name, err := syscallToName(sysNum)
 	if err != nil {
 		return "", errors.Wrap(err, "syscall parsing failed")
 	}
@@ -870,7 +870,7 @@ func printIpcCall(fieldValue string, base int) (string, error) {
 
 func printA1(fieldValue, sysNum string, a0 int) (string, error) {
 	//TODO: currently only considering x64 machines
-	name, err := AuditSyscallToName(sysNum)
+	name, err := syscallToName(sysNum)
 	if err != nil {
 		return "", errors.Wrap(err, "syscall parsing failed")
 	}
@@ -1094,7 +1094,7 @@ func printSocketProto(fieldValue string) (string, error) {
 
 func printA2(fieldValue, sysNum string, a1 int) (string, error) {
 	//TODO: currently only considering x64 machines
-	name, err := AuditSyscallToName(sysNum)
+	name, err := syscallToName(sysNum)
 	if err != nil {
 		return "", errors.Wrap(err, "syscall parsing failed")
 	}
@@ -1379,7 +1379,7 @@ func printSeek(fieldValue string) (string, error) {
 
 func printA3(fieldValue, sysNum string) (string, error) {
 	// TODO: currently only considering x64 machines
-	name, err := AuditSyscallToName(sysNum)
+	name, err := syscallToName(sysNum)
 	if err != nil {
 		return "", errors.Wrap(err, "syscall parsing failed")
 	}
