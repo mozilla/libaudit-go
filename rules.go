@@ -34,6 +34,11 @@ type auditRules struct {
 	AuditRules []auditRule
 }
 
+// extractAuditRules populates the AuditRules field in the auditRules type after data
+// has been unmarshalled into this type.
+//
+// Since RawRules/audit_rules is of type interface and can contain either a watch or system call
+// rule, this function identifies the correct type to allocate.
 func (a *auditRules) extractAuditRules() {
 	var ri []interface{}
 
