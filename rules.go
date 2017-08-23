@@ -89,11 +89,11 @@ type auditFileRule struct {
 func (a *auditFileRule) toKernelRule() (ret auditRuleData, act int, filt int, err error) {
 	ret.Buf = make([]byte, 0)
 
-	err = auditSetupAndAddWatchDir(&ret, a.Path, true)
+	err = ret.addWatch(a.Path, true)
 	if err != nil {
 		return
 	}
-	err = auditSetupAndUpdatePerms(&ret, a.Permission)
+	err = ret.addPerms(a.Permission)
 	if err != nil {
 		return
 	}
@@ -665,82 +665,66 @@ func checkPath(pathName string) error {
 	return nil
 }
 
-// auditSetupAndAddWatchDir checks directory watch params for setting of fields in auditRuleData
-func auditSetupAndAddWatchDir(rule *auditRuleData, pathName string, strictPath bool) error {
+// addWatch adds AUDIT_WATCH/AUDIT_DIR values for path to an auditRuleData
+func (r *auditRuleData) addWatch(path string, strictPath bool) error {
 	typeName := uint16(AUDIT_WATCH)
 
-	err := checkPath(pathName)
+	err := checkPath(path)
 	if err != nil {
-		return errors.Wrap(err, "auditSetupAndAddWatchDir failed")
+		return err
 	}
 
-	// Trim trailing '/' should they exist
-	pathName = strings.TrimRight(pathName, "/")
+	// Trim any trailing slash if present
+	path = strings.TrimRight(path, "/")
 
-	fileInfo, err := os.Stat(pathName)
+	// Validate the path exists
+	fileInfo, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) && strictPath {
-			return fmt.Errorf("auditSetupAndAddWatchDir failed: file at %v does not exist", pathName)
+			return err
 		} else if !os.IsNotExist(err) {
-			// report errors which are not due to non-existent file/dir
-			return errors.Wrap(err, "auditSetupAndAddWatchDir failed")
+			return err
 		}
 	}
-	if !os.IsNotExist(err) && fileInfo.IsDir() {
+	if fileInfo.IsDir() {
 		typeName = uint16(AUDIT_DIR)
 	}
-	err = auditAddWatchDir(typeName, rule, pathName)
-	if err != nil {
-		return errors.Wrap(err, "auditSetupAndAddWatchDir failed")
-	}
-	return nil
 
-}
-
-// auditAddWatchDir sets fields in auditRuleData for watching PathName
-func auditAddWatchDir(typeName uint16, rule *auditRuleData, pathName string) error {
-
-	// Check if Rule is Empty
-	if rule.FieldCount != 0 {
-		return fmt.Errorf("auditAddWatchDir failed: rule is not empty")
+	// Verify the rule is empty
+	if r.FieldCount != 0 {
+		return fmt.Errorf("rule is not empty")
 	}
 
-	if typeName != uint16(AUDIT_DIR) && typeName != uint16(AUDIT_WATCH) {
-		return fmt.Errorf("auditAddWatchDir failed: invalid type %v used", typeName)
-	}
-
-	rule.Flags = uint32(AUDIT_FILTER_EXIT)
-	rule.Action = uint32(AUDIT_ALWAYS)
+	r.Flags = uint32(AUDIT_FILTER_EXIT)
+	r.Action = uint32(AUDIT_ALWAYS)
 	// mark all bits as would be done by audit_rule_syscallbyname_data(rule, "all")
 	for i := 0; i < AUDIT_BITMASK_SIZE-1; i++ {
-		rule.Mask[i] = 0xFFFFFFFF
+		r.Mask[i] = 0xFFFFFFFF
 	}
 
-	rule.FieldCount = uint32(2)
-	rule.Fields[0] = uint32(typeName)
+	r.FieldCount = uint32(2)
+	r.Fields[0] = uint32(typeName)
 
-	rule.Fieldflags[0] = uint32(AUDIT_EQUAL)
-	valbyte := []byte(pathName)
+	r.Fieldflags[0] = uint32(AUDIT_EQUAL)
+	valbyte := []byte(path)
 	vlen := len(valbyte)
 
-	rule.Values[0] = (uint32)(vlen)
-	rule.Buflen = (uint32)(vlen)
-	//Now append the key value with the rule buffer space
-	//May need to reallocate memory to rule.Buf i.e. the 0 size byte array, append will take care of that
-	rule.Buf = append(rule.Buf, valbyte[:]...)
+	r.Values[0] = (uint32)(vlen)
+	r.Buflen = (uint32)(vlen)
+	// Now write the key value in the rule buffer space
+	r.Buf = append(r.Buf, valbyte...)
 
-	rule.Fields[1] = uint32(AUDIT_PERM)
-	rule.Fieldflags[1] = uint32(AUDIT_EQUAL)
-	rule.Values[1] = uint32(AUDIT_PERM_READ | AUDIT_PERM_WRITE | AUDIT_PERM_EXEC | AUDIT_PERM_ATTR)
+	r.Fields[1] = uint32(AUDIT_PERM)
+	r.Fieldflags[1] = uint32(AUDIT_EQUAL)
+	r.Values[1] = uint32(AUDIT_PERM_READ | AUDIT_PERM_WRITE | AUDIT_PERM_EXEC | AUDIT_PERM_ATTR)
 
 	return nil
 }
 
-// auditSetupAndUpdatePerms validates permission string and passes their
-// integer equivalents to set auditRuleData
-func auditSetupAndUpdatePerms(rule *auditRuleData, perms string) error {
-	if len(perms) > 4 {
-		return fmt.Errorf("auditSetupAndUpdatePerms failed: invalid permission string %v", perms)
+// addPerms parses a permissions string and associated it with a watch rule
+func (r *auditRuleData) addPerms(perms string) error {
+	if len(perms) > 4 || len(perms) < 1 {
+		return fmt.Errorf("invalid permission string %q", perms)
 	}
 	perms = strings.ToLower(perms)
 	var permValue int
@@ -755,44 +739,30 @@ func auditSetupAndUpdatePerms(rule *auditRuleData, perms string) error {
 		case 'a':
 			permValue |= AUDIT_PERM_ATTR
 		default:
-			return fmt.Errorf("auditSetupAndUpdatePerms failed: unsupported permission %v", val)
+			return fmt.Errorf("unknown permission %v", val)
 		}
 	}
 
-	err := auditUpdateWatchPerms(rule, permValue)
-	if err != nil {
-		return errors.Wrap(err, "auditSetupAndUpdatePerms failed")
-	}
-	return nil
-}
-
-// auditUpdateWatchPerms sets permisission bits in auditRuleData
-func auditUpdateWatchPerms(rule *auditRuleData, perms int) error {
-	var done bool
-
-	if rule.FieldCount < 1 {
-		return fmt.Errorf("auditUpdateWatchPerms failed: empty rule")
+	if r.FieldCount < 1 {
+		return fmt.Errorf("rule is empty")
 	}
 
 	// First see if we have an entry we are updating
-	for i := range rule.Fields {
-		if rule.Fields[i] == uint32(AUDIT_PERM) {
-			rule.Values[i] = uint32(perms)
-			done = true
+	for i := range r.Fields {
+		if r.Fields[i] == uint32(AUDIT_PERM) {
+			r.Values[i] = uint32(permValue)
+			return nil
 		}
 	}
-
-	if !done {
-		// If not check to see if we have room to add a field
-		if rule.FieldCount >= AUDIT_MAX_FIELDS-1 {
-			return fmt.Errorf("auditUpdateWatchPerms: maximum field limit reached")
-		}
-
-		rule.Fields[rule.FieldCount] = uint32(AUDIT_PERM)
-		rule.Values[rule.FieldCount] = uint32(perms)
-		rule.Fieldflags[rule.FieldCount] = uint32(AUDIT_EQUAL)
-		rule.FieldCount++
+	// If not check to see if we have room to add a field
+	if r.FieldCount >= AUDIT_MAX_FIELDS-1 {
+		return fmt.Errorf("maximum field limit reached")
 	}
+
+	r.Fields[r.FieldCount] = uint32(AUDIT_PERM)
+	r.Values[r.FieldCount] = uint32(permValue)
+	r.Fieldflags[r.FieldCount] = uint32(AUDIT_EQUAL)
+	r.FieldCount++
 
 	return nil
 }
