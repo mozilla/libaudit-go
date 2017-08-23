@@ -588,7 +588,8 @@ func parseActionAndFilters(actions []string) (action int, filter int) {
 	return
 }
 
-// Send prepared auditRuleData to the kernel (loads audit rules)
+// auditAddRuleData sends a prepared auditRuleData to be loaded by the kernel, this effectively
+// installs the rule
 func auditAddRuleData(s Netlink, rule *auditRuleData, flags int, action int) error {
 	if flags == AUDIT_FILTER_ENTRY {
 		return fmt.Errorf("use of entry filter is deprecated")
@@ -636,30 +637,22 @@ func SetRules(s Netlink, content []byte) error {
 	return nil
 }
 
-var errPathTooBig = errors.New("the path passed for the watch is too big")
-var errPathStart = errors.New("the path must start with '/'")
-var errBaseTooBig = errors.New("the base name of the path is too big")
-
+// checkPath checks the path which is being used in a watch rule to validate it is formatted
+// correctly
 func checkPath(pathName string) error {
 	if len(pathName) >= PATH_MAX {
-		return errors.Wrap(errPathTooBig, "checkPath failed")
+		return fmt.Errorf("path %q too large", pathName)
 	}
 	if pathName[0] != '/' {
-		return errors.Wrap(errPathStart, "checkPath failed")
+		return fmt.Errorf("path %q must be absolute")
+	}
+	if strings.Contains(pathName, "..") {
+		return fmt.Errorf("path %q cannot contain special directory values", pathName)
 	}
 
 	base := path.Base(pathName)
-
 	if len(base) > syscall.NAME_MAX {
-		return errors.Wrap(errBaseTooBig, "checkPath failed")
-	}
-
-	if strings.Contains(base, "..") {
-		return fmt.Errorf("warning: relative path notation is not supported %v", base)
-	}
-
-	if strings.Contains(base, "*") || strings.Contains(base, "?") {
-		return fmt.Errorf("warning: wildcard notation is not supported %v", base)
+		return fmt.Errorf("base name %q too large", base)
 	}
 
 	return nil
