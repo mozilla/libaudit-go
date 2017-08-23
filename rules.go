@@ -76,7 +76,6 @@ func (a *auditRules) extractAuditRules() {
 // rules
 type auditRule interface {
 	toKernelRule() (auditRuleData, int, int, error)
-	toString() (string, error)
 }
 
 // auditFileRule describes the JSON format for a file type audit rule
@@ -86,10 +85,7 @@ type auditFileRule struct {
 	Permission string `json:"permission"`
 }
 
-func (a *auditFileRule) toString() (string, error) {
-	return "", nil
-}
-
+// toKernelRule converts the JSON rule to a kernel audit rule structure.
 func (a *auditFileRule) toKernelRule() (ret auditRuleData, act int, filt int, err error) {
 	ret.Buf = make([]byte, 0)
 
@@ -132,10 +128,7 @@ type auditSyscallRule struct {
 	Actions  []string `json:"actions"`
 }
 
-func (a *auditSyscallRule) toString() (string, error) {
-	return "", nil
-}
-
+// toKernelRule converts the JSON rule to a kernel audit rule structure.
 func (a *auditSyscallRule) toKernelRule() (ret auditRuleData, act int, filt int, err error) {
 	var auditSyscallAdded bool
 
