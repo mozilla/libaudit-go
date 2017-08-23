@@ -17,6 +17,7 @@ var expectedRules = []string{
 	"-a never,exit -F path=/bin/ls -F perm=x",
 	"-a always,exit-F arch=b64 -S execve -F key=exec",
 	"-a always,exit -S clone,fork,vfork",
+	"-a always,exit -S adjtimex,settimeofday -F key=time-change",
 	"-a always,exit-F arch=b64 -S rename,renameat -F auid>=1000 -F key=rename",
 }
 
