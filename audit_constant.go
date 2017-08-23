@@ -1,8 +1,11 @@
-//audit_constant.go contains constants that are used within libaudit for indicating
-//message types, field values etc.
-//The list is compiled from linux/audit.h (from the kernel) and libaudit.h from the auditd source
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 package libaudit
+
+// audit_constants.go contains constants used within libaudit, sourced from linux/audit.h
+// (from the Linux kernel) and from libaudit.h in the audit userspace source code.
 
 const (
 	AUDIT_STATUS_SIZE = 40 // Size of auditStatus

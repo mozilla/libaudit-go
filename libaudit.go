@@ -1,100 +1,13 @@
-/*
-Package libaudit is a client library in pure Go for talking with audit framework in the linux kernel.
-It provides API for dealing with audit related tasks like setting audit rules, deleting audit rules etc.
-The idea is to provide the same set of API as auditd (linux audit daemon).
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-NOTE: Currently the library is only applicable for x64 architecture.
-
-Example usage of the library:
-
-	package main
-
-	import (
-		"fmt"
-		"ioutil"
-		"syscall"
-		"time"
-		"github.com/mozilla/libaudit-go"
-	)
-
-	func main() {
-		s, err := libaudit.NewNetlinkConnection()
-		if err != nil {
-			fmt.Printf("%v\n", err)
-			return
-		}
-		defer s.Close()
-		// enable audit in kernel
-		err = libaudit.AuditSetEnabled(s, 1)
-		if err != nil {
-			fmt.Printf("%v\n", err)
-			return
-		}
-		// check if audit is enabled
-		status, err := libaudit.AuditIsEnabled(s)
-		if err == nil && status == 1 {
-			fmt.Printf("Enabled Audit\n")
-		} else if err == nil && status == 0 {
-			fmt.Prinft("Audit Not Enabled\n")
-			return
-		} else {
-			fmt.Printf("%v\n", err)
-			return
-		}
-		// set the maximum number of messages
-		// that the kernel will send per second
-		err = libaudit.AuditSetRateLimit(s, 450)
-		if err != nil {
-			fmt.Printf("%v\n", err)
-			return
-		}
-		// set max limit audit message queue
-		err = libaudit.AuditSetBacklogLimit(s, 16438)
-		if err != nil {
-			fmt.Printf("%v\n", err)
-			return
-		}
-		// register current pid with audit
-		err = libaudit.AuditSetPID(s, syscall.Getpid())
-		if err != nil {
-			fmt.Printf("%v\n", err)
-			return
-		}
-		// delete all rules that are previously present in kernel
-		err = libaudit.DeleteAllRules(s)
-		if err != nil {
-			fmt.Printf("%v\n", err)
-			return
-		}
-		// set audit rules
-		// specify rules in JSON format (for example see: https://github.com/arunk-s/gsoc16/blob/master/audit.rules.json)
-		out, _ := ioutil.ReadFile("audit.rules.json")
-		err = libaudit.SetRules(s, out)
-		if err != nil {
-			fmt.Printf("%v\n", err)
-			return
-		}
-		// create a channel to indicate libaudit to stop collecting messages
-		done := make(chan, bool)
-		// spawn a go routine that will stop the collection after 5 seconds
-		go func(){
-			time.Sleep(time.Second*5)
-			done <- true
-		}()
-		// collect messages and handle them in a function
-		libaudit.GetAuditMessages(s, callback, &done)
-	}
-
-	// provide a function to handle the messages
-	func callback(msg *libaudit.AuditEvent, ce error, args ...interface{}) {
-		if ce != nil {
-			fmt.Printf("%v\n", ce)
-		} else if msg != nil {
-			// AuditEvent struct holds all message details including a map of audit fields => values
-			fmt.Println(msg.Raw)
-		}
-	}
-*/
+// Package libaudit is a client library used for interfacing with the Linux kernel auditing framework. It
+// provides an API for executing audit related tasks such as setting audit rules, changing the auditing
+// configuration, and processing incoming audit events.
+//
+// The intent for this package is to provide a means for an application to take the role of auditd, for
+// consumption and analysis of audit events in your go program.
 package libaudit
 
 import (
