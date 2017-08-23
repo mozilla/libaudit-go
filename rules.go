@@ -24,23 +24,100 @@ import (
 
 var rulesRetrieved auditRuleData
 
-// Describes a set of audit rules; we load these from a JSON file
+// auditRules describes a set of audit rules in JSON format
 type auditRules struct {
-	FileRules       []auditFileRule    `json:"file_rules"`
-	SyscallRules    []auditSyscallRule `json:"syscall_rules"`
-	StrictPathCheck bool               `json:"strict_path_check"`
-	Delete          bool               `json:"delete"`
-	Enable          string             `json:"enable"`
-	Buffer          string             `json:"buffer"`
-	Rate            string             `json:"rate"`
+	RawRules        interface{} `json:"audit_rules"`
+	StrictPathCheck bool        `json:"strict_path_check"`
+	Delete          bool        `json:"delete"`
+	Enable          string      `json:"enable"`
+	Buffer          string      `json:"buffer"`
+	Rate            string      `json:"rate"`
+
+	AuditRules []auditRule
 }
 
+func (a *auditRules) extractAuditRules() {
+	var ri []interface{}
+
+	ri = a.RawRules.([]interface{})
+	for _, x := range ri {
+		havepath := false
+		for k := range x.(map[string]interface{}) {
+			if k == "path" {
+				havepath = true
+			}
+		}
+		var nr interface{}
+		// If we found a path key, treat it as a file rule, otherwise treat it as a
+		// syscall rule.
+		if havepath {
+			afr := auditFileRule{}
+			nr = &afr
+		} else {
+			afr := auditSyscallRule{}
+			nr = &afr
+		}
+		buf, err := json.Marshal(x)
+		if err != nil {
+			return
+		}
+		err = json.Unmarshal(buf, &nr)
+		if err != nil {
+			return
+		}
+		a.AuditRules = append(a.AuditRules, nr.(auditRule))
+	}
+}
+
+// auditRule is an interface abstraction for file system and system call type audit
+// rules
+type auditRule interface {
+	toKernelRule() (auditRuleData, int, int, error)
+	toString() (string, error)
+}
+
+// auditFileRule describes the JSON format for a file type audit rule
 type auditFileRule struct {
 	Path       string `json:"path"`
 	Key        string `json:"key"`
 	Permission string `json:"permission"`
 }
 
+func (a *auditFileRule) toString() (string, error) {
+	return "", nil
+}
+
+func (a *auditFileRule) toKernelRule() (ret auditRuleData, act int, filt int, err error) {
+	ret.Buf = make([]byte, 0)
+
+	err = auditSetupAndAddWatchDir(&ret, a.Path, true)
+	if err != nil {
+		return
+	}
+	err = auditSetupAndUpdatePerms(&ret, a.Permission)
+	if err != nil {
+		return
+	}
+	// The key value is optional for a file rule
+	if a.Key != "" {
+		fpd := fieldPairData{
+			fieldval:     a.Key,
+			opval:        AUDIT_EQUAL,
+			fieldname:    "key",
+			flags:        AUDIT_FILTER_UNSET,
+			syscallAdded: true,
+		}
+		err = auditRuleFieldPairData(&ret, &fpd)
+		if err != nil {
+			return
+		}
+	}
+	act = AUDIT_ALWAYS
+	filt = AUDIT_FILTER_EXIT
+	return
+}
+
+// auditSyscallRule describes the JSON format for a syscall type audit rule
 type auditSyscallRule struct {
 	Key    string `json:"key"`
 	Fields []struct {
@@ -50,6 +127,82 @@ type auditSyscallRule struct {
 	} `json:"fields"`
 	Syscalls []string `json:"syscalls"`
 	Actions  []string `json:"actions"`
+}
+
+func (a *auditSyscallRule) toString() (string, error) {
+	return "", nil
+}
+
+func (a *auditSyscallRule) toKernelRule() (ret auditRuleData, act int, filt int, err error) {
+	var auditSyscallAdded bool
+
+	ret.Buf = make([]byte, 0)
+
+	syscallMap := headers.SysMapX64
+	for _, y := range a.Syscalls {
+		ival, ok := syscallMap[y]
+		if !ok {
+			return ret, 0, 0, fmt.Errorf("invalid syscall %v", y)
+		}
+		err = auditRuleSyscallData(&ret, ival)
+		if err != nil {
+			return
+		}
+		auditSyscallAdded = true
+	}
+
+	// Separate actions and filters
+	act, filt = parseActionAndFilters(a.Actions)
+
+	for _, y := range a.Fields {
+		var opval uint32
+
+		switch y.Op {
+		case "nt_eq":
+			opval = AUDIT_NOT_EQUAL
+		case "gt_or_eq":
+			opval = AUDIT_GREATER_THAN_OR_EQUAL
+		case "lt_or_eq":
+			opval = AUDIT_LESS_THAN_OR_EQUAL
+		case "and_eq":
+			opval = AUDIT_BIT_TEST
+		case "eq":
+			opval = AUDIT_EQUAL
+		case "gt":
+			opval = AUDIT_GREATER_THAN
+		case "lt":
+			opval = AUDIT_LESS_THAN
+		case "and":
+			opval = AUDIT_BIT_MASK
+		}
+
+		fpd := fieldPairData{
+			fieldval:     y.Value,
+			opval:        opval,
+			fieldname:    y.Name,
+			flags:        filt,
+			syscallAdded: auditSyscallAdded,
+		}
+		err = auditRuleFieldPairData(&ret, &fpd)
+		if err != nil {
+			return
+		}
+	}
+
+	if a.Key != "" {
+		fpd := fieldPairData{
+			fieldval:     a.Key,
+			opval:        AUDIT_EQUAL,
+			fieldname:    "key",
+			flags:        AUDIT_FILTER_UNSET,
+			syscallAdded: auditSyscallAdded,
+		}
+		err = auditRuleFieldPairData(&ret, &fpd)
+		if err != nil {
+			return
+		}
+	}
+	return
 }
 
 // Kernel representation of audit_rule_data
@@ -411,9 +564,11 @@ func auditRuleFieldPairData(rule *auditRuleData, fpd *fieldPairData) error {
 	return nil
 }
 
-func setActionAndFilters(actions []string) (int, int) {
-	action := -1
-	filter := AUDIT_FILTER_UNSET
+// parseActionAndFilters parses a list of actions and filter keywords, returning the action
+// and filter components as individual values
+func parseActionAndFilters(actions []string) (action int, filter int) {
+	action = -1
+	filter = AUDIT_FILTER_UNSET
 
 	for _, value := range actions {
 		if value == "never" {
@@ -434,7 +589,7 @@ func setActionAndFilters(actions []string) (int, int) {
 			filter = AUDIT_FILTER_EXCLUDE
 		}
 	}
-	return action, filter
+	return
 }
 
 // Send prepared auditRuleData to the kernel (loads audit rules)
@@ -460,72 +615,7 @@ func auditAddRuleData(s Netlink, rule *auditRuleData, flags int, action int) err
 	return nil
 }
 
-/*
-SetRules reads the configuration file for audit rules and sets them in kernel.
-It expects the config in a json formatted string of following format:
-{
-    "delete": true,
-    "enable": "1",
-    "buffer": "16348",
-    "rate": "500",
-    "strict_path_check": false,
-    "file_rules": [
-        {
-            "path": "/etc/audit/",
-            "key": "audit",
-            "permission": "wa"
-        }
-	],
-	"syscall_rules": [
-        {
-            "key": "bypass",
-            "fields": [
-                {
-                    "name": "arch",
-                    "value": 64,
-                    "op": "eq"
-                }
-            ],
-            "syscalls": [
-                "personality"
-            ],
-            "actions": [
-                "always",
-                "exit"
-            ]
-        },
-        {
-            "fields": [
-                {
-                    "name": "dir",
-                    "value": "/usr/lib/nagios/plugins",
-                    "op": "eq"
-                },
-                {
-                    "name": "perm",
-                    "value": "x",
-                    "op": "eq"
-                }
-            ],
-            "actions": [
-                "exit",
-                "never"
-            ]
-		},
-        {
-            "syscalls": [
-                "clone",
-                "fork",
-                "vfork"
-            ],
-            "actions": [
-                "entry",
-                "always"
-            ]
-        }
-	]
-}
-*/
+// SetRules sets the audit rule set in the kernel, based on the JSON audit rule data in content
 func SetRules(s Netlink, content []byte) error {
 	var (
 		rules auditRules
@@ -535,116 +625,16 @@ func SetRules(s Netlink, content []byte) error {
 	if err != nil {
 		return err
 	}
-	// TODO: syscallMap should be loaded according to runtime arch
-	syscallMap := headers.SysMapX64
-	for _, x := range rules.FileRules {
-		var ruleData auditRuleData
-		ruleData.Buf = make([]byte, 0)
-
-		err = auditSetupAndAddWatchDir(&ruleData, x.Path, rules.StrictPathCheck)
+	rules.extractAuditRules()
+	for _, x := range rules.AuditRules {
+		// Convert JSON rule to a kernel rule
+		kr, action, filter, err := x.toKernelRule()
 		if err != nil {
 			return err
 		}
-		err = auditSetupAndUpdatePerms(&ruleData, x.Permission)
+		err = auditAddRuleData(s, &kr, filter, action)
 		if err != nil {
 			return err
-		}
-		// The key value is optional for a file rule
-		if x.Key != "" {
-			fpd := fieldPairData{
-				fieldval:     x.Key,
-				opval:        AUDIT_EQUAL,
-				fieldname:    "key",
-				flags:        AUDIT_FILTER_UNSET,
-				syscallAdded: true,
-			}
-			err = auditRuleFieldPairData(&ruleData, &fpd)
-			if err != nil {
-				return err
-			}
-		}
-		err = auditAddRuleData(s, &ruleData, AUDIT_FILTER_EXIT, AUDIT_ALWAYS)
-		if err != nil {
-			return err
-		}
-	}
-	for _, x := range rules.SyscallRules {
-		var (
-			ruleData          auditRuleData
-			auditSyscallAdded = false
-		)
-		ruleData.Buf = make([]byte, 0)
-		for _, y := range x.Syscalls {
-			ival, ok := syscallMap[y]
-			if !ok {
-				return fmt.Errorf("invalid syscall %v", y)
-			}
-			err = auditRuleSyscallData(&ruleData, ival)
-			if err != nil {
-				return err
-			}
-			auditSyscallAdded = true
-		}
-
-		// Apply action on syscall by separating the filters (exit) from actions (always)
-		action, filter := setActionAndFilters(x.Actions)
-
-		for _, y := range x.Fields {
-			var opval uint32
-
-			switch y.Op {
-			case "nt_eq":
-				opval = AUDIT_NOT_EQUAL
-			case "gt_or_eq":
-				opval = AUDIT_GREATER_THAN_OR_EQUAL
-			case "lt_or_eq":
-				opval = AUDIT_LESS_THAN_OR_EQUAL
-			case "and_eq":
-				opval = AUDIT_BIT_TEST
-			case "eq":
-				opval = AUDIT_EQUAL
-			case "gt":
-				opval = AUDIT_GREATER_THAN
-			case "lt":
-				opval = AUDIT_LESS_THAN
-			case "and":
-				opval = AUDIT_BIT_MASK
-			}
-
-			fpd := fieldPairData{
-				fieldval:     y.Value,
-				opval:        opval,
-				fieldname:    y.Name,
-				flags:        filter,
-				syscallAdded: auditSyscallAdded,
-			}
-			err = auditRuleFieldPairData(&ruleData, &fpd)
-			if err != nil {
-				return err
-			}
-		}
-
-		if x.Key != "" {
-			fpd := fieldPairData{
-				fieldval:     x.Key,
-				opval:        AUDIT_EQUAL,
-				fieldname:    "key",
-				flags:        AUDIT_FILTER_UNSET,
-				syscallAdded: auditSyscallAdded,
-			}
-			err = auditRuleFieldPairData(&ruleData, &fpd)
-			if err != nil {
-				return err
-			}
-		}
-
-		if filter != AUDIT_FILTER_UNSET {
-			err = auditAddRuleData(s, &ruleData, filter, action)
-			if err != nil {
-				return err
-			}
-		} else {
-			return fmt.Errorf("filters not set or invalid")
 		}
 	}
 	return nil
@@ -811,19 +801,22 @@ func auditUpdateWatchPerms(rule *auditRuleData, perms int) error {
 	return nil
 }
 
-// ListAllRules lists all audit rules currently loaded in audit kernel.
-// It displays them in the standard auditd format as done by auditctl utility.
-// It also returns a list of strings that contain the audit rules (in auditctl format)
-func ListAllRules(s Netlink) ([]string, error) {
-	var ruleArray []*auditRuleData
-	var result []string
+// ListAllRules returns a list of audit rules from the kernel. Note that the list is returned
+// as a slice of strings, formatted in the way auditctl would display the audit rules.
+//
+// XXX Conversion back to an auditRules type is not currently supported. This function should
+// likely instead return an auditRules type, which can then be translated into an auditctl style
+// output if desired.
+func ListAllRules(s Netlink) (ret []string, err error) {
+	var kernelRules []auditRuleData
+
 	wb := newNetlinkAuditRequest(uint16(AUDIT_LIST_RULES), syscall.AF_NETLINK, 0)
-	if err := s.Send(wb); err != nil {
-		return nil, errors.Wrap(err, "ListAllRules failed")
+	if err = s.Send(wb); err != nil {
+		return
 	}
 	msgs, err := auditGetReply(s, wb.Header.Seq, false)
 	if err != nil {
-		return nil, err
+		return
 	}
 	for _, m := range msgs {
 		if m.Header.Type == uint16(AUDIT_LIST_RULES) {
@@ -831,16 +824,17 @@ func ListAllRules(s Netlink) ([]string, error) {
 			nbuf := bytes.NewBuffer(m.Data)
 			err = struc.Unpack(nbuf, &r)
 			if err != nil {
-				return nil, errors.Wrap(err, "ListAllRules failed")
+				return
 			}
-			ruleArray = append(ruleArray, &r)
+			kernelRules = append(kernelRules, r)
 		}
 	}
-	for _, r := range ruleArray {
-		printed := printRule(r)
-		result = append(result, printed)
+	// Now convert each of the rules returned by the kernel into a string.
+	for _, kr := range kernelRules {
+		r := printRule(&kr)
+		ret = append(ret, r)
 	}
-	return result, nil
+	return
 }
 
 //AuditSyscallToName takes syscall number and returns the syscall name. Currently only applicable for x64 arch.
@@ -997,31 +991,36 @@ func printRule(rule *auditRuleData) string {
 	return result
 }
 
-//isWatch checks if the auditRuleData is a watch rule.
-//returns true when syscall == all and a perm field is detected in auditRuleData
+// isWatch returns true if a given kernel audit rule is a watch (file) rule.
 func isWatch(rule *auditRuleData) bool {
 	var (
-		perm bool
-		all  = true
+		foundPerm bool
+		foundAll  bool = true
 	)
+	// Try to locate AUDIT_PERM in the field list
 	for i := 0; i < int(rule.FieldCount); i++ {
 		field := rule.Fields[i] & (^uint32(AUDIT_OPERATORS))
 		if field == AUDIT_PERM {
-			perm = true
+			foundPerm = true
+			continue
 		}
+		// Watch rules can only have 4 field types, if we see any others return false
 		if field != AUDIT_PERM && field != AUDIT_FILTERKEY && field != AUDIT_DIR && field != AUDIT_WATCH {
 			return false
 		}
 	}
-	if ((rule.Flags & AUDIT_FILTER_MASK) != AUDIT_FILTER_USER) && ((rule.Flags & AUDIT_FILTER_MASK) != AUDIT_FILTER_TASK) && ((rule.Flags & AUDIT_FILTER_MASK) != AUDIT_FILTER_EXCLUDE) {
+	if ((rule.Flags & AUDIT_FILTER_MASK) != AUDIT_FILTER_USER) &&
+		((rule.Flags & AUDIT_FILTER_MASK) != AUDIT_FILTER_TASK) &&
+		((rule.Flags & AUDIT_FILTER_MASK) != AUDIT_FILTER_EXCLUDE) {
 		for i := 0; i < int(AUDIT_BITMASK_SIZE-1); i++ {
 			if rule.Mask[i] != ^uint32(0) {
-				all = false
+				foundAll = false
 				break
 			}
 		}
 	}
-	if perm && all {
+
+	if foundPerm && foundAll {
 		return true
 	}
 
