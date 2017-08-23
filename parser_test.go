@@ -243,12 +243,6 @@ func BenchmarkNativeParser(b *testing.B) {
 	}
 }
 
-func BenchmarkRegexParser(b *testing.B) {
-	for n := 0; n < b.N; n++ {
-		ParseAuditEventRegex(`audit(1226874073.147:96): avc:  denied  { getattr } for  pid=2465 comm="httpd" path="/var/www/html/file1 space" dev=dm-0 ino=284133 scontext=unconfined_u:system_r:httpd_t:s0 tcontext=unconfined_u:object_r:samba_share_t:s0 tclass=file`)
-	}
-}
-
 func checkEvent(a *AuditEvent, b *AuditEvent, t *testing.T) bool {
 	if a.Serial == b.Serial {
 		if a.Timestamp == b.Timestamp {
