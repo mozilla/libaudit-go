@@ -3,7 +3,7 @@ GO       := GO15VENDOREXPERIMENT=1 $(GOBIN)
 BUILDPRE := auditconstant_string.go
 
 test: $(BUILDPRE)
-	sudo $(GO) test -v -covermode=count -coverprofile=coverage.out
+	sudo $(GO) test -v -bench=. -covermode=count -coverprofile=coverage.out
 
 auditconstant_string.go: audit_constant.go
 	$(GO) get golang.org/x/tools/cmd/stringer
