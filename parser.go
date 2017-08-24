@@ -18,39 +18,43 @@ type record struct {
 }
 
 // ParseAuditEvent parses an incoming audit message from kernel and returns an AuditEvent.
-// msgType is supposed to come from the calling function which holds the msg header indicating header type of the messages
-// it uses simple string parsing techniques and provider better performance than the regex parser
-// idea taken from parse_up_record(rnode* r) in ellist.c (libauparse)
-// any intersting looking audit message should be added to parser_test and see how parser performs against it
+//
+// msgType is supposed to come from the calling function which holds the msg header indicating header
+// type of the messages. It uses simple string parsing techniques and provider better performance than
+// the regex parser, idea taken from parse_up_record(rnode* r) in ellist.c (libauparse).
 func ParseAuditEvent(str string, msgType auditConstant, interpret bool) (*AuditEvent, error) {
 	var r record
 	var event = AuditEvent{
 		Raw: str,
 	}
+
 	m := make(map[string]string)
+
 	if strings.HasPrefix(str, "audit(") {
 		str = str[6:]
 	} else {
-		return nil, fmt.Errorf("parsing failed: malformed audit message")
+		return nil, fmt.Errorf("malformed audit message")
 	}
 	index := strings.Index(str, ":")
 	if index == -1 {
-		return nil, fmt.Errorf("parsing failed: malformed audit message")
+		return nil, fmt.Errorf("malformed audit message")
 	}
-	// determine timeStamp
+
+	// determine timestamp
 	timestamp := str[:index]
 	// move further on string, skipping ':'
 	str = str[index+1:]
 	index = strings.Index(str, ")")
 	if index == -1 {
-		return nil, fmt.Errorf("parsing failed: malformed audit message")
+		return nil, fmt.Errorf("malformed audit message")
 	}
 	serial := str[:index]
 	if strings.HasPrefix(str, serial+"): ") {
 		str = str[index+3:]
 	} else {
-		return nil, fmt.Errorf("parsing failed: malformed audit message")
+		return nil, fmt.Errorf("malformed audit message")
 	}
+
 	var (
 		nBytes string
 		orig   = len(str)
@@ -59,6 +63,7 @@ func ParseAuditEvent(str string, msgType auditConstant, interpret bool) (*AuditE
 		value  string
 		av     bool
 	)
+
 	for n < orig {
 		getSpaceSlice(&str, &nBytes, &n)
 		var newIndex int
@@ -108,8 +113,7 @@ func ParseAuditEvent(str string, msgType auditConstant, interpret bool) (*AuditE
 					}
 					continue
 				} else {
-					// we might get values with space
-					// add it to prev key
+					// We might get values with space, add it to prev key
 					// skip 'for' in avc message (special case)
 					if nBytes == "for" {
 						str = str[len(nBytes)+1:]
@@ -120,8 +124,7 @@ func ParseAuditEvent(str string, msgType auditConstant, interpret bool) (*AuditE
 					m[key] = value
 				}
 			} else {
-				// we might get values with space
-				// add it to prev key
+				// We might get values with space, add it to prev key
 				value += " " + nBytes
 				fixPunctuantions(&value)
 				m[key] = value
@@ -152,7 +155,6 @@ func ParseAuditEvent(str string, msgType auditConstant, interpret bool) (*AuditE
 			if key == "a0" {
 				val, err := strconv.ParseInt(value, 16, 64)
 				if err != nil {
-					//return nil, errors.Wrap(err, "parsing a0 failed")
 					r.a0 = -1
 				} else {
 					r.a0 = int(val)
@@ -161,7 +163,6 @@ func ParseAuditEvent(str string, msgType auditConstant, interpret bool) (*AuditE
 			if key == "a1" {
 				val, err := strconv.ParseInt(value, 16, 64)
 				if err != nil {
-					// return nil, errors.Wrap(err, "parsing a1 failed")
 					r.a1 = -1
 				} else {
 					r.a1 = int(val)
@@ -173,7 +174,7 @@ func ParseAuditEvent(str string, msgType auditConstant, interpret bool) (*AuditE
 			m[key] = value
 		}
 		if len(str) == len(nBytes) {
-			//reached the end of message
+			// Reached the end of message
 			break
 		} else {
 			str = str[len(nBytes)+1:]
@@ -198,27 +199,24 @@ func ParseAuditEvent(str string, msgType auditConstant, interpret bool) (*AuditE
 
 }
 
-// getSpaceSlice checks the index of the next space and put the string upto that space into
+// getSpaceSlice checks the index of the next space and put the string up to that space into
 // the second string, total number of characters processed is updated with each call to the function
 func getSpaceSlice(str *string, b *string, v *int) {
-	// retry:
 	index := strings.Index(*str, " ")
 	if index != -1 {
-		// *b = []byte((*str)[:index])
 		if index == 0 {
-			// found space on the first location only
-			// just forward on the orig string and try again
+			// Found space on the first location only, just forward on the orig
+			// string and try again
 			*str = (*str)[1:]
-			// goto retry (tradeoff discussion goto or functionCall)
 			getSpaceSlice(str, b, v)
 		} else {
 			*b = (*str)[:index]
-			// keep updating total characters processed
+			// Keep updating total characters processed
 			*v += len(*b)
 		}
 	} else {
 		*b = (*str)
-		// keep updating total characters processed
+		// Keep updating total characters processed
 		*v += len(*b)
 	}
 }

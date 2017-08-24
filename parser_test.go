@@ -290,7 +290,7 @@ func TestMalformedPrefix(t *testing.T) {
 		if err == nil {
 			t.Fatalf("ParseAuditEvent should have failed on %q", m.msg)
 		}
-		if err.Error() != "parsing failed: malformed audit message" {
+		if err.Error() != "malformed audit message" {
 			t.Fatalf("ParseAuditEvent failed, but error %q was unexpected", err)
 		}
 	}
