@@ -12,47 +12,44 @@ import (
 	"github.com/pkg/errors"
 )
 
-// EventCallback is the function signature for any function that wants to receive an AuditEvent as soon as
-// it is received from the kernel. Error will be set to indicate any error that happens while receiving
+// EventCallback is the function definition for any function that wants to receive an AuditEvent as soon as
+// it is received from the kernel. Error will be set to indicate any error that occurs while receiving
 // messages.
 type EventCallback func(*AuditEvent, error, ...interface{})
 
-// RawEventCallback is similar to EventCallback and provides a function signature but the difference is that the function
-// will receive only the message string which contains the audit event and not the parsed AuditEvent struct.
+// RawEventCallback is similar to EventCallback but the difference is that the function will receive only
+// the message string which contains the audit event and not the parsed AuditEvent struct.
 type RawEventCallback func(string, error, ...interface{})
 
-// AuditEvent holds a parsed audit message.
-// Serial holds the serial number for the message.
-// Timestamp holds the unix timestamp of the message.
-// Type indicates the type of the audit message.
-// Data holds a map of field values of audit messages where keys => field names and values => field values.
-// Raw string holds the original audit message received from kernel.
+// AuditEvent is a parsed audit message.
 type AuditEvent struct {
-	Serial    string
-	Timestamp string
-	Type      string
-	Data      map[string]string
-	Raw       string
+	Serial    string            // Message serial
+	Timestamp string            // Timestamp
+	Type      string            // Audit event type
+	Data      map[string]string // Map of field values in the audit message
+	Raw       string            // Raw audit message from kernel
 }
 
-//NewAuditEvent takes a NetlinkMessage passed from the netlink connection
-//and parses the data from the message header to return an AuditEvent struct.
+// NewAuditEvent takes a NetlinkMessage passed from the netlink connection and parses the data
+// from the message header to return an AuditEvent type.
 func NewAuditEvent(msg NetlinkMessage) (*AuditEvent, error) {
 	x, err := ParseAuditEvent(string(msg.Data[:]), auditConstant(msg.Header.Type), true)
 	if err != nil {
 		return nil, err
 	}
 	if (*x).Type == "auditConstant("+strconv.Itoa(int(msg.Header.Type))+")" {
-		return nil, fmt.Errorf("NewAuditEvent failed: unknown message type %d", msg.Header.Type)
+		return nil, fmt.Errorf("unknown message type %d", msg.Header.Type)
 	}
 
 	return x, nil
 }
 
-// GetAuditEvents receives audit messages from the kernel and parses them to AuditEvent struct.
+// GetAuditEvents receives audit messages from the kernel and parses them into an AuditEvent.
 // It passes them along the callback function and if any error occurs while receiving the message,
 // the same will be passed in the callback as well.
-// Code that receives the message runs inside a go-routine.
+//
+// This function executes a go-routine (which does not return) and the function itself returns
+// immediately.
 func GetAuditEvents(s Netlink, cb EventCallback, args ...interface{}) {
 	go func() {
 		for {
@@ -63,7 +60,7 @@ func GetAuditEvents(s Netlink, cb EventCallback, args ...interface{}) {
 					if msg.Header.Type == syscall.NLMSG_ERROR {
 						err := int32(hostEndian.Uint32(msg.Data[0:4]))
 						if err != 0 {
-							cb(nil, fmt.Errorf("error receiving events %d", err), args...)
+							cb(nil, fmt.Errorf("audit error %d", err), args...)
 						}
 					} else {
 						nae, err := NewAuditEvent(msg)
@@ -75,10 +72,8 @@ func GetAuditEvents(s Netlink, cb EventCallback, args ...interface{}) {
 	}()
 }
 
-// GetRawAuditEvents receives raw audit messages from kernel parses them to AuditEvent struct.
-// It passes them along the callback function and if any error occurs while receiving the message,
-// the same will be passed in the callback as well.
-// Code that receives the message runs inside a go-routine.
+// GetRawAuditEvents is similar to GetAuditEvents, however it returns raw messages and does not parse
+// incoming audit data.
 func GetRawAuditEvents(s Netlink, cb RawEventCallback, args ...interface{}) {
 	go func() {
 		for {
@@ -93,14 +88,15 @@ func GetRawAuditEvents(s Netlink, cb RawEventCallback, args ...interface{}) {
 					if msg.Header.Type == syscall.NLMSG_ERROR {
 						v := int32(hostEndian.Uint32(msg.Data[0:4]))
 						if v != 0 {
-							cb(m, fmt.Errorf("error receiving events %d", v), args...)
+							cb(m, fmt.Errorf("audit error %d", v), args...)
 						}
 					} else {
 						Type := auditConstant(msg.Header.Type)
 						if Type.String() == "auditConstant("+strconv.Itoa(int(msg.Header.Type))+")" {
 							err = errors.New("Unknown Type: " + string(msg.Header.Type))
 						} else {
-							m = "type=" + Type.String()[6:] + " msg=" + string(msg.Data[:]) + "\n"
+							m = "type=" + Type.String()[6:] +
+								" msg=" + string(msg.Data[:]) + "\n"
 						}
 					}
 					cb(m, err, args...)
@@ -110,10 +106,10 @@ func GetRawAuditEvents(s Netlink, cb RawEventCallback, args ...interface{}) {
 	}()
 }
 
-// GetAuditMessages is a blocking function (runs in forever for loop) that
-// receives audit messages from kernel and parses them to AuditEvent.
-// It passes them along the callback function and if any error occurs while receiving the message,
-// the same will be passed in the callback as well.
+// GetAuditMessages is a blocking function (runs in forever for loop) that receives audit messages
+// from the kernel and parses them to AuditEvent. It passes them along the callback function and if
+// any error occurs while receiving the message, the same will be passed in the callback as well.
+//
 // It will return when a signal is received on the done channel.
 func GetAuditMessages(s Netlink, cb EventCallback, done *chan bool, args ...interface{}) {
 	for {
@@ -126,7 +122,7 @@ func GetAuditMessages(s Netlink, cb EventCallback, done *chan bool, args ...inte
 				if msg.Header.Type == syscall.NLMSG_ERROR {
 					v := int32(hostEndian.Uint32(msg.Data[0:4]))
 					if v != 0 {
-						cb(nil, fmt.Errorf("error receiving events %d", v), args...)
+						cb(nil, fmt.Errorf("audit error %d", v), args...)
 					}
 				} else {
 					nae, err := NewAuditEvent(msg)
