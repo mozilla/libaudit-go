@@ -71,6 +71,7 @@ func interpretField(fieldName string, fieldValue string, msgType auditConstant, 
 		ftype  fieldType
 		result string
 		err    error
+		ok     bool
 	)
 
 	if msgType == AUDIT_EXECVE && strings.HasPrefix(fieldName, "a") &&
@@ -98,9 +99,7 @@ func interpretField(fieldName string, fieldValue string, msgType auditConstant, 
 		msgType == AUDIT_DEL_GROUP) {
 		ftype = typeGID
 	} else {
-		if _, ok := fieldLookupMap[fieldName]; ok {
-			ftype = fieldLookupMap[fieldName]
-		} else {
+		if ftype, ok = fieldLookupMap[fieldName]; !ok {
 			ftype = typeUnclassified
 		}
 	}
