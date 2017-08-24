@@ -104,7 +104,7 @@ func ParseAuditEvent(str string, msgType auditConstant, interpret bool) (*AuditE
 					}
 					value = v
 					m[key] = value
-					fixPunctuantions(&value)
+					fixPunctuations(&value)
 					if len(str) == len(nBytes) {
 						//reached the end of message
 						break
@@ -120,13 +120,13 @@ func ParseAuditEvent(str string, msgType auditConstant, interpret bool) (*AuditE
 						continue
 					}
 					value += " " + nBytes
-					fixPunctuantions(&value)
+					fixPunctuations(&value)
 					m[key] = value
 				}
 			} else {
 				// We might get values with space, add it to prev key
 				value += " " + nBytes
-				fixPunctuantions(&value)
+				fixPunctuations(&value)
 				m[key] = value
 			}
 
@@ -148,7 +148,7 @@ func ParseAuditEvent(str string, msgType auditConstant, interpret bool) (*AuditE
 				value = value[newIndex+1:]
 			}
 
-			fixPunctuantions(&value)
+			fixPunctuations(&value)
 			if key == "arch" {
 				// determine machine type
 			}
@@ -221,7 +221,7 @@ func getSpaceSlice(str *string, b *string, v *int) {
 	}
 }
 
-func fixPunctuantions(value *string) {
+func fixPunctuations(value *string) {
 	// Remove trailing punctuation
 	l := len(*value)
 	if l > 0 && strings.HasSuffix(*value, "'") {
