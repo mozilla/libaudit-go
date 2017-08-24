@@ -420,45 +420,45 @@ func printModeShortInt(ival int64) (string, error) {
 func printSockAddr(fieldValue string) (string, error) {
 	// representations of c struct to unpack bytestream into
 	type sockaddr struct {
-		Sa_family uint16   `struc:"uint16,little"`   // address family, AF_xxx
-		Sa_data   [14]byte `struc:"[14]byte,little"` // 14 bytes of protocol address
+		SaFamily uint16   `struc:"uint16,little"`   // address family, AF_xxx
+		SaData   [14]byte `struc:"[14]byte,little"` // 14 bytes of protocol address
 	}
 
-	type sockaddr_un struct {
-		Sun_family uint16    `struc:"uint16,little"`    /* AF_UNIX */
-		Sun_path   [108]byte `struc:"[108]byte,little"` /* pathname */
+	type sockaddrUn struct {
+		SunFamily uint16    `struc:"uint16,little"`    /* AF_UNIX */
+		SunPath   [108]byte `struc:"[108]byte,little"` /* pathname */
 	}
 
-	type sockaddr_nl struct {
-		Sun_family uint16 `struc:"uint16,little"` /* AF_NETLINK */
-		Nl_pad     uint16 `struc:"uint16,little"` /* Zero. */
-		Nl_pid     int32  `struc:"int32,little"`  /* Port ID. */
-		Nl_groups  uint32 `struc:"uint32,little"` /* Multicast groups mask. */
+	type sockaddrNl struct {
+		SunFamily uint16 `struc:"uint16,little"` /* AF_NETLINK */
+		NlPad     uint16 `struc:"uint16,little"` /* Zero. */
+		NlPid     int32  `struc:"int32,little"`  /* Port ID. */
+		NlGroups  uint32 `struc:"uint32,little"` /* Multicast groups mask. */
 	}
 
-	type sockaddr_ll struct {
-		Sll_family   uint16  `struc:"uint16,little"`  /* Always AF_PACKET */
-		Sll_protocol uint16  `struc:"uint16,little"`  /* Physical-layer protocol */
-		Sll_ifindex  int32   `struc:"int32,little"`   /* Interface number */
-		Sll_hatype   uint16  `struc:"uint16,little"`  /* ARP hardware type */
-		Sll_pkttype  byte    `struc:"byte,little"`    /* Packet type */
-		Sll_halen    byte    `struc:"byte,little"`    /* Length of address */
-		Sll_addr     [8]byte `struc:"[8]byte,little"` /* Physical-layer address */
+	type sockaddrLl struct {
+		SllFamily   uint16  `struc:"uint16,little"`  /* Always AF_PACKET */
+		SllProtocol uint16  `struc:"uint16,little"`  /* Physical-layer protocol */
+		SllIfindex  int32   `struc:"int32,little"`   /* Interface number */
+		SllHatype   uint16  `struc:"uint16,little"`  /* ARP hardware type */
+		SllPkttype  byte    `struc:"byte,little"`    /* Packet type */
+		SllHalen    byte    `struc:"byte,little"`    /* Length of address */
+		SllAddr     [8]byte `struc:"[8]byte,little"` /* Physical-layer address */
 	}
 
-	type sockaddr_in struct {
-		Sin_family uint16  `struc:"uint16,little"` // e.g. AF_INET, AF_INET6
-		Sin_port   uint16  `struc:"uint16,big"`    // port in network byte order
-		In_addr    [4]byte `struc:"[4]byte,big"`   // address in network byte order
-		Sin_zero   [8]byte `struc:"[8]byte,little"`
+	type sockaddrIn struct {
+		SinFamily uint16  `struc:"uint16,little"` // e.g. AF_INET, AF_INET6
+		SinPort   uint16  `struc:"uint16,big"`    // port in network byte order
+		InAddr    [4]byte `struc:"[4]byte,big"`   // address in network byte order
+		SinZero   [8]byte `struc:"[8]byte,little"`
 	}
 
-	type sockaddr_in6 struct {
-		Sin6_family   uint16   `struc:"uint16,little"` // address family, AF_INET6
-		Sin6_port     uint16   `struc:"uint16,big"`    // port in network byte order
-		Sin6_flowinfo uint32   `struc:"uint32,little"` // IPv6 flow information
-		Sin6_addr     [16]byte `struc:"[16]byte,big"`  // IPv6 address
-		Sin6_scope_id uint32   `struc:"uint32,little"` // Scope ID
+	type sockaddrIn6 struct {
+		Sin6Family   uint16   `struc:"uint16,little"` // address family, AF_INET6
+		Sin6Port     uint16   `struc:"uint16,big"`    // port in network byte order
+		Sin6Flowinfo uint32   `struc:"uint32,little"` // IPv6 flow information
+		Sin6Addr     [16]byte `struc:"[16]byte,big"`  // IPv6 address
+		Sin6ScopeID uint32   `struc:"uint32,little"` // Scope ID
 	}
 
 	var (
@@ -476,7 +476,7 @@ func printSockAddr(fieldValue string) (string, error) {
 	if err != nil {
 		return fieldValue, err
 	}
-	family := int(s.Sa_family)
+	family := int(s.SaFamily)
 
 	if _, ok := headers.SocketFamLookup[int(family)]; !ok {
 		return fmt.Sprintf("unknown family (%v)", family), nil
@@ -486,50 +486,50 @@ func printSockAddr(fieldValue string) (string, error) {
 
 	switch family {
 	case syscall.AF_LOCAL:
-		var p sockaddr_un
+		var p sockaddrUn
 		nbuf := bytes.NewBuffer(bytestr)
 
 		err = struc.Unpack(nbuf, &p)
 		if err != nil {
 			return fieldValue, errstring
 		}
-		name = fmt.Sprintf("%s %s", headers.SocketFamLookup[family], string(p.Sun_path[:]))
+		name = fmt.Sprintf("%s %s", headers.SocketFamLookup[family], string(p.SunPath[:]))
 		return name, nil
 	case syscall.AF_INET:
-		var ip4 sockaddr_in
+		var ip4 sockaddrIn
 
 		nbuf := bytes.NewBuffer(bytestr)
 		err = struc.Unpack(nbuf, &ip4)
 		if err != nil {
 			return fieldValue, errstring
 		}
-		addrBytes := ip4.In_addr[:]
+		addrBytes := ip4.InAddr[:]
 		var x net.IP = addrBytes
-		name = fmt.Sprintf("%s host:%s serv:%d", headers.SocketFamLookup[family], x.String(), ip4.Sin_port)
+		name = fmt.Sprintf("%s host:%s serv:%d", headers.SocketFamLookup[family], x.String(), ip4.SinPort)
 		return name, nil
 	case syscall.AF_INET6:
-		var ip6 sockaddr_in6
+		var ip6 sockaddrIn6
 		nbuf := bytes.NewBuffer(bytestr)
 		err = struc.Unpack(nbuf, &ip6)
 		if err != nil {
 			return fieldValue, errstring
 		}
-		addrBytes := ip6.Sin6_addr[:]
+		addrBytes := ip6.Sin6Addr[:]
 		var x net.IP = addrBytes
-		name = fmt.Sprintf("%s host:%s serv:%d", headers.SocketFamLookup[family], x.String(), ip6.Sin6_port)
+		name = fmt.Sprintf("%s host:%s serv:%d", headers.SocketFamLookup[family], x.String(), ip6.Sin6Port)
 		return name, nil
 	case syscall.AF_NETLINK:
-		var n sockaddr_nl
+		var n sockaddrNl
 
 		nbuf := bytes.NewBuffer(bytestr)
 		err = struc.Unpack(nbuf, &n)
 		if err != nil {
 			return fieldValue, errstring
 		}
-		name = fmt.Sprintf("%s pid:%d", headers.SocketFamLookup[family], n.Nl_pid)
+		name = fmt.Sprintf("%s pid:%d", headers.SocketFamLookup[family], n.NlPid)
 		return name, nil
 	case syscall.AF_PACKET:
-		var l sockaddr_ll
+		var l sockaddrLl
 
 		nbuf := bytes.NewBuffer(bytestr)
 		err = struc.Unpack(nbuf, &l)
