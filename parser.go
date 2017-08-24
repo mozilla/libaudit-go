@@ -80,6 +80,13 @@ func ParseAuditEvent(str string, msgType auditConstant, interpret bool) (*AuditE
 				if av {
 					key = "seresult"
 					value = nBytes
+					if interpret {
+						var err error
+						value, err = interpretField(key, value, msgType, r)
+						if err != nil {
+							return nil, err
+						}
+					}
 					m[key] = value
 					av = false
 					if len(str) == len(nBytes) {
@@ -103,6 +110,13 @@ func ParseAuditEvent(str string, msgType auditConstant, interpret bool) (*AuditE
 						getSpaceSlice(&str, &nBytes, &n)
 					}
 					value = v
+					if interpret {
+						var err error
+						value, err = interpretField(key, value, msgType, r)
+						if err != nil {
+							return nil, err
+						}
+					}
 					m[key] = value
 					fixPunctuations(&value)
 					if len(str) == len(nBytes) {
@@ -121,12 +135,26 @@ func ParseAuditEvent(str string, msgType auditConstant, interpret bool) (*AuditE
 					}
 					value += " " + nBytes
 					fixPunctuations(&value)
+					if interpret {
+						var err error
+						value, err = interpretField(key, value, msgType, r)
+						if err != nil {
+							return nil, err
+						}
+					}
 					m[key] = value
 				}
 			} else {
 				// We might get values with space, add it to prev key
 				value += " " + nBytes
 				fixPunctuations(&value)
+				if interpret {
+					var err error
+					value, err = interpretField(key, value, msgType, r)
+					if err != nil {
+						return nil, err
+					}
+				}
 				m[key] = value
 			}
 
@@ -171,6 +199,13 @@ func ParseAuditEvent(str string, msgType auditConstant, interpret bool) (*AuditE
 			if key == "syscall" {
 				r.syscallNum = value
 			}
+			if interpret {
+				var err error
+				value, err = interpretField(key, value, msgType, r)
+				if err != nil {
+					return nil, err
+				}
+			}
 			m[key] = value
 		}
 		if len(str) == len(nBytes) {
@@ -180,15 +215,6 @@ func ParseAuditEvent(str string, msgType auditConstant, interpret bool) (*AuditE
 			str = str[len(nBytes)+1:]
 		}
 
-	}
-	if interpret {
-		for key, value := range m {
-			ivalue, err := interpretField(key, value, msgType, r)
-			if err != nil {
-				return nil, err
-			}
-			m[key] = ivalue
-		}
 	}
 
 	event.Timestamp = timestamp

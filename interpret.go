@@ -71,6 +71,7 @@ func interpretField(fieldName string, fieldValue string, msgType auditConstant, 
 		ftype  fieldType
 		result string
 		err    error
+		ok     bool
 	)
 
 	if msgType == AUDIT_EXECVE && strings.HasPrefix(fieldName, "a") &&
@@ -98,9 +99,7 @@ func interpretField(fieldName string, fieldValue string, msgType auditConstant, 
 		msgType == AUDIT_DEL_GROUP) {
 		ftype = typeGID
 	} else {
-		if _, ok := fieldLookupMap[fieldName]; ok {
-			ftype = fieldLookupMap[fieldName]
-		} else {
+		if ftype, ok = fieldLookupMap[fieldName]; !ok {
 			ftype = typeUnclassified
 		}
 	}
@@ -458,7 +457,7 @@ func printSockAddr(fieldValue string) (string, error) {
 		Sin6Port     uint16   `struc:"uint16,big"`    // port in network byte order
 		Sin6Flowinfo uint32   `struc:"uint32,little"` // IPv6 flow information
 		Sin6Addr     [16]byte `struc:"[16]byte,big"`  // IPv6 address
-		Sin6ScopeID uint32   `struc:"uint32,little"` // Scope ID
+		Sin6ScopeID  uint32   `struc:"uint32,little"` // Scope ID
 	}
 
 	var (
@@ -551,10 +550,10 @@ func printFlags(fieldValue string) (string, error) {
 }
 
 func printEscaped(fieldValue string) (string, error) {
-	if strings.HasPrefix(fieldValue, `"`) {
-		newStr := strings.Trim(fieldValue, `"`)
-		return newStr, nil
-	} else if strings.HasPrefix(fieldValue, "00") {
+	if fieldValue[0] == '"' && fieldValue[len(fieldValue)-1] == '"' {
+		return fieldValue[1 : len(fieldValue)-1], nil
+	}
+	if strings.HasPrefix(fieldValue, "00") {
 		newStr := unescape(fieldValue[2:])
 		if newStr == "" {
 			return fieldValue, nil
