@@ -551,10 +551,10 @@ func printFlags(fieldValue string) (string, error) {
 }
 
 func printEscaped(fieldValue string) (string, error) {
-	if strings.HasPrefix(fieldValue, `"`) {
-		newStr := strings.Trim(fieldValue, `"`)
-		return newStr, nil
-	} else if strings.HasPrefix(fieldValue, "00") {
+	if fieldValue[0] == '"' && fieldValue[len(fieldValue)-1] == '"' {
+		return fieldValue[1 : len(fieldValue)-1], nil
+	}
+	if strings.HasPrefix(fieldValue, "00") {
 		newStr := unescape(fieldValue[2:])
 		if newStr == "" {
 			return fieldValue, nil
