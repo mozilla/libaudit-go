@@ -458,7 +458,7 @@ func printSockAddr(fieldValue string) (string, error) {
 		Sin6Port     uint16   `struc:"uint16,big"`    // port in network byte order
 		Sin6Flowinfo uint32   `struc:"uint32,little"` // IPv6 flow information
 		Sin6Addr     [16]byte `struc:"[16]byte,big"`  // IPv6 address
-		Sin6ScopeID uint32   `struc:"uint32,little"` // Scope ID
+		Sin6ScopeID  uint32   `struc:"uint32,little"` // Scope ID
 	}
 
 	var (
