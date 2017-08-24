@@ -4,7 +4,7 @@
 
 package libaudit
 
-//fieldLookupMap if for interpreting field names in audit messages for their integer values
+// fieldLookupMap is for interpreting field names in audit messages for their integer values
 var fieldLookupMap = map[string]fieldType{
 	"auid":           typeUID,
 	"uid":            typeUID,
@@ -108,16 +108,14 @@ var fieldLookupMap = map[string]fieldType{
 	"new_group":      typeEscaped,
 }
 
-// following maps are not moved to headers as the keys are audit constants
-
-//actionLookup is for mapping audit actions applied on auditRuleData
+// actionLookup is for mapping audit actions applied on auditRuleData
 var actionLookup = map[int]string{
 	AUDIT_NEVER:    "never",
 	AUDIT_POSSIBLE: "possible",
 	AUDIT_ALWAYS:   "always",
 }
 
-//flagLookup is for mapping flags applied on auditRuleData
+// flagLookup is for mapping flags applied on auditRuleData
 var flagLookup = map[int]string{
 	AUDIT_FILTER_TASK:    "task",
 	AUDIT_FILTER_ENTRY:   "entry",
@@ -126,7 +124,7 @@ var flagLookup = map[int]string{
 	AUDIT_FILTER_EXCLUDE: "exclude",
 }
 
-//opLookup is for mapping operators applied on auditRuleData
+// opLookup is for mapping operators applied on auditRuleData
 var opLookup = map[int]string{
 	AUDIT_EQUAL:                 "=",
 	AUDIT_NOT_EQUAL:             "!=",
@@ -138,8 +136,8 @@ var opLookup = map[int]string{
 	AUDIT_BIT_TEST:              "&=",
 }
 
-//opLookup is for mapping fields applied on auditRuleData and also used for interpreting
-//fields set in auditRuleData struct
+// fieldLookup is for mapping fields applied on auditRuleData and also used for interpreting
+// fields set in auditRuleData struct
 var fieldLookup = map[int]string{
 	AUDIT_PID:      "pid",
 	AUDIT_UID:      "uid",
@@ -186,8 +184,8 @@ var fieldLookup = map[int]string{
 	AUDIT_EXE:           "exe",
 }
 
-//MsgTypeTab is for looking audit header type based on string prefixes attached to audit messages
-var MsgTypeTab = map[string]auditConstant{
+// msgTypeTab is to look up audit header type based on string prefixes attached to audit messages
+var msgTypeTab = map[string]auditConstant{
 	"USER":             AUDIT_USER,
 	"LOGIN":            AUDIT_LOGIN,
 	"USER_AUTH":        AUDIT_USER_AUTH,

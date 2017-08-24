@@ -7,6 +7,8 @@ package libaudit
 // audit_constants.go contains constants used within libaudit, sourced from linux/audit.h
 // (from the Linux kernel) and from libaudit.h in the audit userspace source code.
 
+// Code generated using various audit headers, DO NOT EDIT.
+
 const (
 	AUDIT_STATUS_SIZE = 40 // Size of auditStatus
 )
