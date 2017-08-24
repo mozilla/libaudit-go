@@ -20,10 +20,9 @@ import (
 	"github.com/pkg/errors"
 )
 
+// fieldType denotes the integer values of various fields occuring in audit messages
 type fieldType int
 
-// fieldType denotes the integer values of various
-// fields occuring in audit messages
 const (
 	typeUID fieldType = iota
 	typeGID
@@ -61,18 +60,21 @@ const (
 )
 
 // interpretField takes fieldName and the encoded fieldValue (part of the audit message) and
-// returns the string representations for the values
-// For eg. syscall numbers to names, uids to usernames etc.
+// returns the string representations for the values e.g., syscall numbers to names, uids to
+// usernames, etc.
 func interpretField(fieldName string, fieldValue string, msgType auditConstant, r record) (string, error) {
 	// the code follows the same logic as these auditd functions (call chain is shown) =>
-	// auparse_interpret_field() [auparse.c] -> nvlist_interp_cur_val(const rnode *r) [nvlist.c]-> interpret(r) [interpret.c] ->
-	// type = auparse_interp_adjust_type(r->type, id.name, id.val); [interpret.c]
+	// auparse_interpret_field() [auparse.c] -> nvlist_interp_cur_val(const rnode *r) [nvlist.c]
+	// -> interpret(r) [interpret.c] -> type = auparse_interp_adjust_type(r->type, id.name, id.val); [interpret.c]
 	// 	out = auparse_do_interpretation(type, &id); [interpret.c]
-	var ftype fieldType
-	var result string
-	var err error
+	var (
+		ftype  fieldType
+		result string
+		err    error
+	)
 
-	if msgType == AUDIT_EXECVE && strings.HasPrefix(fieldName, "a") && fieldName != "argc" && strings.Index(fieldName, "_len") == -1 {
+	if msgType == AUDIT_EXECVE && strings.HasPrefix(fieldName, "a") &&
+		fieldName != "argc" && strings.Index(fieldName, "_len") == -1 {
 		ftype = typeEscaped
 	} else if msgType == AUDIT_AVC && fieldName == "saddr" {
 		ftype = typeUnclassified
@@ -107,161 +109,159 @@ func interpretField(fieldName string, fieldValue string, msgType auditConstant, 
 	case typeUID:
 		result, err = printUID(fieldValue)
 		if err != nil {
-			return "", errors.Wrap(err, "UID interpretation failed")
+			return "", err
 		}
 	case typeGID:
-		// printGID is currently only a stub
+		// XXX printGID is currently only a stub
 		result, err = printGID(fieldValue)
 		if err != nil {
-			return "", errors.Wrap(err, "GID interpretation failed")
+			return "", err
 		}
-
 	case typeSyscall:
 		result, err = printSyscall(fieldValue)
 		if err != nil {
-			return "", errors.Wrap(err, "syscall interpretation failed")
+			return "", err
 		}
 	case typeArch:
 		return printArch()
 	case typeExit:
 		result, err = printExit(fieldValue) // peek on exit codes (stderror)
 		if err != nil {
-			return "", errors.Wrap(err, "exit interpretation failed")
+			return "", err
 		}
 	case typePerm:
 		result, err = printPerm(fieldValue)
 		if err != nil {
-			return "", errors.Wrap(err, "perm interpretation failed")
+			return "", err
 		}
 	case typeEscaped:
 		result, err = printEscaped(fieldValue)
 		if err != nil {
-			return "", errors.Wrap(err, "interpretation failed")
+			return "", err
 		}
 	case typeMode:
 		result, err = printMode(fieldValue, 8)
 		if err != nil {
-			return "", errors.Wrap(err, "mode interpretation failed")
+			return "", err
 		}
 	case typeModeShort:
 		result, err = printModeShort(fieldValue, 8)
 		if err != nil {
-			return "", errors.Wrap(err, "short mode interpretation failed")
+			return "", err
 		}
 	case typeSockaddr:
 		result, err = printSockAddr(fieldValue)
 		if err != nil {
-			return "", errors.Wrap(err, "sockaddr interpretation failed")
+			return "", err
 		}
 	case typePromisc:
 		result, err = printPromiscuous(fieldValue)
 		if err != nil {
-			return "", errors.Wrap(err, "promsc interpretation failed")
+			return "", err
 		}
 	case typeCapability:
 		result, err = printCapabilities(fieldValue, 10)
 		if err != nil {
-			return "", errors.Wrap(err, "capability interpretation failed")
+			return "", err
 		}
 	case typeSuccess:
 		result, err = printSuccess(fieldValue)
 		if err != nil {
-			return "", errors.Wrap(err, "success interpretation failed")
+			return "", err
 		}
 	case typeA0:
 		result, err = printA0(fieldValue, r.syscallNum)
 		if err != nil {
-			return "", errors.Wrap(err, "a0 interpretation failed")
+			return "", err
 		}
 	case typeA1:
 		result, err = printA1(fieldValue, r.syscallNum, r.a0)
 		if err != nil {
-			return "", errors.Wrap(err, "a1 interpretation failed")
+			return "", err
 		}
 	case typeA2:
 		result, err = printA2(fieldValue, r.syscallNum, r.a1)
 		if err != nil {
-			return "", errors.Wrap(err, "a2 interpretation failed")
+			return "", err
 		}
 	case typeA3:
 		result, err = printA3(fieldValue, r.syscallNum)
 		if err != nil {
-			return "", errors.Wrap(err, "a3 interpretation failed")
+			return "", err
 		}
 	case typeSignal:
 		result, err = printSignals(fieldValue, 10)
 		if err != nil {
-			return "", errors.Wrap(err, "signal interpretation failed")
+			return "", err
 		}
 	case typeList:
 		result, err = printList(fieldValue)
 		if err != nil {
-			return "", errors.Wrap(err, "list interpretation failed")
+			return "", err
 		}
 	case typeTTYData:
 		// TODO: add printTTYData (see interpret.c (auparse) for ideas)
 		// result, err = printTTYData(fieldValue)
 		// if err != nil {
-		// 	return "", errors.Wrap(err, "tty interpretation failed")
+		// 	return "", err
 		// }
 	case typeSession:
 		result, err = printSession(fieldValue)
 		if err != nil {
-			return "", errors.Wrap(err, "session interpretation failed")
+			return "", err
 		}
 	case typeCapBitmap:
 		// TODO: add printCapBitMap (see interpret.c (auparse) for ideas)
 		// result, err = printCapBitMap(fieldValue)
 		// if err != nil {
-		// 	return "", errors.Wrap(err, "cap bitmap interpretation failed")
+		// 	return "", err
 		// }
 	case typeNFProto:
 		result, err = printNFProto(fieldValue)
 		if err != nil {
-			return "", errors.Wrap(err, "session interpretation failed")
+			return "", err
 		}
 	case typeICMP:
 		result, err = printICMP(fieldValue)
 		if err != nil {
-			return "", errors.Wrap(err, "ICMP type interpretation failed")
+			return "", err
 		}
 	case typeProtocol:
-		// discuss priority
 		// getprotobynumber
 		// result, err = printProtocol(fieldValue)
 		// if err != nil {
-		// 	return "", errors.Wrap(err, "ICMP type interpretation failed")
+		// 	return "", err
 		// }
 	case typeAddr:
 		result, err = printAddr(fieldValue)
 		if err != nil {
-			return "", errors.Wrap(err, "Addr interpretation failed")
+			return "", err
 		}
 	case typePersonality:
 		result, err = printPersonality(fieldValue)
 		if err != nil {
-			return "", errors.Wrap(err, "personality interpretation failed")
+			return "", err
 		}
 	case typeOFlag:
 		result, err = printOpenFlags(fieldValue)
 		if err != nil {
-			return "", errors.Wrap(err, "Addr interpretation failed")
+			return "", err
 		}
 	case typeSeccomp:
 		result, err = printSeccompCode(fieldValue)
 		if err != nil {
-			return "", errors.Wrap(err, "seccomp code interpretation failed")
+			return "", err
 		}
 	case typeMmap:
 		result, err = printMmap(fieldValue)
 		if err != nil {
-			return "", errors.Wrap(err, "mmap interpretation failed")
+			return "", err
 		}
 	case typeProctile:
-		//printing proctitle is same as printing escaped
+		// Printing proctitle is same as printing escaped
 		result, err = printEscaped(fieldValue)
 		if err != nil {
-			return "", errors.Wrap(err, "proctitle interpretation failed")
+			return "", err
 		}
 	case typeMacLabel:
 		fallthrough
@@ -275,24 +275,21 @@ func interpretField(fieldName string, fieldValue string, msgType auditConstant, 
 }
 
 func printUID(fieldValue string) (string, error) {
-
 	name, err := user.LookupId(fieldValue)
 	if err != nil {
-		return fmt.Sprintf("unknown(%s)", fieldValue), nil
+		return fmt.Sprintf("unknown(%v)", fieldValue), nil
 	}
 	return name.Username, nil
 }
 
-// No standard function until Go 1.7
 func printGID(fieldValue string) (string, error) {
 	return fieldValue, nil
 }
 
 func printSyscall(fieldValue string) (string, error) {
-	//NOTE: considering only x64 machines
 	name, err := syscallToName(fieldValue)
 	if err != nil {
-		return "", errors.Wrap(err, "syscall parsing failed")
+		return "", err
 	}
 	return name, nil
 }
@@ -304,7 +301,7 @@ func printArch() (string, error) {
 func printExit(fieldValue string) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, 10, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "exit parsing failed")
+		return "", err
 	}
 	// c version of this method tries to retrieve string description of the error code
 	// ignoring the same approach as the codes can vary
@@ -317,7 +314,7 @@ func printExit(fieldValue string) (string, error) {
 func printPerm(fieldValue string) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, 10, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "perm parsing failed")
+		return "", err
 	}
 	var perm string
 	if ival == 0 {
@@ -353,7 +350,7 @@ func printPerm(fieldValue string) (string, error) {
 func printMode(fieldValue string, base int) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, base, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "mode parsing failed")
+		return "", err
 	}
 	var name string
 	firstIFMTbit := syscall.S_IFMT & ^(syscall.S_IFMT - 1)
@@ -392,7 +389,7 @@ func printMode(fieldValue string, base int) (string, error) {
 func printModeShort(fieldValue string, base int) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, base, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "short mode parsing failed")
+		return "", err
 	}
 	return printModeShortInt(ival)
 }
@@ -464,84 +461,80 @@ func printSockAddr(fieldValue string) (string, error) {
 		Sin6_scope_id uint32   `struc:"uint32,little"` // Scope ID
 	}
 
-	var name string
-	var s sockaddr
+	var (
+		name string
+		s    sockaddr
+	)
 
 	bytestr, err := hex.DecodeString(fieldValue)
 	if err != nil {
-		return fieldValue, errors.Wrap(err, "sockaddr parsing failed")
+		return fieldValue, err
 	}
 
 	buf := bytes.NewBuffer(bytestr)
 	err = struc.Unpack(buf, &s)
-
 	if err != nil {
-		return fieldValue, errors.Wrap(err, "sockaddr decoding failed")
+		return fieldValue, err
 	}
 	family := int(s.Sa_family)
 
 	if _, ok := headers.SocketFamLookup[int(family)]; !ok {
-		return fmt.Sprintf("unknown family (%d)", family), nil
+		return fmt.Sprintf("unknown family (%v)", family), nil
 	}
 
-	errstring := fmt.Sprintf("%s (error resolving addr)", headers.SocketFamLookup[family])
+	errstring := fmt.Errorf("%s (error resolving addr)", headers.SocketFamLookup[family])
 
 	switch family {
-
 	case syscall.AF_LOCAL:
 		var p sockaddr_un
 		nbuf := bytes.NewBuffer(bytestr)
 
 		err = struc.Unpack(nbuf, &p)
 		if err != nil {
-			return fieldValue, errors.Wrap(err, errstring)
+			return fieldValue, errstring
 		}
 		name = fmt.Sprintf("%s %s", headers.SocketFamLookup[family], string(p.Sun_path[:]))
 		return name, nil
-
 	case syscall.AF_INET:
 		var ip4 sockaddr_in
 
 		nbuf := bytes.NewBuffer(bytestr)
 		err = struc.Unpack(nbuf, &ip4)
 		if err != nil {
-			return fieldValue, errors.Wrap(err, errstring)
+			return fieldValue, errstring
 		}
 		addrBytes := ip4.In_addr[:]
 		var x net.IP = addrBytes
 		name = fmt.Sprintf("%s host:%s serv:%d", headers.SocketFamLookup[family], x.String(), ip4.Sin_port)
 		return name, nil
-
 	case syscall.AF_INET6:
 		var ip6 sockaddr_in6
 		nbuf := bytes.NewBuffer(bytestr)
 		err = struc.Unpack(nbuf, &ip6)
 		if err != nil {
-			return fieldValue, errors.Wrap(err, errstring)
+			return fieldValue, errstring
 		}
 		addrBytes := ip6.Sin6_addr[:]
 		var x net.IP = addrBytes
 		name = fmt.Sprintf("%s host:%s serv:%d", headers.SocketFamLookup[family], x.String(), ip6.Sin6_port)
 		return name, nil
-
 	case syscall.AF_NETLINK:
 		var n sockaddr_nl
 
 		nbuf := bytes.NewBuffer(bytestr)
 		err = struc.Unpack(nbuf, &n)
 		if err != nil {
-			return fieldValue, errors.Wrap(err, errstring)
+			return fieldValue, errstring
 		}
 		name = fmt.Sprintf("%s pid:%d", headers.SocketFamLookup[family], n.Nl_pid)
 		return name, nil
-
 	case syscall.AF_PACKET:
 		var l sockaddr_ll
 
 		nbuf := bytes.NewBuffer(bytestr)
 		err = struc.Unpack(nbuf, &l)
 		if err != nil {
-			return fieldValue, errors.Wrap(err, errstring)
+			return fieldValue, errstring
 		}
 		// TODO: decide on kind of information to return
 		// currently only returning the family name
@@ -551,9 +544,8 @@ func printSockAddr(fieldValue string) (string, error) {
 	return headers.SocketFamLookup[family], nil
 }
 
-// this is currently just a stub as its only used in RHEL kernels
-// later interpretation can be added
-// for ideas see auparse -> interpret.c -> print_flags()
+// this is currently just a stub as its only used in RHEL kernels, interpretation
+// can be added, see auparse -> interpret.c -> print_flags()
 func printFlags(fieldValue string) (string, error) {
 	return fieldValue, nil
 }
@@ -595,7 +587,7 @@ func unescape(fieldvalue string) string {
 func printPromiscuous(fieldValue string) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, 10, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "promiscuous parsing failed")
+		return "", err
 	}
 	if ival == 0 {
 		return "no", nil
@@ -606,7 +598,7 @@ func printPromiscuous(fieldValue string) (string, error) {
 func printCapabilities(fieldValue string, base int) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, base, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "capability parsing failed")
+		return "", err
 	}
 	cap, ok := headers.CapabLookup[int(ival)]
 	if ok {
@@ -622,8 +614,8 @@ func printSuccess(fieldValue string) (string, error) {
 
 	ival, err := strconv.ParseInt(fieldValue, 10, 64)
 	if err != nil {
-		// if we are unable to parse success values just return them as it is
-		// behaviour same as auparse -interpret.c
+		// if we are unable to parse success values just return them as is,
+		// behaviour is the same as auparse interpret.c
 		return fieldValue, nil
 	}
 	const (
@@ -644,10 +636,9 @@ func printSuccess(fieldValue string) (string, error) {
 }
 
 func printA0(fieldValue string, sysNum string) (string, error) {
-	// TODO: currently only considering only x64 machines
 	name, err := syscallToName(sysNum)
 	if err != nil {
-		return "", errors.Wrap(err, "syscall parsing failed")
+		return "", err
 	}
 	if strings.HasPrefix(name, "r") {
 		if name == "rt_sigaction" {
@@ -738,7 +729,7 @@ func printSignals(fieldValue string, base int) (string, error) {
 
 	ival, err := strconv.ParseInt(fieldValue, base, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "signal parsing failed")
+		return "", err
 	}
 	if ival < 31 {
 		return headers.SignalLookup[int(ival)], nil
@@ -759,7 +750,7 @@ func printDirFd(fieldValue string) (string, error) {
 func printCloneFlags(fieldValue string) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, 16, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "clone flags parsing failed")
+		return "", err
 	}
 
 	var name string
@@ -787,7 +778,7 @@ func printCloneFlags(fieldValue string) (string, error) {
 func printClockID(fieldValue string) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, 16, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "clock ID parsing failed")
+		return "", err
 	}
 	if ival < 7 {
 		return headers.ClockLookup[int(ival)], nil
@@ -804,7 +795,7 @@ func printPersonality(fieldValue string) (string, error) {
 func printPtrace(fieldValue string) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, 16, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "ptrace parsing failed")
+		return "", err
 	}
 	if _, ok := headers.PtraceLookup[int(ival)]; !ok {
 		return fmt.Sprintf("unknown ptrace (0x%s)", fieldValue), nil
@@ -815,7 +806,7 @@ func printPtrace(fieldValue string) (string, error) {
 func printPrctlOpt(fieldValue string) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, 16, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "prctl parsing failed")
+		return "", err
 	}
 	if _, ok := headers.PrctlLookup[int(ival)]; !ok {
 		return fmt.Sprintf("unknown prctl option (0x%s)", fieldValue), nil
@@ -826,7 +817,7 @@ func printPrctlOpt(fieldValue string) (string, error) {
 func printSocketDomain(fieldValue string) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, 16, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "socket domain parsing failed")
+		return "", err
 	}
 	if _, ok := headers.SocketFamLookup[int(ival)]; !ok {
 		return fmt.Sprintf("unknown family (0x%s)", fieldValue), nil
@@ -838,7 +829,7 @@ func printSocketDomain(fieldValue string) (string, error) {
 func printSocketCall(fieldValue string, base int) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, 16, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "socketcall parsing failed")
+		return "", err
 	}
 	if _, ok := headers.SockLookup[int(ival)]; !ok {
 		return fmt.Sprintf("unknown socketcall (0x%s)", fieldValue), nil
@@ -849,7 +840,7 @@ func printSocketCall(fieldValue string, base int) (string, error) {
 func printRLimit(fieldValue string) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, 16, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "rlimit parsing failed")
+		return "", err
 	}
 	if _, ok := headers.RlimitLookup[int(ival)]; !ok {
 		return fmt.Sprintf("unknown rlimit (0x%s)", fieldValue), nil
@@ -860,7 +851,7 @@ func printRLimit(fieldValue string) (string, error) {
 func printIpcCall(fieldValue string, base int) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, 16, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "ipccall parsing failed")
+		return "", err
 	}
 	if _, ok := headers.IpccallLookup[int(ival)]; !ok {
 		return fmt.Sprintf("unknown ipccall (%s)", fieldValue), nil
@@ -869,10 +860,9 @@ func printIpcCall(fieldValue string, base int) (string, error) {
 }
 
 func printA1(fieldValue, sysNum string, a0 int) (string, error) {
-	//TODO: currently only considering x64 machines
 	name, err := syscallToName(sysNum)
 	if err != nil {
-		return "", errors.Wrap(err, "syscall parsing failed")
+		return "", err
 	}
 	if strings.HasPrefix(name, "f") {
 		if name == "fchmod" {
@@ -943,7 +933,7 @@ func printA1(fieldValue, sysNum string, a0 int) (string, error) {
 func printFcntlCmd(fieldValue string) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, 16, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "fcntl command parsing failed")
+		return "", err
 	}
 	if _, ok := headers.FcntlLookup[int(ival)]; !ok {
 		return fmt.Sprintf("unknown fcntl command(%d)", ival), nil
@@ -954,7 +944,7 @@ func printFcntlCmd(fieldValue string) (string, error) {
 func printSocketType(fieldValue string) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, 16, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "socket type parsing failed")
+		return "", err
 	}
 	if _, ok := headers.SockTypeLookup[int(ival)]; !ok {
 		return fmt.Sprintf("unknown socket type(%d)", ival), nil
@@ -966,7 +956,7 @@ func printSched(fieldValue string) (string, error) {
 	const schedResetOnFork int64 = 0x40000000
 	ival, err := strconv.ParseInt(fieldValue, 16, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "sched parsing failed")
+		return "", err
 	}
 	if _, ok := headers.SchedLookup[int(ival)&0x0F]; !ok {
 		return fmt.Sprintf("unknown scheduler policy (0x%s)", fieldValue), nil
@@ -979,11 +969,9 @@ func printSched(fieldValue string) (string, error) {
 
 // TODO: add interpretation
 // see auparse -> interpret.c -> print_open_flags() for ideas
-// useful for debugging rather than forensics
-// actual policy is to filter either on open or write or both
-// and emit msg that this happened so if its opened in r,rw, etc.
-// all endup looking the same i.e READ or WRITE
-// auparse specific table is open-flagtab.h
+// useful for debugging rather than forensics actual policy is to filter either on open or write or both
+// and emit msg that this happened so if its opened in r,rw, etc. All endup looking the same i.e READ or WRITE
+// auparse specific table is open-flagtab.h.
 func printOpenFlags(fieldValue string) (string, error) {
 	// look at table of values from /usr/include/asm-generic/fcntl.h
 	return fieldValue, nil
@@ -995,7 +983,7 @@ func printOpenFlags(fieldValue string) (string, error) {
 func printAccess(fieldValue string) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, 16, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "access parsing failed")
+		return "", err
 	}
 	if ival&0x0F == 0 {
 		return "F_OK", nil
@@ -1018,7 +1006,7 @@ func printAccess(fieldValue string) (string, error) {
 func printEpollCtl(fieldValue string) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, 16, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "epoll parsing failed")
+		return "", err
 	}
 	if _, ok := headers.EpollLookup[int(ival)]; !ok {
 		return fmt.Sprintf("unknown epoll_ctl operation (%d)", ival), nil
@@ -1029,7 +1017,7 @@ func printEpollCtl(fieldValue string) (string, error) {
 func printUmount(fieldValue string) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, 16, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "umount parsing failed")
+		return "", err
 	}
 	var name string
 	for key, val := range headers.UmountLookUp {
@@ -1050,7 +1038,7 @@ func printUmount(fieldValue string) (string, error) {
 func printIoctlReq(fieldValue string) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, 16, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "ioctl req parsing failed")
+		return "", err
 	}
 
 	if _, ok := headers.IoctlLookup[int(ival)]; !ok {
@@ -1065,7 +1053,7 @@ func printIoctlReq(fieldValue string) (string, error) {
 func printSockOptLevel(fieldValue string) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, 16, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "sock opt parsing failed")
+		return "", err
 	}
 	if ival == syscall.SOL_SOCKET {
 		return "SOL_SOCKET", nil
@@ -1084,7 +1072,7 @@ func printSockOptLevel(fieldValue string) (string, error) {
 func printSocketProto(fieldValue string) (string, error) {
 	// ival, err := strconv.ParseInt(fieldValue, 16, 64)
 	// if err != nil {
-	// 	return "", errors.Wrap(err, "sock proto parsing failed")
+	// 	return "", err
 	// }
 	//protocol = getprotobynumber(ival)
 	// if not found
@@ -1093,15 +1081,14 @@ func printSocketProto(fieldValue string) (string, error) {
 }
 
 func printA2(fieldValue, sysNum string, a1 int) (string, error) {
-	//TODO: currently only considering x64 machines
 	name, err := syscallToName(sysNum)
 	if err != nil {
-		return "", errors.Wrap(err, "syscall parsing failed")
+		return "", err
 	}
 	if name == "fcntl" {
 		ival, err := strconv.ParseInt(fieldValue, 16, 64)
 		if err != nil {
-			return "", errors.Wrap(err, "fcntl parsing failed")
+			return "", err
 		}
 		switch a1 {
 		case syscall.F_SETOWN:
@@ -1188,7 +1175,7 @@ func printA2(fieldValue, sysNum string, a1 int) (string, error) {
 func printIPOptName(fieldValue string) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, 16, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "ip opt parsing failed")
+		return "", err
 	}
 	if _, ok := headers.IpOptLookup[int(ival)]; !ok {
 		return fmt.Sprintf("unknown ipopt name (0x%s)", fieldValue), nil
@@ -1199,7 +1186,7 @@ func printIPOptName(fieldValue string) (string, error) {
 func printIP6OptName(fieldValue string) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, 16, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "ip6 opt parsing failed")
+		return "", err
 	}
 	if _, ok := headers.Ip6OptLookup[int(ival)]; !ok {
 		return fmt.Sprintf("unknown ip6opt name (0x%s)", fieldValue), nil
@@ -1221,7 +1208,7 @@ func printTCPOptName(fieldValue string) (string, error) {
 func printUDPOptName(fieldValue string) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, 16, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "udp opt parsing failed")
+		return "", err
 	}
 	if ival == 1 {
 		return "UDP_CORK", nil
@@ -1235,7 +1222,7 @@ func printUDPOptName(fieldValue string) (string, error) {
 func printPktOptName(fieldValue string) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, 16, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "pkt opt parsing failed")
+		return "", err
 	}
 	if _, ok := headers.PktOptLookup[int(ival)]; !ok {
 		return fmt.Sprintf("unknown pktopt name (0x%s)", fieldValue), nil
@@ -1243,11 +1230,11 @@ func printPktOptName(fieldValue string) (string, error) {
 	return headers.PktOptLookup[int(ival)], nil
 }
 
-// tables (question, ) what are the actual values from table ( are they in binary?)
+// printSHMFlags - What are the actual values from table ( are they in binary?)
 func printSHMFlags(fieldValue string) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, 16, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "shm parsing failed")
+		return "", err
 	}
 	var ipccmdLookUp = map[int]string{
 		00001000: "IPC_CREAT",
@@ -1299,7 +1286,7 @@ func printSHMFlags(fieldValue string) (string, error) {
 func printProt(fieldValue string, isMmap int) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, 16, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "prot parsing failed")
+		return "", err
 	}
 	if ival&0x07 == 0 {
 		return "PROT_NONE", nil
@@ -1327,17 +1314,10 @@ func printProt(fieldValue string, isMmap int) (string, error) {
 }
 
 func printSockOptName(fieldValue string) (string, error) {
-	// Note: Considering only x64 machines
 	ival, err := strconv.ParseInt(fieldValue, 16, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "sock optname parsing failed")
+		return "", err
 	}
-	/*
-		// PPC machine arch
-			if ((machine == MACH_PPC64 || machine == MACH_PPC) &&
-					opt >= 16 && opt <= 21)
-				opt+=100;
-	*/
 	if _, ok := headers.SockOptNameLookup[int(ival)]; !ok {
 		return fmt.Sprintf("unknown sockopt name (0x%s)", fieldValue), nil
 	}
@@ -1347,7 +1327,7 @@ func printSockOptName(fieldValue string) (string, error) {
 func printRecv(fieldValue string) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, 16, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "recv parsing failed")
+		return "", err
 	}
 	var name string
 	for key, val := range headers.RecvLookUp {
@@ -1368,7 +1348,7 @@ func printRecv(fieldValue string) (string, error) {
 func printSeek(fieldValue string) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, 16, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "seek parsing failed")
+		return "", err
 	}
 	var whence = int(ival) & 0xFF
 	if _, ok := headers.SeekLookup[whence]; !ok {
@@ -1378,10 +1358,9 @@ func printSeek(fieldValue string) (string, error) {
 }
 
 func printA3(fieldValue, sysNum string) (string, error) {
-	// TODO: currently only considering x64 machines
 	name, err := syscallToName(sysNum)
 	if err != nil {
-		return "", errors.Wrap(err, "syscall parsing failed")
+		return "", err
 	}
 	if strings.HasPrefix(name, "m") {
 		if name == "mmap" {
@@ -1412,7 +1391,7 @@ func printA3(fieldValue, sysNum string) (string, error) {
 func printMmap(fieldValue string) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, 16, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "mmap parsing failed")
+		return "", err
 	}
 	var name string
 	if ival&0x0F == 0 {
@@ -1436,7 +1415,7 @@ func printMmap(fieldValue string) (string, error) {
 func printMount(fieldValue string) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, 16, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "mount parsing failed")
+		return "", err
 	}
 	var name string
 	for key, val := range headers.MountLookUp {
@@ -1464,7 +1443,7 @@ func printSession(fieldValue string) (string, error) {
 func printNFProto(fieldValue string) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, 10, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "netfilter protocol parsing failed")
+		return "", err
 	}
 	if _, ok := headers.NfProtoLookup[int(ival)]; !ok {
 		return fmt.Sprintf("unknown netfilter protocol (%s)", fieldValue), nil
@@ -1475,7 +1454,7 @@ func printNFProto(fieldValue string) (string, error) {
 func printICMP(fieldValue string) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, 10, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "icmp type parsing failed")
+		return "", err
 	}
 	if _, ok := headers.IcmpLookup[int(ival)]; !ok {
 		return fmt.Sprintf("unknown icmp type (%s)", fieldValue), nil
@@ -1493,7 +1472,7 @@ func printSeccompCode(fieldValue string) (string, error) {
 	}
 	ival, err := strconv.ParseInt(fieldValue, 16, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "seccomp code parsing failed")
+		return "", err
 	}
 	var SECCOMPRETACTION = 0x7fff0000
 	if _, ok := headers.SeccompCodeLookUp[int(ival)&SECCOMPRETACTION]; !ok {
@@ -1505,7 +1484,7 @@ func printSeccompCode(fieldValue string) (string, error) {
 func printList(fieldValue string) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, 10, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "list parsing failed")
+		return "", err
 	}
 	if _, ok := flagLookup[int(ival)]; !ok {
 		return fmt.Sprintf("unknown list (%s)", fieldValue), nil
