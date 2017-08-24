@@ -5,7 +5,6 @@
 package libaudit
 
 import (
-	"fmt"
 	"reflect"
 	"testing"
 )
@@ -278,7 +277,6 @@ var auditTests = []struct {
 }
 
 func TestMalformedPrefix(t *testing.T) {
-	var err = fmt.Errorf("parsing failed: malformed audit message")
 	tmsg := []struct {
 		msg     string
 		msgType auditConstant
@@ -288,29 +286,24 @@ func TestMalformedPrefix(t *testing.T) {
 		{`audit(1464176620.068:1445`, AUDIT_AVC},
 	}
 	for _, m := range tmsg {
-		_, er := ParseAuditEvent(m.msg, m.msgType, false)
-
-		if err.Error() != er.Error() { // maybe a better method ?
-			t.Errorf("prefix parse: %v , expected %v, found %v", m.msg, err, er)
+		_, err := ParseAuditEvent(m.msg, m.msgType, false)
+		if err == nil {
+			t.Fatalf("ParseAuditEvent should have failed on %q", m.msg)
 		}
-
+		if err.Error() != "parsing failed: malformed audit message" {
+			t.Fatalf("ParseAuditEvent failed, but error %q was unexpected", err)
+		}
 	}
 }
 
 func TestNativeParser(t *testing.T) {
-	for _, tt := range auditTests {
+	for i, tt := range auditTests {
 		x, err := ParseAuditEvent(tt.msg, tt.msgType, false)
 		if err != tt.expected {
-			t.Errorf("parse: %v , expected %v, found %v", tt.msg, tt.expected, err)
+			t.Fatalf("ParseAuditEvent: event %v had unexpected error value", i)
 		}
 		if tt.match {
-			if !checkEvent(&tt.event, x, t) {
-				t.Errorf("parse: %v , failed %v", tt.msg, tt.event)
-			}
-		} else {
-			if checkEvent(&tt.event, x, t) {
-				t.Errorf("parse: %v , failed %v", tt.msg, tt.event)
-			}
+			checkEvent(i, &tt.event, x, t)
 		}
 	}
 }
@@ -321,23 +314,18 @@ func BenchmarkNativeParser(b *testing.B) {
 	}
 }
 
-func checkEvent(a *AuditEvent, b *AuditEvent, t *testing.T) bool {
-	if a.Serial == b.Serial {
-		if a.Timestamp == b.Timestamp {
-			if a.Type == b.Type {
-				if reflect.DeepEqual(a.Data, b.Data) {
-					return true
-				} else {
-					t.Errorf("parse event check: %v , failed %v", a.Data, b.Data)
-				}
-			} else {
-				t.Errorf("parse event check: %v , failed %v", a.Type, b.Type)
-			}
-		} else {
-			t.Errorf("parse event check: %v , failed %v", a.Timestamp, b.Timestamp)
-		}
-	} else {
-		t.Errorf("parse event check: %v , failed %v", a.Serial, b.Serial)
+// checkEvent compares auditEvent a to b, ensuring they are identical.
+func checkEvent(eventid int, a *AuditEvent, b *AuditEvent, t *testing.T) {
+	if a.Serial != b.Serial {
+		t.Fatalf("audit event %v serial did not match", eventid)
 	}
-	return false
+	if a.Timestamp != b.Timestamp {
+		t.Fatalf("audit event %v timestamp did not match", eventid)
+	}
+	if a.Type != b.Type {
+		t.Fatalf("audit event %v type did not match", eventid)
+	}
+	if !reflect.DeepEqual(a.Data, b.Data) {
+		t.Fatalf("audit event %v data was not equal", eventid)
+	}
 }
