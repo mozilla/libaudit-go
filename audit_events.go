@@ -5,11 +5,10 @@
 package libaudit
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"syscall"
-
-	"github.com/pkg/errors"
 )
 
 // EventCallback is the function definition for any function that wants to receive an AuditEvent as soon as
