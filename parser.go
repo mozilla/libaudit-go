@@ -28,7 +28,10 @@ func ParseAuditEvent(str string, msgType auditConstant, interpret bool) (*AuditE
 		Raw: str,
 	}
 
-	m := make(map[string]string)
+	// Create the map which will store the audit record fields for this event, note we
+	// provide an allocation hint here based on the average number of fields we would come
+	// across in an audit event
+	m := make(map[string]string, 24)
 
 	if strings.HasPrefix(str, "audit(") {
 		str = str[6:]
