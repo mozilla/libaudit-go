@@ -1,5 +1,6 @@
 language: go
 dist: trusty
+sudo: required
 notifications:
     email: false
 go:
