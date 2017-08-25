@@ -22,8 +22,8 @@ import (
 	"github.com/pkg/errors"
 )
 
-// auditRules describes a set of audit rules in JSON format
-type auditRules struct {
+// AuditRules describes a set of audit rules in JSON format
+type AuditRules struct {
 	RawRules        interface{} `json:"audit_rules"`
 	StrictPathCheck bool        `json:"strict_path_check"`
 	Delete          bool        `json:"delete"`
@@ -31,15 +31,15 @@ type auditRules struct {
 	Buffer          string      `json:"buffer"`
 	Rate            string      `json:"rate"`
 
-	AuditRules []auditRule
+	AuditRules []AuditRule
 }
 
-// extractAuditRules populates the AuditRules field in the auditRules type after data
+// extractAuditRules populates the AuditRules field in the AuditRules type after data
 // has been unmarshalled into this type.
 //
 // Since RawRules/audit_rules is of type interface and can contain either a watch or system call
 // rule, this function identifies the correct type to allocate.
-func (a *auditRules) extractAuditRules() {
+func (a *AuditRules) extractAuditRules() {
 	var ri []interface{}
 
 	ri = a.RawRules.([]interface{})
@@ -54,10 +54,10 @@ func (a *auditRules) extractAuditRules() {
 		// If we found a path key, treat it as a file rule, otherwise treat it as a
 		// syscall rule.
 		if havepath {
-			afr := auditFileRule{}
+			afr := AuditFileRule{}
 			nr = &afr
 		} else {
-			afr := auditSyscallRule{}
+			afr := AuditSyscallRule{}
 			nr = &afr
 		}
 		buf, err := json.Marshal(x)
@@ -68,25 +68,25 @@ func (a *auditRules) extractAuditRules() {
 		if err != nil {
 			return
 		}
-		a.AuditRules = append(a.AuditRules, nr.(auditRule))
+		a.AuditRules = append(a.AuditRules, nr.(AuditRule))
 	}
 }
 
-// auditRule is an interface abstraction for file system and system call type audit
+// AuditRule is an interface abstraction for file system and system call type audit
 // rules
-type auditRule interface {
+type AuditRule interface {
 	toKernelRule() (auditRuleData, int, int, error)
 }
 
-// auditFileRule describes the JSON format for a file type audit rule
-type auditFileRule struct {
+// AuditFileRule describes the JSON format for a file type audit rule
+type AuditFileRule struct {
 	Path       string `json:"path"`
 	Key        string `json:"key"`
 	Permission string `json:"permission"`
 }
 
 // toKernelRule converts the JSON rule to a kernel audit rule structure.
-func (a *auditFileRule) toKernelRule() (ret auditRuleData, act int, filt int, err error) {
+func (a *AuditFileRule) toKernelRule() (ret auditRuleData, act int, filt int, err error) {
 	ret.Buf = make([]byte, 0)
 
 	err = ret.addWatch(a.Path, true)
@@ -116,8 +116,8 @@ func (a *auditFileRule) toKernelRule() (ret auditRuleData, act int, filt int, er
 	return
 }
 
-// auditSyscallRule describes the JSON format for a syscall type audit rule
-type auditSyscallRule struct {
+// AuditSyscallRule describes the JSON format for a syscall type audit rule
+type AuditSyscallRule struct {
 	Key    string `json:"key"`
 	Fields []struct {
 		Name  string      `json:"name"`
@@ -129,7 +129,7 @@ type auditSyscallRule struct {
 }
 
 // toKernelRule converts the JSON rule to a kernel audit rule structure.
-func (a *auditSyscallRule) toKernelRule() (ret auditRuleData, act int, filt int, err error) {
+func (a *AuditSyscallRule) toKernelRule() (ret auditRuleData, act int, filt int, err error) {
 	var auditSyscallAdded bool
 
 	ret.Buf = make([]byte, 0)
@@ -602,7 +602,7 @@ func auditAddRuleData(s Netlink, rule *auditRuleData, flags int, action int) err
 // SetRules sets the audit rule set in the kernel, based on the JSON audit rule data in content
 func SetRules(s Netlink, content []byte) error {
 	var (
-		rules auditRules
+		rules AuditRules
 		err   error
 	)
 	err = json.Unmarshal(content, &rules)
@@ -750,8 +750,8 @@ func (rule *auditRuleData) addPerms(perms string) error {
 // ListAllRules returns a list of audit rules from the kernel. Note that the list is returned
 // as a slice of strings, formatted in the way auditctl would display the audit rules.
 //
-// XXX Conversion back to an auditRules type is not currently supported. This function should
-// likely instead return an auditRules type, which can then be translated into an auditctl style
+// XXX Conversion back to an AuditRules type is not currently supported. This function should
+// likely instead return an AuditRules type, which can then be translated into an auditctl style
 // output if desired.
 func ListAllRules(s Netlink) (ret []string, err error) {
 	var kernelRules []auditRuleData
