@@ -314,6 +314,14 @@ func BenchmarkNativeParser(b *testing.B) {
 	}
 }
 
+func BenchmarkNativeParserTable(b *testing.B) {
+	for n := 0; n < b.N; n++ {
+		for _, x := range auditTests {
+			ParseAuditEvent(x.msg, AUDIT_AVC, true)
+		}
+	}
+}
+
 // checkEvent compares auditEvent a to b, ensuring they are identical.
 func checkEvent(eventid int, a *AuditEvent, b *AuditEvent, t *testing.T) {
 	if a.Serial != b.Serial {
