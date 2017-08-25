@@ -1,0 +1,6 @@
+language: go
+dist: trusty
+notifications:
+    email: false
+script:
+    - make test
