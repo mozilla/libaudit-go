@@ -40,7 +40,7 @@ func TestSetRules(t *testing.T) {
 		t.Fatalf("DeleteAllRules: %v", err)
 	}
 
-	err = SetRules(s, jsonRules)
+	_, err = SetRules(s, jsonRules)
 	if err != nil {
 		t.Fatalf("SetRules: %v", err)
 	}
@@ -66,4 +66,83 @@ func TestSetRules(t *testing.T) {
 		}
 	}
 	x.Close()
+}
+
+// Try to load a rule set with strict path checking enabled, where the path in a watch rule is
+// nonexistent; should fail.
+func TestSetRulesStrictPathFail(t *testing.T) {
+	if os.Getuid() != 0 {
+		t.Skipf("skipping test, not root user")
+	}
+
+	jsonRules, err := ioutil.ReadFile("./testdata/strictpathfail.json")
+	if err != nil {
+		t.Fatalf("ioutil.ReadFile: %v", err)
+	}
+
+	s, err := NewNetlinkConnection()
+	if err != nil {
+		t.Fatalf("NewNetlinkConnection: %v", err)
+	}
+	err = DeleteAllRules(s)
+	if err != nil {
+		t.Fatalf("DeleteAllRules: %v", err)
+	}
+
+	_, err = SetRules(s, jsonRules)
+	if err == nil {
+		t.Fatalf("SetRules should have failed on nonexistent path")
+	}
+	s.Close()
+}
+
+// Try to load a rule set with strict path checking disabled, where the path in a watch rule is
+// nonexistent; should succeed but ignore the invalid rule.
+func TestSetRulesNoStrictPath(t *testing.T) {
+	if os.Getuid() != 0 {
+		t.Skipf("skipping test, not root user")
+	}
+
+	jsonRules, err := ioutil.ReadFile("./testdata/badpathnostrictpath.json")
+	if err != nil {
+		t.Fatalf("ioutil.ReadFile: %v", err)
+	}
+
+	s, err := NewNetlinkConnection()
+	if err != nil {
+		t.Fatalf("NewNetlinkConnection: %v", err)
+	}
+	err = DeleteAllRules(s)
+	if err != nil {
+		t.Fatalf("DeleteAllRules: %v", err)
+	}
+
+	warnings, err := SetRules(s, jsonRules)
+	if err != nil {
+		t.Fatalf("SetRules: %v", err)
+	}
+
+	// We should have gotten one warning back
+	if len(warnings) != 1 {
+		t.Fatalf("SetRules: should have returned 1 warning")
+	}
+
+	// Open up a new connection before we list the rules
+	x, err := NewNetlinkConnection()
+	if err != nil {
+		t.Fatalf("NewNetlinkConnection: %v", err)
+	}
+
+	setRules, err := ListAllRules(x)
+	if err != nil {
+		t.Fatalf("ListAllRules: %v", err)
+	}
+	// We should have 1 rule here, since the test data set contains 2 rules, one of which
+	// should have been ignored.
+	expectedRules := 1
+	if len(setRules) != expectedRules {
+		t.Fatalf("number of set rules unexpected, wanted %v got %v", expectedRules,
+			len(setRules))
+	}
+	s.Close()
 }
