@@ -24,12 +24,11 @@ import (
 
 // AuditRules describes a set of audit rules in JSON format
 type AuditRules struct {
-	RawRules        interface{} `json:"audit_rules"`
-	StrictPathCheck bool        `json:"strict_path_check"`
-	Delete          bool        `json:"delete"`
-	Enable          string      `json:"enable"`
-	Buffer          string      `json:"buffer"`
-	Rate            string      `json:"rate"`
+	RawRules interface{} `json:"audit_rules"`
+	Delete   bool        `json:"delete"`
+	Enable   string      `json:"enable"`
+	Buffer   string      `json:"buffer"`
+	Rate     string      `json:"rate"`
 
 	AuditRules []AuditRule
 }
@@ -79,17 +78,21 @@ type AuditRule interface {
 }
 
 // AuditFileRule describes the JSON format for a file type audit rule
+//
+// If StrictPathCheck is true and the path the watch is being added for does not exist, this
+// cause SetRules to return an error. If false (default), the rule will just be ignored.
 type AuditFileRule struct {
-	Path       string `json:"path"`
-	Key        string `json:"key"`
-	Permission string `json:"permission"`
+	Path            string `json:"path"`
+	Key             string `json:"key"`
+	Permission      string `json:"permission"`
+	StrictPathCheck bool   `json:"strict_path_check"`
 }
 
 // toKernelRule converts the JSON rule to a kernel audit rule structure.
 func (a *AuditFileRule) toKernelRule() (ret auditRuleData, act int, filt int, err error) {
 	ret.Buf = make([]byte, 0)
 
-	err = ret.addWatch(a.Path, true)
+	err = ret.addWatch(a.Path, a.StrictPathCheck)
 	if err != nil {
 		return
 	}
@@ -600,28 +603,35 @@ func auditAddRuleData(s Netlink, rule *auditRuleData, flags int, action int) err
 }
 
 // SetRules sets the audit rule set in the kernel, based on the JSON audit rule data in content
-func SetRules(s Netlink, content []byte) error {
-	var (
-		rules AuditRules
-		err   error
-	)
+//
+// Any warnings which are non-fatal (e.g., attempting to set a watch rule on a nonexistent file)
+// are included in the warnings slice which is returned. If a fatal error occurs, err will be
+// non-nil.
+func SetRules(s Netlink, content []byte) (warnings []string, err error) {
+	var rules AuditRules
 	err = json.Unmarshal(content, &rules)
 	if err != nil {
-		return err
+		return
 	}
 	rules.extractAuditRules()
 	for _, x := range rules.AuditRules {
 		// Convert JSON rule to a kernel rule
 		kr, action, filter, err := x.toKernelRule()
 		if err != nil {
-			return err
+			// See if the error indicates the rule was being skipped, if so we
+			// do not treat this as fatal and keep going.
+			if strings.HasPrefix(err.Error(), "skipping rule") {
+				warnings = append(warnings, err.Error())
+				continue
+			}
+			return warnings, err
 		}
 		err = auditAddRuleData(s, &kr, filter, action)
 		if err != nil {
-			return err
+			return warnings, err
 		}
 	}
-	return nil
+	return warnings, nil
 }
 
 // checkPath checks the path which is being used in a watch rule to validate it is formatted
@@ -665,6 +675,9 @@ func (rule *auditRuleData) addWatch(path string, strictPath bool) error {
 		} else if !os.IsNotExist(err) {
 			return err
 		}
+		// Otherwise the path did not exist, return an error indicating this rule
+		// is being skipped
+		return fmt.Errorf("skipping rule: %v", err)
 	}
 	if fileInfo.IsDir() {
 		typeName = uint16(AUDIT_DIR)
