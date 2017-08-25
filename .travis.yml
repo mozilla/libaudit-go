@@ -5,5 +5,8 @@ notifications:
     email: false
 go:
     - 1.8
+before_install:
+    - sudo apt-get -qq update
+    - sudo apt-get install -y auditd
 script:
     - make test
