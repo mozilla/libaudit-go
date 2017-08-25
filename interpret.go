@@ -17,7 +17,6 @@ import (
 
 	"github.com/lunixbochs/struc"
 	"github.com/mozilla/libaudit-go/headers"
-	"github.com/pkg/errors"
 )
 
 // fieldType denotes the integer values of various fields occuring in audit messages
@@ -1196,7 +1195,7 @@ func printIP6OptName(fieldValue string) (string, error) {
 func printTCPOptName(fieldValue string) (string, error) {
 	ival, err := strconv.ParseInt(fieldValue, 16, 64)
 	if err != nil {
-		return "", errors.Wrap(err, "tcp opt parsing failed")
+		return "", err
 	}
 	if _, ok := headers.TcpOptLookup[int(ival)]; !ok {
 		return fmt.Sprintf("unknown tcpopt name (0x%s)", fieldValue), nil
@@ -1268,7 +1267,7 @@ func printSHMFlags(fieldValue string) (string, error) {
 	partial = ival & 000777
 	tmode, err := printModeShortInt(partial)
 	if err != nil {
-		return "", errors.Wrap(err, "shm parsing failed")
+		return "", err
 	}
 	if len(name) > 0 {
 		name += "|"

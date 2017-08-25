@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/user"
@@ -19,7 +20,6 @@ import (
 
 	"github.com/lunixbochs/struc"
 	"github.com/mozilla/libaudit-go/headers"
-	"github.com/pkg/errors"
 )
 
 // AuditRules describes a set of audit rules in JSON format
@@ -373,7 +373,7 @@ func auditRuleFieldPairData(rule *auditRuleData, fpd *fieldPairData) error {
 			} else {
 				user, err := user.Lookup(val)
 				if err != nil {
-					return errors.Wrapf(err, "unknown user %v", user)
+					return fmt.Errorf("bad user: %v: %v", user, err)
 				}
 				userID, err := strconv.Atoi(user.Uid)
 				if err != nil {
