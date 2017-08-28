@@ -175,6 +175,7 @@ func parseAuditNetlinkMessage(b []byte) (ret []NetlinkMessage, err error) {
 		var (
 			m NetlinkMessage
 		)
+
 		m.Header.Len, b, err = netlinkPopuint32(b)
 		if err != nil {
 			return
@@ -182,6 +183,7 @@ func parseAuditNetlinkMessage(b []byte) (ret []NetlinkMessage, err error) {
 		// Determine our alignment size given the reported header length
 		alignbounds := nlmAlignOf(int(m.Header.Len))
 		padding := alignbounds - int(m.Header.Len)
+
 		// Subtract 4 from alignbounds here to account for already having popped 4 bytes
 		// off the input buffer
 		if len(b) < alignbounds-4 {
@@ -208,9 +210,27 @@ func parseAuditNetlinkMessage(b []byte) (ret []NetlinkMessage, err error) {
 		if err != nil {
 			return ret, err
 		}
-		datalen := m.Header.Len - syscall.NLMSG_HDRLEN
-		m.Data = b[:datalen]
-		b = b[int(datalen)+padding:]
+		// Determine how much data we want to read here; if this isn't NLM_F_MULTI, we'd
+		// typically want to read m.Header.Len bytes (the length of the payload indicated in
+		// the netlink header.
+		//
+		// However, this isn't always the case. Depending on what is generating the audit
+		// message (e.g., via audit_log_end) the kernel does not include the netlink header
+		// size in the submitted audit message. So, we just read whatever is left in the buffer
+		// we have if this isn't multipart.
+		//
+		// Additionally, it seems like there are also a few messages types where the netlink paylaod
+		// value is inaccurate and can't be relied upon.
+		//
+		// XXX Just consuming the rest of the buffer based on the event type might be a better
+		// approach here.
+		if !multi {
+			m.Data = b
+		} else {
+			datalen := m.Header.Len - syscall.NLMSG_HDRLEN
+			m.Data = b[:datalen]
+			b = b[int(datalen)+padding:]
+		}
 		ret = append(ret, m)
 		if !multi {
 			break
