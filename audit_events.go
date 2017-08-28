@@ -31,6 +31,14 @@ type AuditEvent struct {
 
 // NewAuditEvent takes a NetlinkMessage passed from the netlink connection and parses the data
 // from the message header to return an AuditEvent type.
+//
+// Note that it is possible here that we don't have a full event to return. In some cases, a
+// single audit event may be represented by multiple audit events from the kernel. This function
+// looks after buffering partial fragments of a full event, and may only return the complete event
+// once an AUDIT_EOE record has been recieved for the audit event.
+//
+// See https://www.redhat.com/archives/linux-audit/2016-January/msg00019.html for additional information
+// on the behavior of this function.
 func NewAuditEvent(msg NetlinkMessage) (*AuditEvent, error) {
 	x, err := ParseAuditEvent(string(msg.Data[:]), auditConstant(msg.Header.Type), true)
 	if err != nil {
@@ -40,7 +48,23 @@ func NewAuditEvent(msg NetlinkMessage) (*AuditEvent, error) {
 		return nil, fmt.Errorf("unknown message type %d", msg.Header.Type)
 	}
 
-	return x, nil
+	// Determine if the event type is one which the kernel is expected to send only a single
+	// packet for; in these cases we don't need to look into buffering it and can return the
+	// event immediately.
+	if auditConstant(msg.Header.Type) < AUDIT_SYSCALL ||
+		auditConstant(msg.Header.Type) >= AUDIT_FIRST_ANOM_MSG {
+		return x, nil
+	}
+
+	// If this is an EOE message, get the entire processed message and return it.
+	if auditConstant(msg.Header.Type) == AUDIT_EOE {
+		return bufferGet(x), nil
+	}
+
+	// Otherwise we need to buffer this message.
+	bufferEvent(x)
+
+	return nil, nil
 }
 
 // GetAuditEvents receives audit messages from the kernel and parses them into an AuditEvent.
@@ -63,6 +87,9 @@ func GetAuditEvents(s Netlink, cb EventCallback) {
 						}
 					} else {
 						nae, err := NewAuditEvent(msg)
+						if nae == nil {
+							continue
+						}
 						cb(nae, err)
 					}
 				}
@@ -125,6 +152,9 @@ func GetAuditMessages(s Netlink, cb EventCallback, done *chan bool) {
 					}
 				} else {
 					nae, err := NewAuditEvent(msg)
+					if nae == nil {
+						continue
+					}
 					cb(nae, err)
 				}
 			}
