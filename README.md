@@ -14,6 +14,8 @@ libaudit-go can be used to build go applications which perform tasks similar to 
 
 To get started see package documentation at [godoc](https://godoc.org/github.com/mozilla/libaudit-go).
 
+For a simple example of usage, see the [auditprint](./auditprint/) tool included in this repository.
+
 Some key functions are discussed in the overview section below.
 
 ## Overview
