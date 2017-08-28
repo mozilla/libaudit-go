@@ -18,7 +18,13 @@ import (
 
 func auditProc(e *libaudit.AuditEvent, err error) {
 	if err != nil {
-		fmt.Printf("callback received error: %v\n", err)
+		// See if the error is libaudit.ErrorAuditParse, if so convert and also display
+		// the audit record we could not parse
+		if nerr, ok := err.(libaudit.ErrorAuditParse); ok {
+			fmt.Printf("parser error: %v: %v\n", nerr, nerr.Raw)
+		} else {
+			fmt.Printf("callback received error: %v\n", err)
+		}
 		return
 	}
 	// Marshal the event to JSON and print

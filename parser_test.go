@@ -280,17 +280,18 @@ func TestMalformedPrefix(t *testing.T) {
 	tmsg := []struct {
 		msg     string
 		msgType auditConstant
+		err     string
 	}{
-		{"xyzabc", AUDIT_AVC},
-		{`audit(1464163771`, AUDIT_AVC},
-		{`audit(1464176620.068:1445`, AUDIT_AVC},
+		{"xyzabc", AUDIT_AVC, "malformed, missing audit prefix"},
+		{`audit(1464163771`, AUDIT_AVC, "malformed, can't locate start of fields"},
+		{`audit(1464176620.068:1445`, AUDIT_AVC, "malformed, can't locate end of prefix"},
 	}
 	for _, m := range tmsg {
 		_, err := ParseAuditEvent(m.msg, m.msgType, false)
 		if err == nil {
 			t.Fatalf("ParseAuditEvent should have failed on %q", m.msg)
 		}
-		if err.Error() != "malformed audit message" {
+		if err.Error() != m.err {
 			t.Fatalf("ParseAuditEvent failed, but error %q was unexpected", err)
 		}
 	}

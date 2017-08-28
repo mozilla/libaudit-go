@@ -17,6 +17,28 @@ type record struct {
 	a1         int
 }
 
+// ErrorAuditParse is an implementation of the error interface that is returned by
+// ParseAuditEvent. msg will contain a description of the error, and the raw audit event
+// which failed parsing is returned in raw for inspection by the calling program.
+type ErrorAuditParse struct {
+	Msg string
+	Raw string
+}
+
+// Error returns a string representation of ErrorAuditParse e
+func (e ErrorAuditParse) Error() string {
+	return e.Msg
+}
+
+// newErrorAuditParse returns a new ErrorAuditParse type with the fields populated
+func newErrorAuditParse(raw string, f string, v ...interface{}) ErrorAuditParse {
+	ret := ErrorAuditParse{
+		Raw: raw,
+		Msg: fmt.Sprintf(f, v...),
+	}
+	return ret
+}
+
 // ParseAuditEvent parses an incoming audit message from kernel and returns an AuditEvent.
 //
 // msgType is supposed to come from the calling function which holds the msg header indicating header
@@ -36,11 +58,11 @@ func ParseAuditEvent(str string, msgType auditConstant, interpret bool) (*AuditE
 	if strings.HasPrefix(str, "audit(") {
 		str = str[6:]
 	} else {
-		return nil, fmt.Errorf("malformed audit message")
+		return nil, newErrorAuditParse(event.Raw, "malformed, missing audit prefix")
 	}
 	index := strings.Index(str, ":")
 	if index == -1 {
-		return nil, fmt.Errorf("malformed audit message")
+		return nil, newErrorAuditParse(event.Raw, "malformed, can't locate start of fields")
 	}
 
 	// determine timestamp
@@ -49,13 +71,13 @@ func ParseAuditEvent(str string, msgType auditConstant, interpret bool) (*AuditE
 	str = str[index+1:]
 	index = strings.Index(str, ")")
 	if index == -1 {
-		return nil, fmt.Errorf("malformed audit message")
+		return nil, newErrorAuditParse(event.Raw, "malformed, can't locate end of prefix")
 	}
 	serial := str[:index]
 	if strings.HasPrefix(str, serial+"): ") {
 		str = str[index+3:]
 	} else {
-		return nil, fmt.Errorf("malformed audit message")
+		return nil, newErrorAuditParse(event.Raw, "malformed, prefix termination unexpected")
 	}
 
 	var (
@@ -87,7 +109,7 @@ func ParseAuditEvent(str string, msgType auditConstant, interpret bool) (*AuditE
 						var err error
 						value, err = interpretField(key, value, msgType, r)
 						if err != nil {
-							return nil, err
+							return nil, newErrorAuditParse(event.Raw, "interpretField: %v", err)
 						}
 					}
 					m[key] = value
@@ -117,7 +139,7 @@ func ParseAuditEvent(str string, msgType auditConstant, interpret bool) (*AuditE
 						var err error
 						value, err = interpretField(key, value, msgType, r)
 						if err != nil {
-							return nil, err
+							return nil, newErrorAuditParse(event.Raw, "interpretField: %v", err)
 						}
 					}
 					m[key] = value
@@ -142,7 +164,7 @@ func ParseAuditEvent(str string, msgType auditConstant, interpret bool) (*AuditE
 						var err error
 						value, err = interpretField(key, value, msgType, r)
 						if err != nil {
-							return nil, err
+							return nil, newErrorAuditParse(event.Raw, "interpretField: %v", err)
 						}
 					}
 					m[key] = value
@@ -155,7 +177,7 @@ func ParseAuditEvent(str string, msgType auditConstant, interpret bool) (*AuditE
 					var err error
 					value, err = interpretField(key, value, msgType, r)
 					if err != nil {
-						return nil, err
+						return nil, newErrorAuditParse(event.Raw, "interpretField: %v", err)
 					}
 				}
 				m[key] = value
@@ -206,7 +228,7 @@ func ParseAuditEvent(str string, msgType auditConstant, interpret bool) (*AuditE
 				var err error
 				value, err = interpretField(key, value, msgType, r)
 				if err != nil {
-					return nil, err
+					return nil, newErrorAuditParse(event.Raw, "interpretField: %v", err)
 				}
 			}
 			m[key] = value
