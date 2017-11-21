@@ -100,6 +100,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "ruleset warning: %v\n", x)
 	}
 
+	s.UseReadBuffer(true)
 	doneCh := make(chan bool, 1)
 	libaudit.GetAuditMessages(s, auditProc, &doneCh)
 }

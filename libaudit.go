@@ -64,8 +64,10 @@ type Netlink interface {
 //
 // Programs should call NewNetlinkConnection() to create a new instance.
 type NetlinkConnection struct {
-	fd      int                     // File descriptor used for communication
-	address syscall.SockaddrNetlink // Netlink sockaddr
+	fd            int                     // File descriptor used for communication
+	address       syscall.SockaddrNetlink // Netlink sockaddr
+	readBuffer    []byte                  // Input buffer used to store incoming data
+	useReadBuffer bool                    // Make use of global read buffer
 }
 
 // Close closes the Netlink connection.
@@ -86,12 +88,17 @@ func (s *NetlinkConnection) Receive(nonblocking bool) ([]NetlinkMessage, error) 
 	if nonblocking {
 		flags |= syscall.MSG_DONTWAIT
 	}
-	buf := make([]byte, MAX_AUDIT_MESSAGE_LENGTH+syscall.NLMSG_HDRLEN)
-	nr, _, err := syscall.Recvfrom(s.fd, buf, flags)
+	var bptr []byte
+	if s.useReadBuffer {
+		bptr = s.readBuffer
+	} else {
+		bptr = make([]byte, MAX_AUDIT_MESSAGE_LENGTH+syscall.NLMSG_HDRLEN)
+	}
+	nr, _, err := syscall.Recvfrom(s.fd, bptr, flags)
 	if err != nil {
 		return nil, err
 	}
-	return parseAuditNetlinkMessage(buf[:nr])
+	return parseAuditNetlinkMessage(bptr[:nr])
 }
 
 // GetPID returns the netlink port ID of the netlink socket peer.
@@ -107,6 +114,17 @@ func (s *NetlinkConnection) GetPID() (int, error) {
 	}
 	v = address.(*syscall.SockaddrNetlink)
 	return int(v.Pid), nil
+}
+
+// UseReadBuffer informs the connection to the netlink system that it should use a
+// persistent read buffer to avoid reallocating storage for incoming messages for each
+// message received. Note that this should only be called after setup (e.g., rule loading)
+// and should not be set prior to any sort of interleaved request/response activity.
+//
+// As an example, UseReadBuffer can be called immediately prior to starting to drain audit
+// messages from netlink.
+func (s *NetlinkConnection) UseReadBuffer(enabled bool) {
+	s.useReadBuffer = enabled
 }
 
 // nativeEndian determines the byte order for the system
@@ -283,6 +301,8 @@ func NewNetlinkConnection() (ret *NetlinkConnection, err error) {
 		syscall.Close(ret.fd)
 		return
 	}
+	// Pre-allocate the read buffer here
+	ret.readBuffer = make([]byte, MAX_AUDIT_MESSAGE_LENGTH+syscall.NLMSG_HDRLEN)
 	return
 }
 
