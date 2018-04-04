@@ -315,12 +315,12 @@ done:
 			if err != nil {
 				return ret, err
 			}
-			if m.Header.Seq != seq {
-				// Wasn't the sequence number we are looking for, just discard it
+			if socketPID != os.Getpid() {
+				// PID didn't match, just discard it
 				continue
 			}
-			if int(m.Header.Pid) != socketPID {
-				// PID didn't match, just discard it
+			if m.Header.Seq != seq {
+				// Wasn't the sequence number we are looking for, just discard it
 				continue
 			}
 			if m.Header.Type == syscall.NLMSG_DONE {
