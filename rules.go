@@ -641,7 +641,7 @@ func checkPath(pathName string) error {
 		return fmt.Errorf("path %q too large", pathName)
 	}
 	if pathName[0] != '/' {
-		return fmt.Errorf("path %q must be absolute")
+		return fmt.Errorf("path %q must be absolute", pathName)
 	}
 	if strings.Contains(pathName, "..") {
 		return fmt.Errorf("path %q cannot contain special directory values", pathName)
