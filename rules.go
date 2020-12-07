@@ -387,9 +387,16 @@ func auditRuleFieldPairData(rule *auditRuleData, fpd *fieldPairData) error {
 	case AUDIT_GID, AUDIT_EGID, AUDIT_SGID, AUDIT_FSGID:
 		if val, isInt := fpd.fieldval.(float64); isInt {
 			rule.Values[rule.FieldCount] = (uint32)(val)
-		} else if _, isString := fpd.fieldval.(string); isString {
-			// TODO: use of group names is unsupported
-			return fmt.Errorf("group name translation is unsupported %v", fpd.fieldval)
+		} else if val, isString := fpd.fieldval.(string); isString {
+			group, err := user.LookupGroup(val)
+			if err != nil {
+				return fmt.Errorf("bad group: %v: %v", group, err)
+			}
+			groupID, err := strconv.Atoi(group.Gid)
+			if err != nil {
+				return fmt.Errorf("bad gid %v", groupID)
+			}
+			rule.Values[rule.FieldCount] = (uint32)(groupID)
 		} else {
 			return fmt.Errorf("field value has unusable type %v", fpd.fieldval)
 		}
